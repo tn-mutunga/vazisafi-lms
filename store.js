@@ -472,6 +472,7 @@ window.SAFI_STORE = (() => {
     },
 
     // ── Data management ────────────────────────────────────
+    snapshot() { return JSON.stringify(state); },
     exportJSON() {
       const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);

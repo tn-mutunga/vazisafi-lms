@@ -102,6 +102,7 @@ function App() {
         case 'approvals':  return <ApprovalsScreen {...props}/>;
         case 'settings':   return <SettingsScreen {...props}/>;
         case 'data':       return <DataScreen {...props}/>;
+        case 'cloud':      return <CloudScreen {...props}/>;
         case 'order-detail': return <OrderDetail {...props} role="owner"/>;
         case 'orders':     return <OrdersQueue {...props} role="owner"/>;
         default:           return <OwnerDashboard {...props}/>;
