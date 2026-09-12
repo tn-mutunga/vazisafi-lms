@@ -492,6 +492,28 @@ window.SAFI_STORE = (() => {
       } catch (e) { return false; }
     },
     resetAll() { state = clone(SAMPLE); save(); },
+
+    // Wipe every trace of sample/demo activity and start the books at zero.
+    // Keeps only the setup you configured: services & pricing, staff, expense
+    // categories, packages, discounts. Ready for a real customer import.
+    goLive() {
+      state = {
+        ...state,
+        customers: [],
+        orders: [],
+        payments: [],
+        expenses: [],
+        issues: [],
+        messages: [],
+        dispatch: [],
+        approvals: [],
+        revenueTrend: (state.revenueTrend || []).map(d => ({ ...d, v: 0 })),
+        revenueByService: (state.revenueByService || []).map(d => ({ ...d, value: 0, pct: 0 })),
+        revenueByMethod: (state.revenueByMethod || []).map(d => ({ ...d, value: 0, pct: 0 })),
+      };
+      save();
+    },
+
     clearAll() {
       state = {
         ...clone(SAMPLE),

@@ -673,6 +673,15 @@ function DataScreen({ lang }) {
         </div>
       </Card>
 
+      <Card title="Go live">
+        <p className="safi-cell-sub" style={{ marginTop: 0 }}>
+          Clears every demo customer, order, payment and expense so the books start at zero.
+          Your services, prices, staff and expense categories are kept. Do this once, then import
+          your real customer list.
+        </p>
+        <Button kind="primary" icon="users" onClick={() => setConfirm('golive')}>Clear demo data & start fresh</Button>
+      </Card>
+
       <Card title="Danger zone" className="safi-danger">
         <p className="safi-cell-sub" style={{ marginTop: 0 }}>These actions cannot be undone — back up first.</p>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -682,17 +691,20 @@ function DataScreen({ lang }) {
       </Card>
 
       <Modal open={!!confirm} onClose={() => setConfirm(null)}
-        title={confirm === 'clear' ? 'Clear orders & payments?' : 'Reset to sample data?'}
+        title={confirm === 'golive' ? 'Clear demo data and start fresh?' : confirm === 'clear' ? 'Clear orders & payments?' : 'Reset to sample data?'}
         footer={<>
           <Button kind="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
           <Button kind="primary" icon="check" onClick={() => {
-            if (confirm === 'clear') { window.SAFI_STORE.clearAll(); toast('Orders cleared'); }
+            if (confirm === 'golive') { window.SAFI_STORE.goLive(); toast('Demo data cleared — ready for your real customers'); }
+            else if (confirm === 'clear') { window.SAFI_STORE.clearAll(); toast('Orders cleared'); }
             else { window.SAFI_STORE.resetAll(); toast('Reset to sample data'); }
             setConfirm(null);
-          }}>{confirm === 'clear' ? 'Clear all orders' : 'Reset everything'}</Button>
+          }}>{confirm === 'golive' ? 'Clear demo data' : confirm === 'clear' ? 'Clear all orders' : 'Reset everything'}</Button>
         </>}>
         <p>
-          {confirm === 'clear'
+          {confirm === 'golive'
+            ? 'Every demo customer, order, payment, expense and chart figure is removed. Services, prices, staff and expense categories stay. This cannot be undone — download a backup first if you want one.'
+            : confirm === 'clear'
             ? 'This will delete every order, payment, and issue. Customers will be kept. Make sure you have a backup.'
             : 'This will replace ALL data on this laptop with the demo sample data. Useful when you first set up — destructive otherwise.'}
         </p>

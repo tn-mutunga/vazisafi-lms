@@ -66,6 +66,33 @@ user-data folder — Help → About shows the path. On Windows that is
 That folder is per-machine: a Mac and a Windows till each hold their own data until the
 Supabase step puts them on one database.
 
+## Releasing without a Windows machine
+
+You work on a Mac; the tills run Windows. A Windows `.exe` cannot be built on a Mac — so
+GitHub builds it for you, on its own Windows machine, free.
+
+`.github/workflows/release.yml` is already set up. To ship an update from the Mac:
+
+1. Bump `"version"` in `package.json`.
+2. Commit and tag it:
+
+       git add .
+       git commit -m "what changed"
+       git push
+       git tag v0.1.1
+       git push origin v0.1.1
+
+   (The tag must match the version, with a `v` in front.)
+
+3. Watch it build at https://github.com/tn-mutunga/vazisafi-lms/actions — takes a few
+   minutes. It produces the Windows `.exe` and the Mac `.dmg` and attaches both to a
+   **draft** release.
+
+4. Go to the Releases page and click **Publish release**.
+
+Every Windows till then picks it up within 6 hours, wherever you happen to be. No token
+setup needed for this route — GitHub Actions supplies its own.
+
 ## Updating both apps from one place
 
 Both builds check the **same GitHub release** for new versions. You publish once; the
