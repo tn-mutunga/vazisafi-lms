@@ -1,0 +1,74 @@
+{
+  "name": "vazisafi-lms",
+  "version": "0.1.0",
+  "description": "VaziSafi Laundry Management System — desktop POS shell",
+  "productName": "VaziSafi LMS",
+  "main": "desktop/main.js",
+  "author": "Safi Laundry",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "start:kiosk": "electron . --kiosk",
+    "dist": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win portable",
+    "dist:mac": "electron-builder --mac dmg zip",
+    "dist:all": "electron-builder --win nsis --mac dmg",
+    "release": "electron-builder --publish always",
+    "release:win": "electron-builder --win nsis --publish always",
+    "release:mac": "electron-builder --mac dmg zip --publish always"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "build": {
+    "appId": "co.ke.vazisafi.lms",
+    "productName": "VaziSafi LMS",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "tn-mutunga",
+        "repo": "vazisafi-lms",
+        "releaseType": "release"
+      }
+    ],
+    "files": [
+      "desktop/**",
+      "assets/**",
+      "vendor/**",
+      "*.html",
+      "*.js",
+      "*.jsx",
+      "*.css",
+      "!screenshots/**",
+      "!uploads/**",
+      "!_test.html"
+    ],
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ],
+      "darkModeSupport": false,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "desktop/entitlements.mac.plist",
+      "entitlementsInherit": "desktop/entitlements.mac.plist"
+    },
+    "dmg": {
+      "title": "VaziSafi LMS"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

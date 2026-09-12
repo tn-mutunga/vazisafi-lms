@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" data-direction="navy" data-density="regular">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=1440"/>
+  <title>Safi · Laundry Management</title>
+
+  <link rel="stylesheet" href="vendor/fonts.css"/>
+
+  <link rel="stylesheet" href="styles.css"/>
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+      <rect width="200" height="200" fill="#5C2D91"/>
+      <circle cx="100" cy="100" r="62" fill="#fff" stroke="#5C2D91" stroke-width="4"/>
+      <path d="M70 120 Q100 90 130 120 L130 140 L70 140 Z" fill="#E87722"/>
+      <circle cx="80" cy="125" r="4" fill="#fff"/>
+      <circle cx="115" cy="130" r="3" fill="#fff"/>
+      <path d="M55 100 Q70 85 70 115" stroke="#3DAEE9" stroke-width="6" fill="none" stroke-linecap="round"/>
+    </svg>
+  </template>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React + Babel (vendored locally for offline use) -->
+  <script src="vendor/react.js"></script>
+  <script src="vendor/react-dom.js"></script>
+  <script src="vendor/babel.js"></script>
+
+  <!-- Data + i18n + store + image-slot + inlined logos (plain JS) -->
+  <script src="data.js"></script>
+  <script src="i18n.js"></script>
+  <script src="store.js"></script>
+  <script src="assets-inline.js"></script>
+  <script src="image-slot.js"></script>
+
+  <!-- Tweaks shell (JSX) -->
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+
+  <!-- Components + screens + app (JSX) -->
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="screens-frontdesk.jsx"></script>
+  <script type="text/babel" src="screens-owner.jsx"></script>
+  <script type="text/babel" src="screens-expenses.jsx"></script>
+  <script type="text/babel" src="screens-extra.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

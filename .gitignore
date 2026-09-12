@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.DS_Store
+Thumbs.db
+*.log
+.env
+
+# Real customer data — never commit
+VaziSafi - Customer List.xlsx
+*Customer List*
+*customers*.csv
+*customers*.xlsx
+backups/
+exports/
+
+screenshots/
+uploads/
