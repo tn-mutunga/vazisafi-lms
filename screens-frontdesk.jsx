@@ -13,6 +13,9 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
 
   const queue = D.orders.filter(o => o.status !== 'collected').slice(0, 6);
 
+  const openShift = window.SAFI_STORE.getOpenShift();
+  const [shiftModal, setShiftModal] = useStateFD(false);
+
   return (
     <>
       <Topbar
@@ -20,9 +23,14 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
         subtitle="Karibu Vazi Safi 👋 — here is what's happening at the shop right now."
         right={<>
           <Button kind="ghost" icon="search">Search</Button>
+          <Button kind={openShift ? 'ghost' : 'secondary'} icon="clock" onClick={() => setShiftModal(true)}>
+            {openShift ? 'Close shift' : 'Open shift'}
+          </Button>
           <Button kind="primary" icon="plus" onClick={() => setView('new-order')}>{t('new_order', lang)}</Button>
         </>}
       />
+
+      <ShiftModal open={shiftModal} onClose={() => setShiftModal(false)} money={money}/>
 
       <div className="safi-grid safi-grid--4">
         <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" sparkline={<Sparkline data={D.revenueTrend.slice(-7)} width={140} height={32}/>}/>
@@ -125,6 +133,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   const [method, setMethod] = useStateFD('mpesa');
   const [txn, setTxn] = useStateFD('');
   const [notes, setNotes] = useStateFD('');
+  const [tag, setTag] = useStateFD('');
   const [search, setSearch] = useStateFD('');
   const [showAdd, setShowAdd] = useStateFD(false);
   const [subtypePicker, setSubtypePicker] = useStateFD(null);
@@ -154,6 +163,10 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
       toast('Add at least one priced service', 'error');
       return;
     }
+    if (D.settings?.requireTag && !String(tag).trim()) {
+      toast('Enter the tag number from the tag book', 'error');
+      return;
+    }
     const linePriced = items.map(it => {
       const svc = D.services.find(s => s.id === it.svc);
       const unit = it.customPrice ?? (svc?.tiers[effGroup] || 0);
@@ -162,8 +175,29 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
     const order = window.SAFI_STORE.createOrder({
       customerId, items: linePriced, total, discount, discountPct,
       paid: 0, method: '—', txn: '',
-      notes,
+      notes, tag: String(tag).trim(),
     });
+
+    // The customer's copy. This is the control that matters: once they hold a text
+    // naming the order and the number to pay, the order cannot quietly not exist.
+    if (customer && customer.phone) {
+      const st = D.settings || {};
+      const tpl = (D.smsTemplates || {}).intake
+        || 'Vazi Safi: order {id} received, {items} item(s), total {total}. Tag {tag}. Pay ONLY to {payto}. Queries {owner}.';
+      const body = tpl
+        .replace(/\{name\}/g, customer.name.split(' ')[0])
+        .replace(/\{id\}/g, order.id)
+        .replace(/\{tag\}/g, order.tag || '—')
+        .replace(/\{items\}/g, String(items.reduce((n, it) => n + (it.qty || 0), 0)))
+        .replace(/\{total\}/g, money(total))
+        .replace(/\{payto\}/g, st.payTo || 'the shop till')
+        .replace(/\{owner\}/g, st.ownerPhone || '');
+      window.SAFI_STORE.logMessage({
+        to: `${customer.prefix || ''} ${customer.phone}`.trim(),
+        name: customer.name, body, orderId: order.id, stage: 'intake', method: 'sms',
+      });
+    }
+
     toast(`Order ${order.id} created`, 'success');
     setActiveOrderId(order.id);
     setView(thenPrint ? 'receipt' : 'order-detail');
@@ -331,10 +365,26 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
 
               <div className="safi-sum__divider"/>
 
+              <div className="safi-sum__divider"/>
+
+              <div className="safi-tagentry">
+                <label>Tag number{D.settings?.requireTag && <span className="safi-req">required</span>}</label>
+                <input className="safi-input safi-mono" value={tag} inputMode="numeric"
+                  placeholder="e.g. 10482" onChange={e => setTag(e.target.value.replace(/[^\d-]/g, ''))}/>
+                <span className="safi-hint">Read it off the tag you pinned to the bundle.</span>
+              </div>
+
               <div className="safi-callout" style={{ marginBottom: 4 }}>
                 <Icon name="wallet" size={14}/>
                 <span>Payment is captured later via <b>Collect balance</b> on the order detail (with M-Pesa / Cash / Bank code).</span>
               </div>
+
+              {(D.settings?.payTo || '') && (
+                <div className="safi-callout safi-callout--lock">
+                  <Icon name="lock" size={14}/>
+                  <span>M-Pesa goes to <b className="safi-mono">{D.settings.payTo}</b>{D.settings.payToName ? ` (${D.settings.payToName})` : ''} only.</span>
+                </div>
+              )}
 
               <div className="safi-sum__divider"/>
               <div className="safi-sum__row safi-sum__row--balance"><span>{t('balance', lang)}</span><span className="safi-mono">{money(balance)}</span></div>
@@ -654,7 +704,12 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
   const rewashChild = o.rewashedBy ? D.orders.find(x => x.id === o.rewashedBy) : null;
 
   function markCollected() {
+    const balance = (o.total || 0) - (o.paid || 0);
     window.SAFI_STORE.updateOrder(o.id, { status: 'collected' });
+    window.SAFI_STORE.logRelease({
+      orderId: o.id, tag: o.tag || '',
+      releasedTo: c?.name || 'Walk-in', balanceAtRelease: balance,
+    });
     toast('Order marked Collected', 'success');
     // Mandatory SMS for collection
     if (c && c.phone) {
@@ -1146,10 +1201,11 @@ function Receipt({ orderId, setView, lang, money, shop }) {
     <>
       <Topbar
         title="Receipt"
-        subtitle="80mm thermal-printer optimized. Click Print to send to default printer."
+        subtitle="80mm thermal-printer optimized. Print this, then print the job card & delivery note."
         right={<>
           <Button kind="ghost" onClick={() => setView('order-detail')}><Icon name="arrow-l" size={14}/> Back</Button>
-          <Button kind="primary" icon="print" onClick={() => window.print()}>{t('print', lang)}</Button>
+          <Button kind="secondary" icon="print" onClick={() => window.print()}>{t('print', lang)}</Button>
+          <Button kind="primary" icon="card" onClick={() => setView('job-card')}>Job card &amp; delivery note →</Button>
         </>}
       />
 
@@ -1172,6 +1228,8 @@ function Receipt({ orderId, setView, lang, money, shop }) {
 
           <div className="safi-receipt__meta">
             <div><span>Receipt #</span><b className="safi-mono">{o.id}</b></div>
+            {o.queueNo && <div><span>Client #</span><b className="safi-mono">{String(o.queueNo).padStart(2, '0')}</b></div>}
+            {o.tag && <div><span>Tag #</span><b className="safi-mono">{o.tag}</b></div>}
             <div><span>Date</span><b>{o.in}</b></div>
             <div><span>Cashier</span><b>{(D.staff.find(s => s.id === (o.cashier || D.currentStaffId)) || D.staff[0])?.name || '—'}</b></div>
             <div><span>Due</span><b>{(o.due || '').slice(5, 16)}</b></div>
@@ -1269,6 +1327,13 @@ function Receipt({ orderId, setView, lang, money, shop }) {
           <p className="safi-receipt__terms">
             {shop?.terms || 'Items uncollected after 30 days are donated. Claims must be made within 24 hrs of collection. Keep this receipt — required for pickup. Asante sana!'}
           </p>
+
+          {(D.settings?.ownerPhone || D.settings?.payTo) && (
+            <div className="safi-receipt__notice">
+              {D.settings?.payTo && <div><b>Pay only to {D.settings.payTo}</b>{D.settings.payToName ? ` — ${D.settings.payToName}` : ''}. Never to a personal number.</div>}
+              {D.settings?.ownerPhone && <div>No SMS from us within 10 minutes? Call {D.settings.ownerPhone}.</div>}
+            </div>
+          )}
 
           <div className="safi-receipt__foot">
             <b>{shop?.footerMsg || 'ASANTE — KARIBU TENA'}</b><br/>
@@ -1768,4 +1833,70 @@ function IssuesScreen({ lang }) {
   );
 }
 
-Object.assign(window, { FrontDeskDashboard, NewOrder, OrdersQueue, OrderDetail, Receipt, CustomersScreen, PaymentsScreen, PackagesScreen, IssuesScreen, AddCustomerModal, PaymentModal });
+// ─── Shift open / close ────────────────────────────────────────
+// Counting the drawer at a known moment is what makes cash checkable at all. Framed as
+// handover, because that is what it is — the attendant signs for the float and signs it
+// back out. The comparison against expected happens out of sight.
+function ShiftModal({ open, onClose, money }) {
+  const D = useStore();
+  const sh = window.SAFI_STORE.getOpenShift();
+  const [float_, setFloat] = useStateFD(0);
+  const [counted, setCounted] = useStateFD('');
+  const [note, setNote] = useStateFD('');
+
+  useEffectFD(() => { if (open) { setFloat(0); setCounted(''); setNote(''); } }, [open]);
+
+  const staff = window.SAFI_STORE.getCurrentStaff();
+
+  if (sh) {
+    return (
+      <Modal open={open} onClose={onClose} title="Close shift" width={420}
+        footer={<>
+          <Button kind="ghost" onClick={onClose}>Cancel</Button>
+          <Button kind="primary" icon="check" disabled={counted === ''} onClick={() => {
+            window.SAFI_STORE.closeShift({ declaredCash: Number(counted) || 0, note });
+            toast('Shift closed', 'success');
+            onClose();
+          }}>Close shift</Button>
+        </>}>
+        <div className="safi-form">
+          <div className="safi-mini-cust__row"><span>Attendant</span><b>{(D.staff.find(s => s.id === sh.staff) || staff).name}</b></div>
+          <div className="safi-mini-cust__row"><span>Opened</span><b>{sh.openedAtLabel}</b></div>
+          <div className="safi-mini-cust__row"><span>Opening float</span><b className="safi-mono">{money(sh.openingFloat)}</b></div>
+          <label>Cash counted in the drawer now
+            <input className="safi-input safi-mono" inputMode="numeric" value={counted} placeholder="0"
+              autoFocus onChange={e => setCounted(e.target.value.replace(/[^\d]/g, ''))}/>
+          </label>
+          <label>Note (optional)
+            <input className="safi-input" value={note} placeholder="Anything unusual today"
+              onChange={e => setNote(e.target.value)}/>
+          </label>
+          <p className="safi-hint">Count the notes and coins and enter the figure. Do not work it out from the orders.</p>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Open shift" width={400}
+      footer={<>
+        <Button kind="ghost" onClick={onClose}>Cancel</Button>
+        <Button kind="primary" icon="check" onClick={() => {
+          window.SAFI_STORE.openShift({ openingFloat: Number(float_) || 0 });
+          toast('Shift open — karibu', 'success');
+          onClose();
+        }}>Open shift</Button>
+      </>}>
+      <div className="safi-form">
+        <div className="safi-mini-cust__row"><span>Attendant</span><b>{staff.name}</b></div>
+        <label>Opening float in the drawer
+          <input className="safi-input safi-mono" inputMode="numeric" value={float_} autoFocus
+            onChange={e => setFloat(e.target.value.replace(/[^\d]/g, ''))}/>
+        </label>
+        <p className="safi-hint">Count the float before the first customer. You will count again at close.</p>
+      </div>
+    </Modal>
+  );
+}
+
+Object.assign(window, { FrontDeskDashboard, NewOrder, OrdersQueue, OrderDetail, Receipt, CustomersScreen, PaymentsScreen, PackagesScreen, IssuesScreen, AddCustomerModal, PaymentModal, ShiftModal });

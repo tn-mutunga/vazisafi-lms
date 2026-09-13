@@ -178,6 +178,44 @@ function SettingsScreen({ lang, shop, setShop }) {
         </div>
       </Card>
 
+      <Card title="Receipt integrity" action={<span className="safi-cell-sub">Printed on every receipt and texted to every customer</span>}>
+        <div className="safi-form" style={{ maxWidth: 760 }}>
+          <label>Official payment destination
+            <input className="safi-input safi-mono" defaultValue={D.settings?.payTo || ''}
+              onBlur={e => window.SAFI_STORE.setSetting('payTo', e.target.value)}
+              placeholder="Till 123456"/>
+          </label>
+          <label>Account name on that till
+            <input className="safi-input" defaultValue={D.settings?.payToName || ''}
+              onBlur={e => window.SAFI_STORE.setSetting('payToName', e.target.value)}
+              placeholder="Vazi Safi Ltd"/>
+          </label>
+          <label>Owner number for queries
+            <input className="safi-input safi-mono" defaultValue={D.settings?.ownerPhone || ''}
+              onBlur={e => window.SAFI_STORE.setSetting('ownerPhone', e.target.value)}
+              placeholder="07xx xxx xxx"/>
+          </label>
+          <p className="safi-hint">
+            Both appear on the receipt and in the intake SMS, so a customer asked to pay anywhere
+            else can see that it is wrong. Put the same two lines on a sign at the counter.
+          </p>
+          <h4 className="safi-section-h">Controls</h4>
+          <label className="safi-toggle safi-toggle--lg">
+            <input type="checkbox" checked={!!D.settings?.requireTag}
+              onChange={e => { window.SAFI_STORE.setSetting('requireTag', e.target.checked); toast(`Tag number ${e.target.checked ? 'required' : 'optional'}`); }}/>
+            <span/>
+            <div>
+              <b>Require a tag number on every order</b>
+              <p className="safi-cell-sub" style={{ margin: '2px 0 0' }}>Read off a pre-numbered tag book. Numbers that never reach an order show up as gaps.</p>
+            </div>
+          </label>
+          <label>Cash variance worth flagging (KES)
+            <input className="safi-input safi-mono" style={{ maxWidth: 140 }} defaultValue={D.settings?.varianceLimit ?? 100}
+              onBlur={e => window.SAFI_STORE.setSetting('varianceLimit', Number(e.target.value) || 0)}/>
+          </label>
+        </div>
+      </Card>
+
       <Card title="Owner PIN" action={<span className="safi-cell-sub">Required to enter Management area</span>}>
         <div className="safi-form" style={{ maxWidth: 320 }}>
           <label>PIN<input className="safi-input safi-mono" defaultValue={shop.ownerPin} onBlur={e => setT('ownerPin', e.target.value)}/></label>
@@ -256,7 +294,7 @@ function SettingsScreen({ lang, shop, setShop }) {
 }
 
 // ─── Dispatch (Pickup & Delivery) ─────────────────────────────────────────
-function DispatchScreen({ lang, money }) {
+function DispatchScreen({ lang, money, setView }) {
   const D = useStore();
   const [show, setShow]   = useStateX(false);
   const [editId, setEdit] = useStateX(null);

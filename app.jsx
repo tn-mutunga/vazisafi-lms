@@ -82,6 +82,8 @@ function App() {
         case 'issues':       return <IssuesScreen {...props}/>;
         case 'expenses':     return <ExpensesScreen {...props} role="frontdesk"/>;
         case 'dispatch':     return <DispatchScreen {...props}/>;
+        case 'rider-cards':        return <RiderCardsScreen {...props}/>;
+        case 'job-card':           return <JobCardSheet {...props}/>;
         case 'messages':     return <MessagesScreen {...props}/>;
         default:             return <FrontDeskDashboard {...props}/>;
       }
@@ -103,6 +105,9 @@ function App() {
         case 'settings':   return <SettingsScreen {...props}/>;
         case 'data':       return <DataScreen {...props}/>;
         case 'cloud':      return <CloudScreen {...props}/>;
+        case 'integrity':  return <IntegrityScreen {...props}/>;
+        case 'rider-cards':        return <RiderCardsScreen {...props}/>;
+        case 'job-card':           return <JobCardSheet {...props}/>;
         case 'order-detail': return <OrderDetail {...props} role="owner"/>;
         case 'orders':     return <OrdersQueue {...props} role="owner"/>;
         default:           return <OwnerDashboard {...props}/>;
@@ -113,7 +118,7 @@ function App() {
   return (
     <div className="safi-app" data-screen-label={`${role}/${view}`}>
       <Sidebar role={role} setRole={safeSetRole} view={view} setView={setView} lang={lang} shop={shop}/>
-      <main className="safi-main">{screen}</main>
+      <main className="safi-main"><UpdateBar/>{screen}</main>
       <ToastHost/>
 
       <Modal open={pinPrompt} onClose={() => setPinPrompt(false)} title="Enter Owner PIN" width={360}

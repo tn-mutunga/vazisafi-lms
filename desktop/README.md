@@ -33,16 +33,37 @@ macOS:
 Output lands in `dist/`. **Each installer must be built on its own OS** — the `.exe` on
 Windows, the `.dmg` on a Mac. There is no cross-building here.
 
-### Opening the Mac build the first time
+## Opening the Mac build
 
-The app is unsigned, so macOS will say it "cannot be opened because the developer cannot
-be verified." Right-click the app → **Open** → **Open** clears it, once per machine.
+The app is unsigned, so macOS blocks it — on Sequoia the message even says "Malware
 
-To skip that for good you need an Apple Developer account ($99/yr) and notarisation:
-set `CSC_LINK` / `CSC_KEY_PASSWORD` (Developer ID certificate) plus `APPLE_ID`,
+Blocked" and it may move the app to the Bin. It is not malware; macOS says that about any
+app with no Apple signature.
+
+Three ways round it, cheapest first:
+
+**Build it on the Mac that will run it.** A locally built app is never quarantined:
+
+    npm run dist:mac && open dist
+
+**Strip the quarantine flag** from a downloaded copy — do it to the `.dmg` *before*
+opening it:
+
+    xattr -cr ~/Downloads/VaziSafi-LMS-*.dmg
+
+or, if the app is already in Applications:
+
+    sudo xattr -cr "/Applications/VaziSafi LMS.app"
+    sudo codesign --force --deep --sign - "/Applications/VaziSafi LMS.app"
+
+**Sign and notarise it properly** — the only fix that scales past one machine, and the
+thing that also turns on auto-update for macOS. Needs an Apple Developer account
+($99/yr): set `CSC_LINK` / `CSC_KEY_PASSWORD` (Developer ID certificate) plus `APPLE_ID`,
 `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`, then add `"notarize": true` under
 `build.mac` in `package.json`. Hardened runtime and entitlements are already configured
 (`desktop/entitlements.mac.plist`).
+
+Windows has no equivalent obstacle — the `.exe` installs and auto-updates as-is.
 
 ## What the shell adds
 

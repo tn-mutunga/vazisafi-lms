@@ -2715,3 +2715,111 @@ button { font-family: inherit; }
 
 /* ─── Cloud & Updates ───────────────────────────────────── */
 .safi-code{background:var(--bg-2,#f4f6f9);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-family:var(--ff-mono);font-size:11.5px;line-height:1.6;color:var(--ink-2);overflow-x:auto;margin:12px 0 0;white-space:pre}
+
+/* ─── Integrity ─────────────────────────────────────────── */
+.safi-flags{display:flex;flex-direction:column;gap:10px}
+.safi-flag{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
+.safi-flag--red{border-left:3px solid var(--red)}
+.safi-flag--amber{border-left:3px solid var(--amber)}
+.safi-flag--gray{border-left:3px solid var(--line-2)}
+.safi-flag__hd{display:flex;align-items:center;gap:10px;width:100%;padding:13px 16px;background:none;border:0;cursor:pointer;text-align:left;font:inherit;color:var(--ink)}
+.safi-flag__hd b{font-size:13.5px;font-weight:650}
+.safi-flag__n{font-family:var(--ff-mono);font-size:11px;background:var(--gray-soft);border-radius:20px;padding:2px 8px;color:var(--ink-2)}
+.safi-flag__body{padding:0 16px 14px;border-top:1px solid var(--line)}
+.safi-risk{display:flex;align-items:center;gap:8px}
+.safi-risk__bar{width:58px;height:5px;border-radius:3px;background:var(--gray-soft);overflow:hidden}
+.safi-risk__bar span{display:block;height:100%;background:var(--red);border-radius:3px}
+.safi-neg{color:var(--red)}
+.safi-pos{color:var(--green)}
+.safi-seg{display:flex;gap:2px;background:var(--gray-soft);border-radius:8px;padding:2px}
+.safi-seg button{border:0;background:none;font:inherit;font-size:12px;padding:5px 11px;border-radius:6px;cursor:pointer;color:var(--ink-2)}
+.safi-seg button.is-on{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.safi-tabs{display:flex;gap:4px;margin:0 0 14px;border-bottom:1px solid var(--line)}
+.safi-tabs button{border:0;background:none;font:inherit;font-size:13px;padding:9px 14px;cursor:pointer;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.safi-tabs button.is-on{color:var(--brand);border-bottom-color:var(--brand);font-weight:650}
+.safi-stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+
+/* Tag entry + locked payment destination */
+.safi-tagentry{display:flex;flex-direction:column;gap:4px;margin:10px 0 12px}
+.safi-tagentry>label{font-size:11.5px;font-weight:600;color:var(--ink-2);display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.04em}
+.safi-req{font-size:9.5px;font-weight:700;color:var(--red);background:var(--red-soft);padding:1px 5px;border-radius:4px;letter-spacing:.03em}
+.safi-callout--lock{background:var(--gray-soft)}
+.safi-receipt__notice{margin-top:8px;padding-top:8px;border-top:1px dashed currentColor;font-size:9.5px;line-height:1.45;text-align:center}
+.safi-receipt__notice b{font-weight:700}
+
+
+
+
+
+
+/* ─── Job card + delivery note (one A4 sheet, tear between) ── */
+.safi-jcsheet{max-width:820px;margin:0 auto;background:#fff;color:#111;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.safi-tear{position:relative;height:26px;display:flex;align-items:center;justify-content:center;border-top:2px dashed #999}
+.safi-tear span{font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:#999;background:#fff;padding:0 10px;transform:translateY(-50%)}
+
+.safi-jc,.safi-dn{padding:16px 20px;font-size:11.5px;line-height:1.45;page-break-inside:avoid;break-inside:avoid}
+.safi-jc__hd,.safi-dn__hd{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:1.5px solid #111;padding-bottom:8px}
+.safi-jc__shop,.safi-dn__shop{font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+.safi-jc__kind,.safi-dn__kind{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin-top:2px}
+.safi-jc__ids{display:flex;gap:22px;text-align:right;flex:none}
+.safi-jc__ids span{display:block;font-size:8px;letter-spacing:.12em;text-transform:uppercase;opacity:.6}
+.safi-jc__ids b{font-family:var(--ff-mono);font-size:15px;font-weight:700}
+.safi-jc__row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 14px;padding:8px 0;border-bottom:1px solid #ddd}
+.safi-jc__f span{display:block;font-size:8px;letter-spacing:.11em;text-transform:uppercase;opacity:.6}
+.safi-jc__f b{font-size:11.5px;font-weight:650}
+.safi-jc__f--wide{grid-column:span 2}
+.safi-jc__f--fill i{display:block;border-bottom:1px solid #111;height:17px;margin-top:1px}
+.safi-jc__items{width:100%;border-collapse:collapse;margin:9px 0 2px}
+.safi-jc__items th{font-size:8px;letter-spacing:.11em;text-transform:uppercase;opacity:.6;text-align:left;padding:0 6px 4px 0;border-bottom:1px solid #111;font-weight:700}
+.safi-jc__items th:nth-child(2){width:50px}
+.safi-jc__items th:nth-child(3){width:45%}
+.safi-jc__items td{padding:5px 6px 5px 0;border-bottom:1px dotted #ccc;font-size:11px}
+.safi-jc__blank{border-bottom:1px solid #bbb!important}
+.safi-jc__stages{padding:9px 0 2px}
+.safi-jc__stages-t{font-size:8px;letter-spacing:.12em;text-transform:uppercase;opacity:.6;margin-bottom:5px}
+.safi-jc__stages-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.safi-jc__stages-grid span{display:block;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;opacity:.7}
+.safi-jc__stages-grid i{display:block;border:1px solid #111;height:22px;margin-top:2px}
+.safi-jc__note{margin-top:8px;font-size:10.5px;border-left:2px solid #111;padding-left:8px}
+.safi-jc__note span{display:block;font-size:8px;letter-spacing:.11em;text-transform:uppercase;opacity:.6}
+.safi-jc__ft,.safi-dn__ft{display:flex;justify-content:space-between;gap:16px;font-size:9.5px;padding-top:7px;margin-top:8px;border-top:1px solid #ddd;opacity:.8}
+.safi-dn__ft{border-top:1.5px solid #111;font-weight:600;opacity:1}
+
+.safi-dn__serial{text-align:right;flex:none}
+.safi-dn__serial span{display:block;font-size:8px;letter-spacing:.12em;text-transform:uppercase;opacity:.6}
+.safi-dn__serial b{font-family:var(--ff-mono);font-size:19px;font-weight:700}
+.safi-dn__grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 14px;padding:8px 0;border-bottom:1px solid #ddd}
+.safi-dn__grid span{display:block;font-size:8px;letter-spacing:.11em;text-transform:uppercase;opacity:.6}
+.safi-dn__grid b{font-size:11.5px;font-weight:650}
+.safi-dn__cust{padding:8px 0;border-bottom:1px solid #ddd}
+.safi-dn__cust-name{font-weight:750;font-size:13.5px}
+.safi-dn__slot{font-size:10.5px;opacity:.7;margin-top:2px}
+.safi-dn__due{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:9px 0;padding:9px 12px;border:2px solid #111;border-radius:3px}
+.safi-dn__due span{font-size:9.5px;font-weight:700;letter-spacing:.1em}
+.safi-dn__due b{font-size:21px;font-weight:800}
+.safi-dn__due--paid{border-style:dashed;opacity:.75}
+.safi-dn__due--paid b{font-size:13px;letter-spacing:.04em}
+.safi-dn__payto{font-size:10px;text-align:center;padding-bottom:7px;border-bottom:1px solid #ddd}
+.safi-dn__fill{padding:9px 0 2px}
+.safi-dn__fill-t{font-size:8px;letter-spacing:.12em;text-transform:uppercase;opacity:.6;margin-bottom:6px}
+.safi-dn__fill-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px 14px}
+.safi-dn__fill-grid label{font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;opacity:.7;display:block}
+.safi-dn__fill-grid label i{display:block;border-bottom:1px solid #111;height:19px;margin-top:2px}
+.safi-dn__fill-wide{grid-column:span 4}
+
+@media print{
+  .safi-side,.safi-top,.safi-toasts{display:none!important}
+  .safi-main{padding:0!important}
+  .safi-jcsheet{max-width:none;margin:0;border:0;border-radius:0}
+  .safi-jc,.safi-dn{padding:9mm 11mm;box-sizing:border-box;height:143mm;display:flex;flex-direction:column}
+  .safi-jc__stages,.safi-dn__fill{margin-top:auto}
+  .safi-tear span{color:#666}
+}
+
+/* ─── Update bar (both roles) ───────────────────────────── */
+.safi-updatebar{display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;background:var(--gray-soft);font-size:12.5px;color:var(--ink)}
+.safi-updatebar.is-ready{border-color:var(--brand);background:var(--brand-soft)}
+.safi-updatebar>span{flex:1;min-width:0}
+.safi-updatebar__go{border:0;background:var(--brand);color:#fff;font:inherit;font-size:12px;font-weight:650;padding:6px 14px;border-radius:7px;cursor:pointer;flex:none}
+.safi-updatebar__go:hover{filter:brightness(1.08)}
+.safi-updatebar__x{border:0;background:none;font-size:17px;line-height:1;color:var(--ink-2);cursor:pointer;padding:2px 6px;flex:none}

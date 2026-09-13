@@ -226,6 +226,8 @@ const Icon = ({ name, size = 18, stroke = 'currentColor' }) => {
     case 'dry':        return (<svg {...props}><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="13" r="5"/><path d="M9 13h6"/></svg>);
     case 'mpesa':      return (<svg {...props}><path d="M4 7h16v10H4z"/><path d="M4 11h16M8 7v10M12 7v10M16 7v10"/></svg>);
     case 'lock':       return (<svg {...props}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>);
+    case 'card':       return (<svg {...props}><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h5"/></svg>);
+    case 'shield':     return (<svg {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11.5 14.5 15.5 10"/></svg>);
     case 'cloud':      return (<svg {...props}><path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97 6 6 0 0 0-11.66-1.4A4 4 0 0 0 6.5 19z"/></svg>);
     case 'refresh':    return (<svg {...props}><path d="M20 12a8 8 0 1 1-2.34-5.66"/><polyline points="20 3 20 8 15 8"/></svg>);
     case 'logo':       return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="6" fill="currentColor"/><path d="M7 12c0-2.8 2.2-5 5-5s5 2.2 5 5-2.2 5-5 5" stroke="#fff" strokeWidth="2" strokeLinecap="round"/><circle cx="12" cy="12" r="1.6" fill="#fff"/></svg>);
@@ -300,6 +302,7 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
         ['payments',   'nav_payments',  'wallet'],
         ['expenses',   'nav_expenses',  'box'],
         ['dispatch',   'Pickup & Delivery', 'truck'],
+        ['rider-cards', 'Rider notes', 'card'],
         ['customers',  'nav_customers', 'users'],
         ['pricing',    'nav_pricing',   'tag'],
         ['packages',   'nav_packages',  'package'],
@@ -308,6 +311,7 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
         ['staff',      'nav_staff',     'staff'],
         ['issues',     'nav_issues',    'alert'],
         ['settings',   'Settings',      'settings'],
+        ['integrity',  'Integrity',     'shield'],
         ['data',       'Data & Backup', 'box'],
         ['cloud',      'Cloud & Updates', 'cloud'],
       ];

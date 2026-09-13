@@ -13,5 +13,6 @@ contextBridge.exposeInMainWorld('lms', {
   setConfig: (patch) => ipcRenderer.invoke('lms:config', patch),
   updateStatus: () => ipcRenderer.invoke('lms:updateStatus'),
   checkUpdate: () => ipcRenderer.invoke('lms:checkUpdate'),
+  installUpdate: () => ipcRenderer.invoke('lms:installUpdate'),
   onUpdate: (fn) => { ipcRenderer.on('lms:update', (_e, s) => fn(s)); }
 });

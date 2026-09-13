@@ -249,6 +249,7 @@ ipcMain.handle('lms:openDrawer', () => kickCashDrawer());
 ipcMain.handle('lms:config', (_e, patch) => (patch ? writeConfig(patch) : readConfig()));
 ipcMain.handle('lms:updateStatus', () => updateStatus);
 ipcMain.handle('lms:checkUpdate', () => { updateCtl.check(true); return updateStatus; });
+ipcMain.handle('lms:installUpdate', () => { updateCtl.install(); return true; });
 ipcMain.handle('lms:info', () => ({
   version: app.getVersion(),
   electron: process.versions.electron,

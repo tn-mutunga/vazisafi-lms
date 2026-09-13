@@ -28,6 +28,21 @@ window.SAFI_STORE = (() => {
   if (!state.dispatch)       state.dispatch = [];
   if (!state.approvals)      state.approvals = [];
   if (!state.settings)       state.settings = { firstTimeBagFree: false, freeBagServiceId: 'laundry-bag' };
+  // Integrity controls (added to close the unreceipted-order gap)
+  if (!state.auditLog)       state.auditLog = [];
+  if (!state.shifts)         state.shifts = [];
+  if (!state.releases)       state.releases = [];
+  if (!state.deliveryCards)  state.deliveryCards = [];
+  if (state.settings.payTo === undefined)      state.settings.payTo = '';
+  if (state.settings.payToName === undefined)  state.settings.payToName = '';
+  if (state.settings.ownerPhone === undefined) state.settings.ownerPhone = '';
+  if (state.settings.requireTag === undefined) state.settings.requireTag = true;
+  if (state.settings.requireIntakeSms === undefined) state.settings.requireIntakeSms = true;
+  if (state.settings.varianceLimit === undefined)    state.settings.varianceLimit = 100;
+  if (!state.smsTemplates || !state.smsTemplates.intake) {
+    state.smsTemplates = { ...(state.smsTemplates || {}),
+      intake: 'Vazi Safi: order {id} received, {items} item(s), total {total}. Tag {tag}. Pay ONLY to {payto}. Queries {owner}.' };
+  }
   if (!state.smsTemplates)   state.smsTemplates = {
     ready:     'Hi {name}, your order {id} is READY for collection at Vazi Safi. Balance: {balance}. Asante!',
     washing:   'Hi {name}, your order {id} is being washed. We will text you when ready.',
@@ -69,6 +84,17 @@ window.SAFI_STORE = (() => {
     }
   }
 
+  // Backfill the daily client queue number on orders saved before it existed
+  {
+    const byDay = {};
+    // state.orders is newest-first by id, not chronological, so sort on the timestamp
+    const asc = [...state.orders].sort((a, b) => String(a.in || '').localeCompare(String(b.in || '')));
+    for (const o of asc) {
+      const day = String(o.in || '').slice(0, 10);
+      byDay[day] = (byDay[day] || 0) + 1;
+      if (!o.queueNo) { o.queueNo = byDay[day]; migrated = true; }
+    }
+  }
   const listeners = new Set();
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn('Safi: storage full', e); }
@@ -89,9 +115,169 @@ window.SAFI_STORE = (() => {
   };
   const nextId = (prefix) => `${prefix}-${Date.now().toString(36)}${Math.floor(Math.random() * 999)}`;
 
+  // Client number: position in today's queue. Resets each morning, so "client 7" means
+  // the seventh customer served today — what staff and customers actually say out loud.
+  const nextQueueNo = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    return state.orders.filter(o => String(o.in || '').startsWith(today)).length + 1;
+  };
+
   const STAGES = ['intake', 'washing', 'drying', 'ironing', 'ready', 'collected'];
 
+  const stamp = (d) => (d || new Date()).toISOString().slice(0, 16).replace('T', ' ');
+
+  // Append-only trail. Every write that could hide money leaves a line here. Nothing in
+  // the front-desk UI reads it, so it costs staff nothing to be honest and nothing to
+  // forget it exists.
+  function audit(action, target, detail, meta) {
+    state.auditLog = [{
+      id: nextId('au'), at: new Date().toISOString(),
+      staff: state.currentStaffId || '', action,
+      target: target || '', detail: detail || '', meta: meta || null,
+    }, ...state.auditLog].slice(0, 5000);
+  }
+
   return {
+    audit(action, target, detail, meta) { audit(action, target, detail, meta); save(); },
+    getAudit(filter) {
+      let rows = state.auditLog || [];
+      if (filter?.staff)  rows = rows.filter(r => r.staff === filter.staff);
+      if (filter?.action) rows = rows.filter(r => r.action === filter.action);
+      if (filter?.since)  rows = rows.filter(r => r.at >= filter.since);
+      return rows;
+    },
+
+    // ── Shifts ──────────────────────────────────────────
+    // Cash is only auditable if someone counted it at a known moment. A shift is that
+    // moment: who was on the counter, from when, and what they declared at the end.
+    getOpenShift() { return (state.shifts || []).find(s => !s.closedAt) || null; },
+    openShift({ staffId, openingFloat }) {
+      if (this.getOpenShift()) return null;
+      const sh = {
+        id: nextId('sh'), staff: staffId || state.currentStaffId || '',
+        openedAt: new Date().toISOString(), openedAtLabel: stamp(),
+        openingFloat: Math.round(openingFloat || 0),
+        closedAt: '', declaredCash: 0, expectedCash: 0, variance: 0, note: '',
+      };
+      state.shifts = [sh, ...state.shifts];
+      audit('shift.open', sh.id, `Float ${sh.openingFloat}`);
+      save();
+      return sh;
+    },
+    // Expected cash = float + cash taken in during the shift − cash expenses paid out.
+    shiftExpected(sh) {
+      if (!sh) return 0;
+      const from = sh.openedAt, to = sh.closedAt || new Date().toISOString();
+      const inWin = (iso) => iso >= from && iso <= to;
+      const toIso = (d) => (d || '').replace(' ', 'T');
+      const cashIn = (state.payments || [])
+        .filter(p => p.method === 'cash' && inWin(toIso(p.date)))
+        .reduce((n, p) => n + (p.amount || 0), 0);
+      const cashOut = (state.expenses || [])
+        .filter(e => e.method === 'cash' && inWin(toIso(e.date)))
+        .reduce((n, e) => n + (e.amount || 0), 0);
+      return (sh.openingFloat || 0) + cashIn - cashOut;
+    },
+    closeShift({ declaredCash, note }) {
+      const sh = this.getOpenShift();
+      if (!sh) return null;
+      const expected = this.shiftExpected(sh);
+      const declared = Math.round(declaredCash || 0);
+      const closed = {
+        ...sh, closedAt: new Date().toISOString(), closedAtLabel: stamp(),
+        declaredCash: declared, expectedCash: expected,
+        variance: declared - expected, note: note || '',
+      };
+      state.shifts = state.shifts.map(s => s.id === sh.id ? closed : s);
+      audit('shift.close', sh.id, `Declared ${declared}, expected ${expected}, variance ${closed.variance}`);
+      save();
+      return closed;
+    },
+
+    // ── Garment tags ──────────────────────────────────────
+    // A physical numbered tag book is a controlled resource: every number printed must
+    // end up against an order or be declared void. Skipped numbers are the audit.
+    voidTag(tag, reason) {
+      state.voidTags = [...(state.voidTags || []), {
+        tag: String(tag), reason: reason || '', at: new Date().toISOString(),
+        staff: state.currentStaffId || '',
+      }];
+      audit('tag.void', String(tag), reason || '');
+      save();
+    },
+
+    // ── Rider delivery notes ─────────────────────────────────────────────
+    // A controlled document. Every note carries a serial — the order number and the
+    // client's queue number for that day — goes out with the rider, and has to come back
+    // before that rider is paid.
+    cardSerial(order) {
+      const q = order.queueNo ? String(order.queueNo).padStart(2, '0') : '00';
+      return `${order.id}-${q}`;
+    },
+    nextCardSerial() {
+      const today = new Date().toISOString().slice(0, 10);
+      const n = state.orders.filter(o => String(o.in || '').startsWith(today)).length + 1;
+      return `${nextOrderId()}-${String(n).padStart(2, '0')}`;
+    },
+    issueDeliveryCard(orderId, dispatchId) {
+      const order = state.orders.find(o => o.id === orderId);
+      if (!order) return null;
+      const existing = (state.deliveryCards || []).find(c => c.order === orderId);
+      if (existing) return existing;
+      const d = dispatchId
+        ? (state.dispatch || []).find(x => x.id === dispatchId)
+        : (state.dispatch || []).find(x => x.orderId === orderId && x.type === 'delivery');
+      const due = Math.max(0, (order.total || 0) - (order.paid || 0));
+      const card = {
+        id: nextId('dc'), serial: this.cardSerial(order),
+        dispatch: d?.id || '', order: orderId, customer: order.customer || '',
+        rider: d?.rider || '', amountDue: due, tag: order.tag || '',
+        queueNo: order.queueNo || null,
+        issuedAt: new Date().toISOString(), issuedAtLabel: stamp(),
+        issuedBy: state.currentStaffId || '',
+        returnedAt: '', returnedBy: '', receivedAmount: 0,
+        receivedMethod: '', receivedTxn: '', note: '',
+      };
+      state.deliveryCards = [card, ...(state.deliveryCards || [])];
+      audit('card.issue', card.serial, `Order ${orderId}, due ${due}`, { rider: card.rider });
+      save();
+      return card;
+    },
+    getCardForOrder(orderId) {
+      return (state.deliveryCards || []).find(c => c.order === orderId) || null;
+    },
+    returnDeliveryCard(id, { receivedAmount, receivedMethod, receivedTxn, note }) {
+      const card = (state.deliveryCards || []).find(c => c.id === id);
+      if (!card) return null;
+      const next = {
+        ...card,
+        returnedAt: new Date().toISOString(), returnedAtLabel: stamp(),
+        returnedBy: state.currentStaffId || '',
+        receivedAmount: Math.round(receivedAmount || 0),
+        receivedMethod: receivedMethod || '',
+        receivedTxn: receivedTxn || '',
+        note: note || '',
+      };
+      state.deliveryCards = state.deliveryCards.map(c => c.id === id ? next : c);
+      audit('card.return', card.serial,
+        `Received ${next.receivedAmount} of ${card.amountDue} due${next.receivedTxn ? ` (${next.receivedTxn})` : ''}`,
+        { rider: card.rider, short: card.amountDue - next.receivedAmount });
+      save();
+      return next;
+    },
+
+    // ── Handover ───────────────────────────────────────────
+    logRelease({ orderId, tag, releasedTo, balanceAtRelease }) {
+      state.releases = [{
+        id: nextId('rl'), at: new Date().toISOString(), atLabel: stamp(),
+        order: orderId, tag: tag || '', releasedTo: releasedTo || '',
+        staff: state.currentStaffId || '',
+        balanceAtRelease: Math.round(balanceAtRelease || 0),
+      }, ...state.releases];
+      audit('order.release', orderId, `To ${releasedTo || 'customer'}${balanceAtRelease > 0 ? `, balance ${balanceAtRelease} outstanding` : ''}`);
+      save();
+    },
+
     get: () => state,
     subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
 
@@ -153,7 +339,7 @@ window.SAFI_STORE = (() => {
     removeStaff(id) { state.staff = state.staff.filter(s => s.id !== id); save(); },
 
     // ── Orders ─────────────────────────────────────────────
-    createOrder({ customerId, items, total, discount, discountPct, paid, method, txn, notes, due, rewashOf }) {
+    createOrder({ customerId, items, total, discount, discountPct, paid, method, txn, notes, due, rewashOf, tag }) {
       const id = nextOrderId();
       const now = new Date();
       const fmt = (d) => d.toISOString().slice(0, 10) + ' ' + d.toTimeString().slice(0, 5);
@@ -201,6 +387,9 @@ window.SAFI_STORE = (() => {
         due: due || fmt(new Date(now.getTime() + 24 * 3600 * 1000)),
         notes: notes || '',
         rewashOf: rewashOf || '',
+        tag: tag || '',
+        queueNo: nextQueueNo(),
+        shift: (state.shifts || []).find(s => !s.closedAt)?.id || '',
       };
       state.orders = [order, ...state.orders];
 
@@ -225,6 +414,7 @@ window.SAFI_STORE = (() => {
       }
       // Tag who took the order
       if (state.currentStaffId) order.cashier = state.currentStaffId;
+      audit('order.create', id, `${finalItems.length} line(s), total ${order.total}`, { tag: order.tag || '' });
       // Mark the parent order as having been rewashed
       if (rewashOf) {
         state.orders = state.orders.map(o => o.id === rewashOf ? { ...o, rewashedBy: id } : o);
@@ -233,7 +423,15 @@ window.SAFI_STORE = (() => {
       return order;
     },
     updateOrder(id, patch) {
+      const before = state.orders.find(o => o.id === id);
       state.orders = state.orders.map(o => o.id === id ? { ...o, ...patch } : o);
+      if (before) {
+        const changed = Object.keys(patch).filter(k => String(before[k]) !== String(patch[k]));
+        if (changed.length) {
+          audit('order.edit', id, changed.map(k => `${k}: ${before[k] ?? '—'} → ${patch[k]}`).join('; '),
+            { afterCollection: before.status === 'collected' });
+        }
+      }
       save();
     },
     advanceStatus(id) {
@@ -245,7 +443,9 @@ window.SAFI_STORE = (() => {
       save();
     },
     setStatus(id, status) {
+      const before = state.orders.find(o => o.id === id);
       state.orders = state.orders.map(o => o.id === id ? { ...o, status } : o);
+      audit('order.status', id, `${before?.status || '—'} → ${status}`);
       save();
     },
     deleteOrder(id) {
@@ -261,7 +461,9 @@ window.SAFI_STORE = (() => {
       }
       // Remove associated payments
       state.payments = state.payments.filter(p => p.order !== id);
-      // Remove order
+      // Remove order — the row goes, the record of its going does not
+      audit('order.delete', id, `Total ${o.total}, paid ${o.paid || 0}, status ${o.status}`,
+        { tag: o.tag || '', total: o.total, paid: o.paid || 0 });
       state.orders = state.orders.filter(x => x.id !== id);
       save();
     },
@@ -376,6 +578,7 @@ window.SAFI_STORE = (() => {
         txn: txn || '', verified: false,
       };
       state.payments = [p, ...state.payments];
+      audit('payment.record', orderId, `${method} ${Math.round(amount)}${txn ? ` (${txn})` : ''}`);
       // Update order
       state.orders = state.orders.map(o =>
         o.id === orderId
@@ -386,7 +589,9 @@ window.SAFI_STORE = (() => {
       return p;
     },
     verifyPayment(id) {
-      state.payments = state.payments.map(p => p.id === id ? { ...p, verified: true } : p);
+      const p = state.payments.find(x => x.id === id);
+      state.payments = state.payments.map(x => x.id === id ? { ...x, verified: true } : x);
+      audit('payment.verify', p?.order || id, `${p?.method || ''} ${p?.amount || ''}`);
       save();
     },
 
@@ -508,6 +713,11 @@ window.SAFI_STORE = (() => {
         messages: [],
         dispatch: [],
         approvals: [],
+        auditLog: [],
+        shifts: [],
+        releases: [],
+        deliveryCards: [],
+        voidTags: [],
         revenueTrend: (state.revenueTrend || []).map(d => ({ ...d, v: 0 })),
         revenueByService: (state.revenueByService || []).map(d => ({ ...d, value: 0, pct: 0 })),
         revenueByMethod: (state.revenueByMethod || []).map(d => ({ ...d, value: 0, pct: 0 })),

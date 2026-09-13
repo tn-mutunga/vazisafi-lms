@@ -3,6 +3,43 @@
 // till running the same version.
 const { useState: useStateCl, useEffect: useEffectCl } = React;
 
+// Thin bar shown to BOTH roles — an update is a shop-wide thing, and the person at the
+// counter is usually the only one at the machine. No PIN, no Management screen needed.
+function UpdateBar() {
+  const [st, setSt] = useStateCl(null);
+  const [dismissed, setDismissed] = useStateCl(false);
+  const desktop = !!(window.lms && window.lms.isDesktop);
+
+  useEffectCl(() => {
+    if (!desktop) return;
+    window.lms.updateStatus().then(setSt).catch(() => {});
+    window.lms.onUpdate(s => { setSt(s); setDismissed(false); });
+  }, [desktop]);
+
+  if (!desktop || !st || dismissed) return null;
+  if (!['available', 'downloading', 'ready'].includes(st.state)) return null;
+
+  const ready = st.state === 'ready';
+  return (
+    <div className={`safi-updatebar ${ready ? 'is-ready' : ''}`}>
+      <Icon name="refresh" size={15}/>
+      <span>
+        {ready
+          ? <>Version <b>{st.version}</b> is ready. Installing takes a few seconds and reopens the app.</>
+          : st.state === 'downloading'
+            ? <>Downloading update… {st.percent || 0}%</>
+            : <>Version <b>{st.version}</b> found — downloading in the background.</>}
+      </span>
+      {ready && (
+        <button className="safi-updatebar__go" onClick={() => window.lms.installUpdate()}>
+          Install now
+        </button>
+      )}
+      <button className="safi-updatebar__x" onClick={() => setDismissed(true)} title="Later">×</button>
+    </div>
+  );
+}
+
 function UpdatesCard() {
   const [st, setSt] = useStateCl({ state: 'idle' });
   const [checking, setChecking] = useStateCl(false);
@@ -201,4 +238,4 @@ function CloudScreen() {
   );
 }
 
-Object.assign(window, { CloudScreen, CloudCard, UpdatesCard });
+Object.assign(window, { CloudScreen, CloudCard, UpdatesCard, UpdateBar });

@@ -17,11 +17,11 @@ function init({ app, dialog, getWindow, onStatus }) {
 
   if (!autoUpdater) {
     say({ state: 'unavailable', reason: 'electron-updater not installed' });
-    return { check: () => say({ state: 'unavailable' }), available: false };
+    return { check: () => say({ state: 'unavailable' }), install: () => {}, available: false };
   }
   if (!app.isPackaged) {
     say({ state: 'dev' });
-    return { check: () => say({ state: 'dev' }), available: false };
+    return { check: () => say({ state: 'dev' }), install: () => {}, available: false };
   }
 
   autoUpdater.autoDownload = true;
@@ -69,7 +69,7 @@ function init({ app, dialog, getWindow, onStatus }) {
   setTimeout(() => check(false), 10_000);        // shortly after boot
   setInterval(() => check(false), CHECK_INTERVAL_MS);
 
-  return { check, available: true };
+  return { check, install: () => autoUpdater.quitAndInstall(), available: true };
 }
 
 module.exports = { init };
