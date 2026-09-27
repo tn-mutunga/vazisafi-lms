@@ -55,7 +55,55 @@
   async function callRaw(path, opts = {}) {
     if (!cfg.url || !cfg.anonKey) throw new Error('Not configured');
     if (!navigator.onLine) throw new Error('No internet connection');
-    return fetch(base() + path, { ...opts, headers: { ...headers(opts.auth !== false), ...(opts.headers || {}) } });
+    if (opts.auth !== false) await ensureFresh();
+    const go = () => fetch(base() + path, { ...opts, headers: { ...headers(opts.auth !== false), ...(opts.headers || {}) } });
+    let res = await go();
+    // A token can expire between the check and the request (a laptop lid closed
+    // for an hour, say). Renew once and retry before giving up.
+    if (res.status === 401 && opts.auth !== false && session?.refresh_token) {
+      if (await refresh()) res = await go();
+    }
+    return res;
+  }
+
+  // ── Session renewal ─────────────────────────────────────────────────
+  // Supabase access tokens last an hour. The refresh token that comes with them
+  // lasts until sign-out, so a till signed in once stays signed in.
+  let refreshing = null;
+  function expiresAt() {
+    if (!session) return 0;
+    if (session.expires_at) return session.expires_at * 1000;
+    if (session.expires_in && session.issued_at) return session.issued_at + session.expires_in * 1000;
+    return 0;
+  }
+  async function refresh() {
+    if (!session?.refresh_token) return false;
+    if (refreshing) return refreshing;
+    refreshing = (async () => {
+      try {
+        const res = await fetch(base() + '/auth/v1/token?grant_type=refresh_token', {
+          method: 'POST', headers: headers(false),
+          body: JSON.stringify({ refresh_token: session.refresh_token })
+        });
+        if (!res.ok) {
+          // Refresh token revoked or used up: the owner must sign in again.
+          if (res.status === 400 || res.status === 401) { session = null; write(SESSION_KEY, null); emit(); }
+          return false;
+        }
+        const body = await res.json();
+        session = { ...body, issued_at: Date.now() };
+        write(SESSION_KEY, session);
+        emit();
+        return true;
+      } catch { return false; }
+      finally { refreshing = null; }
+    })();
+    return refreshing;
+  }
+  async function ensureFresh() {
+    if (!session?.refresh_token) return;
+    const at = expiresAt();
+    if (!at || at - Date.now() < 120000) await refresh();
   }
 
   async function call(path, opts = {}) {
@@ -95,7 +143,7 @@
       const body = await call('/auth/v1/token?grant_type=password', {
         method: 'POST', auth: false, body: JSON.stringify({ email, password })
       });
-      session = body;
+      session = { ...body, issued_at: Date.now() };
       write(SESSION_KEY, session);
       emit();
       return status();
