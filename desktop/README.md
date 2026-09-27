@@ -153,10 +153,10 @@ The web app can read the same state: `window.lms.updateStatus()`, `window.lms.on
 ### The one catch: macOS needs signing
 
 Windows auto-update works with an unsigned build. macOS auto-update **does not** — an
-unsigned Mac app can download an update but macOS refuses to install it. Until you have
-an Apple Developer ID ($99/yr), the Mac copy has to be updated by hand: download the new
-`.dmg` and drag it over. Everything else is already wired, so adding the certificate is
-the only step that turns it on.
+unsigned Mac app cannot use Squirrel.Mac, so from v0.1.4 it uses its own updater
+(desktop/updater-mac.js): download the release .zip for the Mac's chip, swap the bundle in
+Applications, strip quarantine, relaunch. Same prompts as Windows. An Apple Developer ID is
+no longer needed for updates.
 
 If you would rather not use GitHub, swap `build.publish` for `{"provider":"s3"}` or
 `{"provider":"generic","url":"https://updates.vazisafi.co.ke"}` — any static file host

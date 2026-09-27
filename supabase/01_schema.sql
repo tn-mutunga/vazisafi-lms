@@ -146,13 +146,13 @@ create index if not exists orders_customer_idx on orders (customer_id);
 create index if not exists orders_status_idx   on orders (status) where archived = false;
 create index if not exists orders_tag_idx      on orders (branch_id, tag);
 
--- The client number resets each morning, so "branch + day + queue no" must be unique.
+-- The client number resets each morning; index "branch + day + queue no" for lookups.
 -- Indexing received_at::date directly will not do: casting a timestamptz to a date
 -- depends on the session time zone, so Postgres refuses to index it. A stored column
 -- pinned to Nairobi time is both immutable and the rule the shop actually follows.
 alter table orders add column if not exists received_day date
   generated always as (((received_at at time zone 'Africa/Nairobi'))::date) stored;
-create unique index if not exists orders_queue_idx
+create index if not exists orders_queue_idx
   on orders (branch_id, received_day, queue_no) where queue_no is not null;
 
 create table if not exists order_items (
@@ -218,7 +218,7 @@ create table if not exists payments (
 );
 create index if not exists payments_branch_idx on payments (branch_id, paid_at desc);
 create index if not exists payments_order_idx  on payments (order_id);
-create unique index if not exists payments_txn_idx on payments (txn) where txn <> '';
+create index if not exists payments_txn_idx on payments (txn) where txn <> '';
 
 -- ── Money out ───────────────────────────────────────────────────────────
 create table if not exists expense_categories (
@@ -321,7 +321,7 @@ create table if not exists delivery_cards (
   received_txn    text default '',
   note            text default ''
 );
-create unique index if not exists delivery_cards_serial_idx on delivery_cards (branch_id, serial);
+create index if not exists delivery_cards_serial_idx on delivery_cards (branch_id, serial);
 create index if not exists delivery_cards_open_idx on delivery_cards (branch_id) where returned_at is null;
 
 -- ── Stock ───────────────────────────────────────────────────────────────

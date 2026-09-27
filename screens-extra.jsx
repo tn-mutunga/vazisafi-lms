@@ -29,6 +29,10 @@ function PeriodSummary({ money }) {
       const d = new Date(today.getFullYear(), 0, 1);
       return { from: d, to: now, label: `${today.getFullYear()}` };
     }
+    if (p === '5y') {
+      const d = new Date(today.getFullYear() - 4, 0, 1);
+      return { from: d, to: now, label: `${today.getFullYear() - 4}–${today.getFullYear()}` };
+    }
     return { from: new Date(2000, 0, 1), to: now, label: 'All-time' };
   }
   function inRange(dateStr, from) {
@@ -51,6 +55,10 @@ function PeriodSummary({ money }) {
     },
     year:    {
       from: new Date(cur.from.getFullYear() - 1, 0, 1),
+      to:   cur.from,
+    },
+    '5y':    {
+      from: new Date(cur.from.getFullYear() - 5, 0, 1),
       to:   cur.from,
     },
   };
@@ -103,7 +111,7 @@ function PeriodSummary({ money }) {
     <>
       <Card title={`Period summary · ${cur.label}`} action={
         <div className="safi-seg">
-          {[['today', 'Today'], ['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year']].map(([k, lbl]) => (
+          {[['today', 'Today'], ['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year'], ['5y', '5 years'], ['all', 'All-time']].map(([k, lbl]) => (
             <button key={k} className={`safi-seg__btn ${period === k ? 'is-active' : ''}`} onClick={() => setPeriod(k)}>{lbl}</button>
           ))}
         </div>
@@ -685,24 +693,46 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
 // ─── Time series chart (Revenue vs Expenses) ───────────────────────────────
 function TimeSeries({ money }) {
   const D = useStore();
-  const [granularity, setGranularity] = useStateX('month'); // 'day' | 'month'
+  const [granularity, setGranularity] = useStateX('month'); // 'day' | 'month' | 'year'
+  const now = new Date();
+  const [monthYear, setMonthYear] = useStateX(now.getFullYear());
+  const years = [0, 1, 2, 3, 4].map(i => now.getFullYear() - i);
+
+  // Keys in shop-local time. toISOString() would turn local midnight on the 1st
+  // into the previous day in UTC, shifting every Nairobi month back by one.
+  const pad = (n) => String(n).padStart(2, '0');
+  const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const monthKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 
   // Build series from real data
   const points = [];
-  const now = new Date();
-  if (granularity === 'day') {
+  if (granularity === 'year') {
+    for (let i = 4; i >= 0; i--) {
+      const y = now.getFullYear() - i;
+      const key = String(y);
+      const rev = D.orders.filter(o => String(o.in).startsWith(key)).reduce((s, o) => s + (o.paid || 0), 0);
+      const exp = D.expenses.filter(e => String(e.date).startsWith(key)).reduce((s, e) => s + e.amount, 0);
+      points.push({ label: key, rev, exp, profit: rev - exp });
+    }
+  } else if (granularity === 'day') {
     for (let i = 29; i >= 0; i--) {
       const d = new Date(now); d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = dayKey(d);
       const label = d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
       const rev = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.paid || 0), 0);
       const exp = D.expenses.filter(e => e.date.startsWith(key)).reduce((s, e) => s + e.amount, 0);
       points.push({ label, rev, exp, profit: rev - exp });
     }
   } else {
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = d.toISOString().slice(0, 7);
+    // Current year: the last 12 months. A past year: January to December.
+    const endMonth = monthYear === now.getFullYear() ? now.getMonth() : 11;
+    const start = monthYear === now.getFullYear()
+      ? new Date(now.getFullYear(), now.getMonth() - 11, 1)
+      : new Date(monthYear, 0, 1);
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+      if (monthYear !== now.getFullYear() && d.getMonth() > endMonth) break;
+      const key = monthKey(d);
       const label = d.toLocaleDateString('en-KE', { month: 'short', year: '2-digit' });
       const rev = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.paid || 0), 0);
       const exp = D.expenses.filter(e => e.date.startsWith(key)).reduce((s, e) => s + e.amount, 0);
@@ -716,10 +746,22 @@ function TimeSeries({ money }) {
   const totalProfit = totalRev - totalExp;
 
   return (
-    <Card title={`Revenue vs Expenses · ${granularity === 'day' ? 'last 30 days' : 'last 12 months'}`} action={
-      <div className="safi-seg">
-        <button className={`safi-seg__btn ${granularity === 'day' ? 'is-active' : ''}`} onClick={() => setGranularity('day')}>Daily</button>
-        <button className={`safi-seg__btn ${granularity === 'month' ? 'is-active' : ''}`} onClick={() => setGranularity('month')}>Monthly</button>
+    <Card title={`Revenue vs Expenses · ${
+      granularity === 'day' ? 'last 30 days'
+      : granularity === 'year' ? `${years[4]}–${years[0]}`
+      : monthYear === now.getFullYear() ? 'last 12 months' : String(monthYear)}`} action={
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {granularity === 'month' && (
+          <select className="safi-input" style={{ width: 'auto', padding: '6px 10px' }}
+            value={monthYear} onChange={e => setMonthYear(Number(e.target.value))}>
+            {years.map(y => <option key={y} value={y}>{y === now.getFullYear() ? 'Last 12 months' : y}</option>)}
+          </select>
+        )}
+        <div className="safi-seg">
+          <button className={`safi-seg__btn ${granularity === 'day' ? 'is-active' : ''}`} onClick={() => setGranularity('day')}>Daily</button>
+          <button className={`safi-seg__btn ${granularity === 'month' ? 'is-active' : ''}`} onClick={() => setGranularity('month')}>Monthly</button>
+          <button className={`safi-seg__btn ${granularity === 'year' ? 'is-active' : ''}`} onClick={() => setGranularity('year')}>Yearly</button>
+        </div>
       </div>
     }>
       <div className="safi-ts-totals">

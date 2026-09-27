@@ -111,9 +111,10 @@ Any time you edit the app:
 ## Notes
 
 - `node_modules/` and `dist/` are excluded by `.gitignore` — don't commit them.
-- The Mac build auto-downloads updates but **cannot self-install** without an Apple
-  Developer ID ($99/yr). Until then, update the Mac by downloading the new `.dmg` from
-  the releases page and dragging it over. Windows is fully automatic.
+- From v0.1.4 the Mac build updates itself too (desktop/updater-mac.js): it downloads the
+  release .zip, swaps the app in Applications, clears quarantine and relaunches. No Apple
+  Developer ID needed. The release must be **published** (not draft) for either platform
+  to see it.
 - If you later want to keep the source private: make the repo private, but create a
   second **public** repo (e.g. `vazisafi-releases`) and point `build.publish.repo` at
   it. Then the tills need no token.

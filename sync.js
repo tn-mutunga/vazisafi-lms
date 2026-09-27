@@ -17,15 +17,20 @@
   // ── value helpers ───────────────────────────────────────────────────
   const n = (v) => Math.round(Number(v) || 0);
   const s = (v) => (v == null ? '' : String(v));
-  // The app stores 'YYYY-MM-DD HH:mm' (local) or a full ISO string. Postgres wants ISO.
+  // The app stores 'YYYY-MM-DD HH:mm' in shop (Nairobi) time, or a full ISO string
+  // which is already UTC. Postgres reads an offset-less string as UTC, so the short
+  // form needs +03:00 or every order lands three hours early.
   const ts = (v) => {
     if (!v) return null;
     const str = String(v);
     if (str.includes('T')) return str;
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(str)) return str.replace(' ', 'T') + ':00';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str + 'T00:00:00';
+    const m = str.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/);
+    if (m) return `${m[1]}T${m[2]}:00+03:00`;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str + 'T00:00:00+03:00';
     return null;
   };
+  // For columns that may not be null: fall back to now rather than fail the push.
+  const tsNow = (v) => ts(v) || new Date().toISOString();
   const fromTs = (v) => (v ? String(v).slice(0, 16).replace('T', ' ') : '');
   const day = (v) => (v ? String(v).slice(0, 10) : null);
 
@@ -67,7 +72,7 @@
         paid: n(r.paid), method: r.method === '—' ? '' : s(r.method), txn: s(r.txn), notes: s(r.notes),
         rewash_of: r.rewashOf || null, rewashed_by: r.rewashedBy || null,
         cashier_id: r.cashier || null, shift_id: r.shift || null,
-        received_at: ts(r.in), due_at: ts(r.due) }),
+        received_at: tsNow(r.in), due_at: ts(r.due) }),
       down: (r) => ({ id: r.id, customer: r.customer_id || '', status: r.status, queueNo: r.queue_no,
         tag: r.tag, total: Number(r.total), discount: Number(r.discount), discountPct: Number(r.discount_pct),
         paid: Number(r.paid), method: r.method || '—', txn: r.txn, notes: r.notes,
@@ -78,7 +83,7 @@
       key: 'payments', table: 'payments', pk: 'id', branch: true,
       up: (r) => ({ id: r.id, branch_id: BRANCH, order_id: r.order || null, customer: s(r.customer),
         method: r.method || 'cash', amount: n(r.amount), txn: s(r.txn), verified: !!r.verified,
-        paid_at: ts(r.date) }),
+        paid_at: tsNow(r.date) }),
       down: (r) => ({ id: r.id, date: fromTs(r.paid_at), order: r.order_id || '', customer: r.customer,
         method: r.method, amount: Number(r.amount), txn: r.txn, verified: r.verified }),
     },
@@ -87,14 +92,14 @@
       up: (r) => ({ id: r.id, branch_id: BRANCH, category_id: r.category || null, label: s(r.label) || '—',
         amount: n(r.amount), method: r.method || 'cash', txn: s(r.txn), paid_by: s(r.paidBy),
         notes: s(r.notes), linked_order: r.linkedOrder || null, linked_customer: r.linkedCustomer || null,
-        spent_at: ts(r.date) }),
+        spent_at: tsNow(r.date) }),
       down: (r) => ({ id: r.id, date: fromTs(r.spent_at), category: r.category_id || '', label: r.label,
         amount: Number(r.amount), method: r.method, txn: r.txn, paidBy: r.paid_by, notes: r.notes,
         linkedOrder: r.linked_order || '', linkedCustomer: r.linked_customer || '' }),
     },
     {
       key: 'shifts', table: 'shifts', pk: 'id', branch: true,
-      up: (r) => ({ id: r.id, branch_id: BRANCH, staff_id: r.staff || null, opened_at: ts(r.openedAt),
+      up: (r) => ({ id: r.id, branch_id: BRANCH, staff_id: r.staff || null, opened_at: tsNow(r.openedAt),
         opening_float: n(r.openingFloat), closed_at: ts(r.closedAt), declared_cash: n(r.declaredCash),
         expected_cash: n(r.expectedCash), variance: n(r.variance), note: s(r.note) }),
       down: (r) => ({ id: r.id, staff: r.staff_id || '', openedAt: r.opened_at, openedAtLabel: fromTs(r.opened_at),
@@ -107,7 +112,7 @@
       up: (r) => ({ id: r.id, branch_id: BRANCH, order_id: r.orderId || null, customer_id: r.customerId || null,
         kind: r.type === 'pickup' ? 'pickup' : 'delivery', address: s(r.address), area: s(r.area),
         rider: s(r.rider), slot_start: s(r.slotStart), slot_end: s(r.slotEnd), notes: s(r.notes),
-        status: r.status || 'scheduled', created_at: ts(r.created) }),
+        status: r.status || 'scheduled', created_at: tsNow(r.created) }),
       down: (r) => ({ id: r.id, orderId: r.order_id || '', customerId: r.customer_id || '', type: r.kind,
         address: r.address, area: r.area, rider: r.rider, slotStart: r.slot_start, slotEnd: r.slot_end,
         notes: r.notes, status: r.status, created: fromTs(r.created_at) }),
@@ -116,7 +121,7 @@
       key: 'deliveryCards', table: 'delivery_cards', pk: 'id', branch: true,
       up: (r) => ({ id: r.id, branch_id: BRANCH, serial: r.serial, order_id: r.order || null,
         dispatch_id: r.dispatch || null, customer_id: r.customer || null, rider: s(r.rider), tag: s(r.tag),
-        queue_no: r.queueNo || null, amount_due: n(r.amountDue), issued_at: ts(r.issuedAt),
+        queue_no: r.queueNo || null, amount_due: n(r.amountDue), issued_at: tsNow(r.issuedAt),
         issued_by: s(r.issuedBy), returned_at: ts(r.returnedAt), returned_by: s(r.returnedBy),
         received_amount: n(r.receivedAmount), received_method: s(r.receivedMethod),
         received_txn: s(r.receivedTxn), note: s(r.note) }),
@@ -130,7 +135,7 @@
     {
       key: 'releases', table: 'releases', pk: 'id', branch: true,
       up: (r) => ({ id: r.id, branch_id: BRANCH, order_id: r.order || null, tag: s(r.tag),
-        released_to: s(r.releasedTo), staff_id: s(r.staff), balance_at_release: n(r.balanceAtRelease), at: ts(r.at) }),
+        released_to: s(r.releasedTo), staff_id: s(r.staff), balance_at_release: n(r.balanceAtRelease), at: tsNow(r.at) }),
       down: (r) => ({ id: r.id, at: r.at, atLabel: fromTs(r.at), order: r.order_id || '', tag: r.tag,
         releasedTo: r.released_to, staff: r.staff_id, balanceAtRelease: Number(r.balance_at_release) }),
     },
@@ -138,23 +143,24 @@
       key: 'messages', table: 'messages', pk: 'id', branch: true,
       up: (r) => ({ id: r.id, branch_id: BRANCH, order_id: r.orderId || null, to_phone: s(r.to),
         name: s(r.name), body: s(r.body) || '—', stage: s(r.stage), method: r.method || 'sms',
-        status: r.status || 'sent', sent_at: ts(r.date) }),
+        status: r.status || 'sent', sent_at: tsNow(r.date) }),
       down: (r) => ({ id: r.id, date: fromTs(r.sent_at), to: r.to_phone, name: r.name, body: r.body,
         orderId: r.order_id || '', stage: r.stage, method: r.method, status: r.status }),
     },
     {
       key: 'inventory', table: 'inventory', pk: 'id', branch: true,
-      up: (r) => ({ id: r.id, branch_id: BRANCH, name: r.name, unit: r.unit || 'unit',
-        qty: Number(r.qty) || 0, reorder_at: Number(r.reorder ?? r.reorderAt) || 0,
+      // Local stock rows are { item, stock, reorder, unit }.
+      up: (r) => ({ id: r.id, branch_id: BRANCH, name: s(r.item ?? r.name) || '—', unit: r.unit || 'unit',
+        qty: Number(r.stock ?? r.qty) || 0, reorder_at: Number(r.reorder ?? r.reorderAt) || 0,
         cost: n(r.cost), supplier: s(r.supplier) }),
-      down: (r) => ({ id: r.id, name: r.name, unit: r.unit, qty: Number(r.qty),
+      down: (r) => ({ id: r.id, item: r.name, unit: r.unit, stock: Number(r.qty),
         reorder: Number(r.reorder_at), cost: Number(r.cost), supplier: r.supplier }),
     },
     {
       key: 'issues', table: 'issues', pk: 'id', branch: true,
       up: (r) => ({ id: r.id, branch_id: BRANCH, order_id: r.order || null, subject: r.subject || '—',
         priority: r.priority || 'medium', status: r.status || 'open', raised_by: s(r.raisedBy),
-        details: s(r.details), raised_at: ts(r.date) }),
+        details: s(r.details), raised_at: tsNow(r.date) }),
       down: (r) => ({ id: r.id, date: fromTs(r.raised_at), order: r.order_id || '', subject: r.subject,
         priority: r.priority, status: r.status, raisedBy: r.raised_by, details: r.details }),
     },
@@ -162,7 +168,7 @@
       key: 'approvals', table: 'approvals', pk: 'id', branch: true,
       up: (r) => ({ id: r.id, branch_id: BRANCH, action: r.action, target: s(r.target),
         reason: s(r.reason), payload: r.payload || null, status: r.status || 'pending',
-        requested_by: s(r.requestedBy), requested_at: ts(r.requestedAt),
+        requested_by: s(r.requestedBy), requested_at: tsNow(r.requestedAt),
         decided_by: s(r.decidedBy), decided_at: ts(r.decidedAt), decision_note: s(r.decisionNote) }),
       down: (r) => ({ id: r.id, action: r.action, target: r.target, reason: r.reason, payload: r.payload,
         status: r.status, requestedBy: r.requested_by, requestedAt: fromTs(r.requested_at),
@@ -170,14 +176,30 @@
     },
     {
       key: 'auditLog', table: 'audit_log', pk: 'id', branch: true, appendOnly: true,
-      up: (r) => ({ id: r.id, branch_id: BRANCH, at: ts(r.at), staff_id: s(r.staff),
+      up: (r) => ({ id: r.id, branch_id: BRANCH, at: tsNow(r.at), staff_id: s(r.staff),
         action: r.action, target: s(r.target), detail: s(r.detail), meta: r.meta || null }),
       down: (r) => ({ id: r.id, at: r.at, staff: r.staff_id, action: r.action, target: r.target,
         detail: r.detail, meta: r.meta }),
     },
   ];
 
-  const byKey = Object.fromEntries(TABLES.map(t => [t.key, t]));
+  // Reference data only the owner login may change. The till login skips these
+  // quietly instead of failing the whole push.
+  const OWNER_ONLY = new Set(['services', 'expense_categories']);
+
+  // The laptop can delete a customer, staff member or service that older rows still
+  // point at. The cloud enforces those links, so a dangling one is cleared to null
+  // before sending — the row keeps its text copy (customer name etc.) either way.
+  function clearDangling(table, rows, ids) {
+    const keep = (field, set) => rows.forEach(r => { if (r[field] && !set.has(r[field])) r[field] = null; });
+    if (table === 'orders')         { keep('customer_id', ids.customers); keep('cashier_id', ids.staff); }
+    if (table === 'payments')       keep('order_id', ids.orders);
+    if (table === 'expenses')       keep('category_id', ids.expenseCategories);
+    if (table === 'dispatch')       { keep('order_id', ids.orders); keep('customer_id', ids.customers); }
+    if (table === 'delivery_cards') { keep('order_id', ids.orders); keep('dispatch_id', ids.dispatch); }
+    if (table === 'releases')       keep('order_id', ids.orders);
+    return rows;
+  }
 
   function chunk(arr, size) {
     const out = [];
@@ -249,12 +271,25 @@
     async push(onProgress) {
       const st = S().get();
       const report = [];
+      const ids = {};
+      for (const k of ['customers', 'orders', 'staff', 'services', 'expenseCategories', 'dispatch'])
+        ids[k] = new Set((st[k] || []).map(r => r.id));
+
       for (const t of TABLES) {
-        const rows = (st[t.key] || []).map(t.up).filter(Boolean);
+        const rows = clearDangling(t.table, (st[t.key] || []).map(t.up).filter(Boolean), ids);
         onProgress && onProgress(t.table, rows.length);
-        const written = t.appendOnly
-          ? await insertIgnore(t.table, rows, t.pk)
-          : await upsert(t.table, rows, t.pk);
+        let written = 0;
+        try {
+          written = t.appendOnly
+            ? await insertIgnore(t.table, rows, t.pk)
+            : await upsert(t.table, rows, t.pk);
+        } catch (e) {
+          if (OWNER_ONLY.has(t.table) && /row-level security|permission denied|42501|403/i.test(e.message)) {
+            report.push({ table: t.table, rows: 0, skipped: 'owner only' });
+            continue;
+          }
+          throw new Error(`${t.table}: ${e.message}`);
+        }
         report.push({ table: t.table, rows: written });
 
         // Order lines ride along with their orders: clear then rewrite, so a line
@@ -270,7 +305,8 @@
           const lines = [];
           for (const o of st.orders) {
             (o.items || []).forEach((it, i) => lines.push({
-              order_id: o.id, line_no: i + 1, service_id: it.svc || null,
+              order_id: o.id, line_no: i + 1,
+              service_id: it.svc && ids.services.has(it.svc) ? it.svc : null,
               subtype: s(it.subtype), qty: Number(it.qty) || 1, price: n(it.price),
               free: !!it.free, note: s(it.note),
             }));

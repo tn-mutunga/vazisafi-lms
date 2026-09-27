@@ -368,7 +368,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
               <div className="safi-sum__divider"/>
 
               <div className="safi-tagentry">
-                <label>Tag number{D.settings?.requireTag && <span className="safi-req">required</span>}</label>
+                <label>Tag number{D.settings?.requireTag ? <span className="safi-req">required</span> : <span className="safi-cell-sub" style={{ marginLeft: 6, fontWeight: 400 }}>optional</span>}</label>
                 <input className="safi-input safi-mono" value={tag} inputMode="numeric"
                   placeholder="e.g. 10482" onChange={e => setTag(e.target.value.replace(/[^\d-]/g, ''))}/>
                 <span className="safi-hint">Read it off the tag you pinned to the bundle.</span>

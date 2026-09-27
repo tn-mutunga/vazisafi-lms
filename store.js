@@ -36,7 +36,9 @@ window.SAFI_STORE = (() => {
   if (state.settings.payTo === undefined)      state.settings.payTo = '';
   if (state.settings.payToName === undefined)  state.settings.payToName = '';
   if (state.settings.ownerPhone === undefined) state.settings.ownerPhone = '';
-  if (state.settings.requireTag === undefined) state.settings.requireTag = true;
+  // Tag numbers are optional (owner's call, v0.1.4). Turned off once for existing
+  // installs; the owner can switch it back on in Settings and it will stay on.
+  if (!state.settings.tagOptionalV014) { state.settings.requireTag = false; state.settings.tagOptionalV014 = true; }
   if (state.settings.requireIntakeSms === undefined) state.settings.requireIntakeSms = true;
   if (state.settings.varianceLimit === undefined)    state.settings.varianceLimit = 100;
   if (!state.smsTemplates || !state.smsTemplates.intake) {
@@ -84,16 +86,25 @@ window.SAFI_STORE = (() => {
     }
   }
 
-  // Backfill the daily client queue number on orders saved before it existed
-  {
+  // Daily client queue number. Authoritative one-time renumber: an earlier build wrote
+  // these from array order rather than time, so fill-only would leave the bad values in
+  // place forever. Recompute every order from the time-sorted list, once.
+  if (!state.queueNoFixed) {
     const byDay = {};
     // state.orders is newest-first by id, not chronological, so sort on the timestamp
     const asc = [...state.orders].sort((a, b) => String(a.in || '').localeCompare(String(b.in || '')));
     for (const o of asc) {
       const day = String(o.in || '').slice(0, 10);
       byDay[day] = (byDay[day] || 0) + 1;
-      if (!o.queueNo) { o.queueNo = byDay[day]; migrated = true; }
+      o.queueNo = byDay[day];
     }
+    // Serials already printed from a wrong number are rewritten to match
+    state.deliveryCards = (state.deliveryCards || []).map(c => {
+      const o = state.orders.find(x => x.id === c.order);
+      return o ? { ...c, queueNo: o.queueNo, serial: `${o.id}-${String(o.queueNo).padStart(2, '0')}` } : c;
+    });
+    state.queueNoFixed = true;
+    migrated = true;
   }
   const listeners = new Set();
   function save() {
@@ -717,6 +728,7 @@ window.SAFI_STORE = (() => {
         shifts: [],
         releases: [],
         deliveryCards: [],
+        queueNoFixed: true,
         voidTags: [],
         revenueTrend: (state.revenueTrend || []).map(d => ({ ...d, v: 0 })),
         revenueByService: (state.revenueByService || []).map(d => ({ ...d, value: 0, pct: 0 })),

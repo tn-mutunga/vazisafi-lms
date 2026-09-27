@@ -13,6 +13,10 @@ try { ({ autoUpdater } = require('electron-updater')); } catch { /* not installe
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 4x a day is plenty for a POS
 
 function init({ app, dialog, getWindow, onStatus }) {
+  // The Mac build is unsigned, which Squirrel.Mac (electron-updater's Mac backend)
+  // refuses to install. Use the hand-rolled updater there instead.
+  if (process.platform === 'darwin') return require('./updater-mac').init({ app, dialog, getWindow, onStatus });
+
   const say = (s) => { try { onStatus && onStatus(s); } catch {} };
 
   if (!autoUpdater) {

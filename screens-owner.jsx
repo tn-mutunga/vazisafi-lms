@@ -8,6 +8,10 @@ function OwnerDashboard({ lang, money, setView }) {
   const today = D.orders.filter(o => o.in.startsWith(todayStr)).reduce((s, o) => s + o.paid, 0);
   const avgOrder = D.orders.length ? Math.round(D.orders.reduce((s, o) => s + o.total, 0) / D.orders.length) : 0;
   const totalExpenses = D.expenses.reduce((s, e) => s + e.amount, 0);
+  const _n = new Date();
+  const localToday = `${_n.getFullYear()}-${String(_n.getMonth() + 1).padStart(2, '0')}-${String(_n.getDate()).padStart(2, '0')}`;
+  const expensesTodayList = D.expenses.filter(e => String(e.date).startsWith(localToday));
+  const expensesToday = expensesTodayList.reduce((s, e) => s + e.amount, 0);
   const totalRevenue = D.orders.reduce((s, o) => s + o.paid, 0);
   const netProfit = totalRevenue - totalExpenses;
 
@@ -64,8 +68,9 @@ function OwnerDashboard({ lang, money, setView }) {
         </>}
       />
 
-      <div className="safi-grid safi-grid--4">
+      <div className="safi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
         <StatCard label={t('revenue_today', lang)} value={money(today)} delta={`${todayOrders.length} orders today`} icon="wallet"/>
+        <StatCard label="Expenses today" value={money(expensesToday)} deltaKind="down" delta={`${expensesTodayList.length} ${expensesTodayList.length === 1 ? 'entry' : 'entries'} today`} icon="box"/>
         <StatCard label="Total revenue" value={money(totalRevenue)} delta="all-time received" icon="chart"/>
         <StatCard label="Total expenses" value={money(totalExpenses)} deltaKind="down" delta="all-time" icon="box"/>
         <div className={`safi-stat safi-stat--accent`}>
