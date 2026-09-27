@@ -69,7 +69,9 @@ function UpdatesCard() {
     available: `Version ${st.version} found — downloading`,
     downloading: `Downloading… ${st.percent || 0}%`,
     ready: `Version ${st.version} ready — restart to install`,
-    error: st.message || 'Could not check',
+    error: /code signature|code requirement|not pass validation/i.test(st.message || '')
+      ? 'Downloaded, but macOS will not install it — this Mac build is unsigned. Update by hand from the releases page.'
+      : (st.message || 'Could not check'),
     dev: 'Running from source — updates apply to installed copies only',
     unavailable: 'Updates not available in this build'
   }[st.state] || st.state;
@@ -77,7 +79,7 @@ function UpdatesCard() {
   return (
     <Card title="App updates">
       <div className="safi-store-info">
-        <div><span>Status</span><b>{label}</b></div>
+        <div><span>Status</span><b style={{ textAlign: 'right', maxWidth: 420 }}>{label}</b></div>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <Button kind="primary" icon="refresh" disabled={checking} onClick={() => {
@@ -100,6 +102,8 @@ function CloudCard() {
   const [pw, setPw] = useStateCl('');
   const [busy, setBusy] = useStateCl('');
   const [backups, setBackups] = useStateCl(null);
+  const [counts, setCounts] = useStateCl(null);
+  const [schema, setSchema] = useStateCl(null);
 
   useEffectCl(() => window.SAFI_CLOUD.subscribe(setSt), []);
 
@@ -128,6 +132,17 @@ function CloudCard() {
               onChange={e => setCfg({ ...cfg, anonKey: e.target.value.trim() })}/>
           </label>
           <p className="safi-hint">Both are in Supabase → Project Settings → API. The anon key is meant to be public.</p>
+          <label>This branch
+            <select className="safi-input" value={cfg.branch || 'main'} onChange={e => setCfg({ ...cfg, branch: e.target.value })}>
+              <option value="main">Vazi Safi Main</option>
+              <option value="br1">Branch 1</option>
+              <option value="br2">Branch 2</option>
+              <option value="br3">Branch 3</option>
+              <option value="br4">Branch 4</option>
+              <option value="br5">Branch 5</option>
+            </select>
+          </label>
+          <p className="safi-hint">Which branch this machine belongs to. Everything it sends is stamped with it. Only Main is open — the rest are placeholders waiting for the pick-up points.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           <Button kind="primary" icon="check" onClick={() => run('save', () => { window.SAFI_CLOUD.setConfig(cfg); }, 'Connection saved')}>Save</Button>
@@ -140,6 +155,7 @@ function CloudCard() {
           <div><span>Status</span><b>{!st.configured ? 'Not connected' : st.signedIn ? `Signed in as ${st.email}` : 'Connected — not signed in'}</b></div>
           <div><span>Internet</span><b>{st.online ? 'Online' : 'Offline — the app still works'}</b></div>
           <div><span>Last cloud backup</span><b>{st.lastBackup ? new Date(st.lastBackup).toLocaleString() : 'Never'}</b></div>
+          <div><span>Last live sync</span><b>{st.lastSync ? new Date(st.lastSync).toLocaleString() : 'Never'}</b></div>
         </div>
       </Card>
 
@@ -204,25 +220,70 @@ function CloudCard() {
         </Card>
       )}
 
+      {st.signedIn && (
+        <Card title="Live sync">
+          <p className="safi-cell-sub" style={{ marginTop: 0 }}>
+            Backup saves one big snapshot. Live sync writes each order, payment and expense into
+            its own table, so the books can be read from another machine and reported on by
+            branch. Leave it off until the three SQL files have been run.
+          </p>
+          <label className="safi-switchrow">
+            <input type="checkbox" checked={!!st.liveSync}
+              onChange={e => { window.SAFI_CLOUD.setLiveSync(e.target.checked); }}/>
+            <span><b>Keep the cloud up to date automatically</b><br/>
+              <span className="safi-cell-sub">Changes are sent a few seconds after they are made, and again whenever the internet comes back.</span></span>
+          </label>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            <Button kind="primary" icon="refresh" disabled={busy === 'sync' || st.syncing}
+              onClick={() => run('sync', () => window.SAFI_CLOUD.syncNow(), 'Cloud is up to date')}>
+              {busy === 'sync' || st.syncing ? 'Sending…' : 'Send everything now'}
+            </Button>
+            <Button kind="ghost" icon="list" disabled={busy === 'cmp'}
+              onClick={() => run('cmp', async () => setCounts(await window.SAFI_SYNC.compare()))}>Compare row counts</Button>
+            <Button kind="ghost" icon="check" disabled={busy === 'sch'}
+              onClick={() => run('sch', async () => setSchema(await window.SAFI_SYNC.checkSchema()))}>Check schema</Button>
+            <Button kind="ghost" icon="box" disabled={busy === 'pullall'}
+              onClick={() => {
+                if (!window.confirm('Replace everything on this laptop with what is in the cloud?')) return;
+                run('pullall', () => window.SAFI_SYNC.pull(), 'Pulled down from the cloud');
+              }}>Pull cloud → this laptop</Button>
+          </div>
+          {st.syncError && <p className="safi-hint" style={{ color: 'var(--danger, #b42318)' }}>Last attempt failed: {st.syncError}</p>}
+          {schema && (
+            <p className="safi-hint" style={{ marginBottom: 0 }}>
+              {schema.ok
+                ? 'All tables are present. Safe to turn live sync on.'
+                : <>Missing: <span className="safi-mono">{schema.missing.join(', ')}</span>. Run the SQL files in the supabase folder first.</>}
+            </p>
+          )}
+          {counts && (
+            <Table
+              cols={[
+                { label: 'Table', render: r => r.table },
+                { label: 'On this laptop', align: 'right', render: r => r.local },
+                { label: 'In the cloud', align: 'right', render: r => r.cloud == null ? '—' : r.cloud },
+                { label: '', render: r => r.error ? <span style={{ color: 'var(--danger, #b42318)' }}>{r.error}</span> : r.cloud === r.local ? 'matched' : `${Math.abs(r.local - r.cloud)} behind` },
+              ]}
+              rows={counts}
+              empty="Nothing to compare."
+            />
+          )}
+        </Card>
+      )}
+
       <Card title="Setting up Supabase">
         <ol className="safi-form" style={{ gap: 6, paddingLeft: 18 }}>
-          <li>Create a free project at supabase.com.</li>
-          <li>Project Settings → API: copy the URL and anon key into the fields above.</li>
-          <li>SQL Editor: run the snippet below to create the backups table.</li>
-          <li>Authentication → Users: add yourself, then sign in above.</li>
+          <li>Create a free project at supabase.com. Region: <b>Central EU (Frankfurt)</b> — the closest one to Nairobi.</li>
+          <li>SQL Editor → New query. Run <span className="safi-mono">supabase/01_schema.sql</span>, then <span className="safi-mono">02_security.sql</span>, then <span className="safi-mono">03_seed.sql</span>, in that order.</li>
+          <li>Authentication → Users: add your own email as the owner, and one till account for the counter.</li>
+          <li>Edit the two email addresses at the bottom of <span className="safi-mono">03_seed.sql</span> and run that part again.</li>
+          <li>Project Settings → API: copy the URL and anon key into the fields above, then Test connection.</li>
+          <li>Sign in, press <b>Check schema</b>, then turn live sync on.</li>
         </ol>
-        <pre className="safi-code">{`create table backups (
-  id bigserial primary key,
-  device text,
-  created_at timestamptz default now(),
-  payload jsonb not null
-);
-
-alter table backups enable row level security;
-
-create policy "signed in users" on backups
-  for all to authenticated
-  using (true) with check (true);`}</pre>
+        <p className="safi-hint" style={{ marginBottom: 0 }}>
+          The full walkthrough, including what each table is for, is in
+          <span className="safi-mono"> supabase/SETUP.md</span>.
+        </p>
       </Card>
     </>
   );

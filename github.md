@@ -3,14 +3,17 @@ branch: main
 visibility: public
 
 ## Last sync
-date: 2026-09-12
-note: initial push from the Mac (local folder ~/Documents/Vazi Safi/Laundry Management System)
+date: 2026-09-19
+note: database layer added (Supabase schema, RLS, seed, per-table sync)
 
 ### Updated in this project
-- Electron shell now builds for macOS as well as Windows (dmg + zip, arm64 + x64)
-- Native macOS menu bar; Ctrl+Cmd+F toggles kiosk
-- Auto-update wired via electron-updater against one shared GitHub Releases feed
-- .gitignore excludes the real customer list; only the blank import template is committed
+- Full Postgres schema in supabase/ — 01_schema, 02_security, 03_seed, SETUP.md
+- branch_id on every operational table; 6 branches seeded (Main live, 5 placeholders)
+- Order status pipeline as a lookup table, incl. pickup-point handoff steps
+- sync.js: per-table push/pull behind a Live sync toggle; snapshot backup unchanged
+
+## Sync history
+- 2026-09-12 — initial push from the Mac (local folder ~/Documents/Vazi Safi/Laundry Management System); Electron mac+win builds, auto-update via GitHub Releases, real customer list gitignored
 
 ## Screen map
 | Area | Built from |
@@ -21,5 +24,7 @@ note: initial push from the Mac (local folder ~/Documents/Vazi Safi/Laundry Mana
 | Expenses | screens-expenses.jsx |
 | Settings, SMS templates, misc | screens-extra.jsx |
 | Data + persistence | store.js, data.js |
+| Cloud connection, backup, live sync | cloud.js, sync.js, screens-cloud.jsx |
+| Database schema + setup | supabase/01_schema.sql, 02_security.sql, 03_seed.sql, SETUP.md |
 | Desktop shell (Win + Mac) | desktop/main.js, desktop/preload.js, desktop/updater.js |
 | Release + build config | package.json, desktop/entitlements.mac.plist |

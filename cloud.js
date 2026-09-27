@@ -17,6 +17,8 @@
   const write = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
   let cfg = read(CFG_KEY) || { url: '', anonKey: '', autoBackup: true };
+  if (cfg.branch === undefined)   cfg.branch = 'main';
+  if (cfg.liveSync === undefined) cfg.liveSync = false;
   let session = read(SESSION_KEY);
   const listeners = new Set();
 
@@ -30,9 +32,17 @@
       url: cfg.url,
       autoBackup: !!cfg.autoBackup,
       online: navigator.onLine,
-      lastBackup: cfg.lastBackup || null
+      lastBackup: cfg.lastBackup || null,
+      branch: cfg.branch || 'main',
+      liveSync: !!cfg.liveSync,
+      lastSync: cfg.lastSync || null,
+      syncing: syncing,
+      syncError: syncError
     };
   }
+
+  let syncing = false;
+  let syncError = null;
 
   function base() { return String(cfg.url || '').replace(/\/+$/, ''); }
 
@@ -42,10 +52,14 @@
     return h;
   }
 
-  async function call(path, opts = {}) {
+  async function callRaw(path, opts = {}) {
     if (!cfg.url || !cfg.anonKey) throw new Error('Not configured');
     if (!navigator.onLine) throw new Error('No internet connection');
-    const res = await fetch(base() + path, { ...opts, headers: { ...headers(opts.auth !== false), ...(opts.headers || {}) } });
+    return fetch(base() + path, { ...opts, headers: { ...headers(opts.auth !== false), ...(opts.headers || {}) } });
+  }
+
+  async function call(path, opts = {}) {
+    const res = await callRaw(path, opts);
     const text = await res.text();
     let body = null;
     try { body = text ? JSON.parse(text) : null; } catch { body = text; }
@@ -55,20 +69,25 @@
 
   const API = {
     status,
+    raw: call,
+    rawResponse: callRaw,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
     getConfig() { return { ...cfg }; },
     setConfig(patch) {
       cfg = { ...cfg, ...patch };
       write(CFG_KEY, cfg);
+      if (window.SAFI_SYNC) window.SAFI_SYNC.setBranch(cfg.branch);
       emit();
       return { ...cfg };
     },
 
-    // Reachability check that does not need a login — asks the REST root for its schema.
+    // Reachability check that does not need a login. The REST root is off-limits to
+    // the new publishable keys (it lists the whole schema), so ask the auth service
+    // instead — it answers any valid key and rejects a wrong one.
     async test() {
       if (!cfg.url || !cfg.anonKey) throw new Error('Enter the project URL and anon key first');
-      await call('/rest/v1/', { method: 'GET', auth: false });
+      await call('/auth/v1/settings', { method: 'GET', auth: false });
       return true;
     },
 
@@ -97,7 +116,12 @@
       await call('/rest/v1/backups', {
         method: 'POST',
         headers: { 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ device: deviceName || 'unnamed', payload })
+        body: JSON.stringify({
+          device: deviceName || 'unnamed',
+          branch_id: cfg.branch || 'main',
+          app_version: (window.lms && window.lms.version) || '',
+          payload
+        })
       });
       API.setConfig({ lastBackup: new Date().toISOString() });
       return true;
@@ -113,8 +137,50 @@
       const rows = await call(`/rest/v1/backups?select=payload&id=eq.${encodeURIComponent(id)}`);
       if (!rows || !rows.length) throw new Error('Backup not found');
       return window.SAFI_STORE.importJSON(JSON.stringify(rows[0].payload));
+    },
+
+    // ── Live sync ────────────────────────────────────────────────────
+    // When on, every local change queues a push a few seconds later. Batched
+    // deliberately: a busy counter fires a dozen writes a minute and the shop's
+    // connection should not carry a request for each one.
+    setLiveSync(on) {
+      API.setConfig({ liveSync: !!on });
+      if (on) schedule(1500);
+      return status();
+    },
+
+    async syncNow() {
+      if (!session) throw new Error('Sign in first');
+      if (!window.SAFI_SYNC) throw new Error('Sync module not loaded');
+      syncing = true; syncError = null; emit();
+      try {
+        window.SAFI_SYNC.setBranch(cfg.branch);
+        const report = await window.SAFI_SYNC.push();
+        syncError = null;
+        return report;
+      } catch (e) {
+        syncError = e.message || String(e);
+        throw e;
+      } finally { syncing = false; emit(); }
     }
   };
+
+  // ── Debounced background push ──────────────────────────────────────
+  let timer = null;
+  function schedule(ms) {
+    if (!cfg.liveSync || !session || !navigator.onLine) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => { API.syncNow().catch(() => {}); }, ms);
+  }
+
+  // Subscribe once the store exists.
+  setTimeout(() => {
+    if (window.SAFI_STORE) window.SAFI_STORE.subscribe(() => schedule(8000));
+    if (window.SAFI_SYNC) window.SAFI_SYNC.setBranch(cfg.branch);
+  }, 0);
+
+  // Coming back online after a spell offline is the moment the cloud is most stale.
+  window.addEventListener('online', () => schedule(3000));
 
   window.addEventListener('online', emit);
   window.addEventListener('offline', emit);

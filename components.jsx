@@ -385,6 +385,54 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
   );
 };
 
+// ─── Sync pill ────────────────────────────────────────────────────────────
+// Sits in every topbar, so the person at the counter can see at a glance that the
+// books are reaching the cloud. Green is fine, red needs the owner. It says nothing
+// at all until a cloud connection has been set up, so an offline-only shop is not
+// nagged about a thing it does not use.
+const SyncPill = () => {
+  const [st, setSt] = React.useState(() => window.SAFI_CLOUD ? window.SAFI_CLOUD.status() : null);
+  const [, tick] = React.useState(0);
+  React.useEffect(() => {
+    if (!window.SAFI_CLOUD) return;
+    const off = window.SAFI_CLOUD.subscribe(setSt);
+    const t = setInterval(() => tick(n => n + 1), 60000);
+    return () => { off(); clearInterval(t); };
+  }, []);
+  if (!st || !st.configured || !st.liveSync) return null;
+
+  const ageMs = st.lastSync ? Date.now() - new Date(st.lastSync).getTime() : Infinity;
+  const stale = ageMs > 24 * 3600 * 1000;
+  const ago = !isFinite(ageMs) ? 'never'
+    : ageMs < 90000 ? 'just now'
+    : ageMs < 3600000 ? `${Math.round(ageMs / 60000)} min ago`
+    : ageMs < 86400000 ? `${Math.round(ageMs / 3600000)} h ago`
+    : `${Math.round(ageMs / 86400000)} days ago`;
+
+  let tone = 'ok', label = 'Synced';
+  if (st.syncing)            { tone = 'busy';  label = 'Saving to cloud'; }
+  else if (st.syncError)     { tone = 'bad';   label = 'Sync failed'; }
+  else if (stale)            { tone = 'bad';   label = 'Not synced'; }
+  else if (!st.online)       { tone = 'wait';  label = 'Offline'; }
+  else if (!st.signedIn)     { tone = 'bad';   label = 'Signed out'; }
+
+  const title = tone === 'busy'
+    ? "Sending today's work to the cloud now."
+    : tone === 'bad'
+      ? `${label}. Last reached the cloud ${ago}. Work is still saved on this machine — tell the owner.`
+      : !st.online
+        ? 'No internet. Keep working normally; everything is saved here and sent when the line is back.'
+        : isFinite(ageMs)
+          ? `Everything sent to the cloud ${ago}.`
+          : 'Connected. Nothing has been sent yet.';
+
+  return (
+    <span className={`safi-syncpill is-${tone}`} title={title}>
+      <i className="safi-syncpill__dot"></i>{label}
+    </span>
+  );
+};
+
 // ─── Topbar ───────────────────────────────────────────────────────────────
 const Topbar = ({ title, subtitle, right }) => (
   <header className="safi-top">
@@ -392,7 +440,7 @@ const Topbar = ({ title, subtitle, right }) => (
       <h1 className="safi-top__title">{title}</h1>
       {subtitle && <p className="safi-top__sub">{subtitle}</p>}
     </div>
-    <div className="safi-top__right">{right}</div>
+    <div className="safi-top__right"><SyncPill/>{right}</div>
   </header>
 );
 
@@ -547,7 +595,7 @@ Object.assign(window, {
   fmtMoney, t, toast,
   // primitives
   Icon, Button, StatusBadge, PayBadge, GroupBadge, MethodBadge,
-  Sidebar, Topbar, Card, StatCard,
+  Sidebar, Topbar, Card, StatCard, SyncPill,
   Sparkline, BarChart, Donut, HBar,
   Table, Placeholder, Modal, ToastHost,
   PhoneInput, PHONE_PREFIXES, IconPicker, ICON_LIBRARY, formatPhone,
