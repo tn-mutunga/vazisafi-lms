@@ -1,12 +1,48 @@
 name: Release
+
+# Build the Windows and macOS installers on GitHub's own machines and publish
+# them as one release. Triggered by pushing a version tag, e.g.
+#
+#     git tag v0.1.5 && git push origin v0.1.5
+#
+# Three stages, in order:
+#   1. prepare — create the release (as a draft) exactly once
+#   2. build   — Windows and Mac build in parallel and upload into that release
+#   3. publish — flip the draft to published, so the tills can see it
+#
+# Creating the release up front matters: when both builds tried to create it at
+# the same moment, the second was refused and the whole run failed.
+
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create draft release (or reuse one left by an earlier attempt)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG exists; clearing old uploads so this run starts clean"
+            gh release view "$TAG" --repo "$REPO" --json assets -q '.assets[].name' | while read -r a; do
+              [ -n "$a" ] && gh release delete-asset "$TAG" "$a" --repo "$REPO" --yes
+            done
+            gh release edit "$TAG" --repo "$REPO" --draft=true
+          else
+            gh release create "$TAG" --repo "$REPO" --draft --title "$TAG" --notes "VaziSafi LMS $TAG"
+          fi
+
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -25,3 +61,12 @@ jobs:
       - run: ${{ matrix.build }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false --latest

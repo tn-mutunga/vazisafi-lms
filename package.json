@@ -32,7 +32,7 @@
         "provider": "github",
         "owner": "tn-mutunga",
         "repo": "vazisafi-lms",
-        "releaseType": "release"
+        "releaseType": "draft"
       }
     ],
     "files": [
