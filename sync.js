@@ -295,8 +295,8 @@
         // Order lines ride along with their orders: clear then rewrite, so a line
         // removed at the counter does not linger in the cloud.
         if (t.key === 'orders' && rows.length) {
-          const ids = rows.map(r => r.id);
-          for (const part of chunk(ids, 100)) {
+          const orderIds = rows.map(r => r.id);
+          for (const part of chunk(orderIds, 100)) {
             const list = part.map(id => `"${id}"`).join(',');
             await C().raw(`/rest/v1/order_items?order_id=in.(${list})`, {
               method: 'DELETE', headers: { 'Prefer': 'return=minimal' },

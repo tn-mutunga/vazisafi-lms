@@ -127,7 +127,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   const D = useStore();
   const [customerId, setCustomerId] = useStateFD('');
   const [group, setGroup] = useStateFD('normal');
-  const [items, setItems] = useStateFD([{ svc: D.services[0]?.id || 'wash-fold', qty: 5 }]);
+  const [items, setItems] = useStateFD([]);
   const [discountPct, setDiscountPct] = useStateFD(0);
   const [deposit, setDeposit] = useStateFD(0);
   const [method, setMethod] = useStateFD('mpesa');
@@ -286,9 +286,13 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
             </div>
 
             <div className="safi-items">
+              {items.length === 0 ? (
+                <p className="safi-cell-sub" style={{ margin: 0, padding: '18px 4px', textAlign: 'center' }}>No items yet. Tap a service above to add it.</p>
+              ) : (
               <div className="safi-items__hd">
                 <span>Service / Type</span><span>Qty</span><span>Unit price</span><span>Line total</span><span></span>
               </div>
+              )}
               {items.map((it, i) => {
                 const svc = D.services.find(x => x.id === it.svc);
                 const unit = it.customPrice ?? (svc?.tiers[effGroup] || 0);

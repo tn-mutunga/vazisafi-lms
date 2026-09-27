@@ -5,7 +5,7 @@ Thumbs.db
 *.log
 .env
 
-# Real customer data — never commit
+# Real customer data — never commit. Only the blank template belongs in the repo.
 VaziSafi - Customer List.xlsx
 *Customer List*
 *customers*.csv
