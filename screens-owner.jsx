@@ -40,7 +40,7 @@ function OwnerDashboard({ lang, money, setView }) {
   }).filter(r => r.value > 0).sort((a, b) => b.value - a.value);
 
   // ── Real "By payment method" Donut (today) ───────────────────────────────
-  const byMethodToday = ['mpesa', 'cash', 'bank'].map(m => {
+  const byMethodToday = ['mpesa', 'bank'].map(m => {
     const value = D.payments.filter(p => p.method === m && p.date.startsWith(todayStr)).reduce((s, p) => s + p.amount, 0);
     return { label: m === 'mpesa' ? 'M-Pesa' : m === 'cash' ? 'Cash' : 'Bank', value, m };
   }).filter(r => r.value > 0);
@@ -191,7 +191,7 @@ function ReportsScreen({ lang, money }) {
   const todays = D.orders.filter(o => o.in.startsWith(todayStr));
   const todayRev = todays.reduce((s, o) => s + o.paid, 0);
 
-  const totalsByMethod = ['mpesa', 'cash', 'bank'].map(m => {
+  const totalsByMethod = ['mpesa', 'bank'].map(m => {
     const list = D.payments.filter(p => p.method === m && (tab !== 'daily' || p.date.startsWith(todayStr)));
     return { m, count: list.length, total: list.reduce((s, p) => s + p.amount, 0), verified: list.filter(p => p.verified).reduce((s, p) => s + p.amount, 0) };
   });
@@ -692,6 +692,39 @@ function DataScreen({ lang }) {
         <Button kind="primary" icon="users" onClick={() => setConfirm('golive')}>Clear demo data & start fresh</Button>
       </Card>
 
+      <Card title="Clear a section" action={<span className="safi-cell-sub">Owner PIN required · the audit log is never cleared</span>}>
+        <p className="safi-cell-sub" style={{ marginTop: 0 }}>Empties one list on this laptop and, when sync is on, in the cloud and on the other laptops. Download a backup first.</p>
+        <div className="safi-clear-list">
+          {[
+            ['customers', 'Customers', 'Past orders stay; they just lose the customer link'],
+            ['orders', 'Orders', 'Also clears payments, handovers and delivery cards'],
+            ['payments', 'Payments', ''],
+            ['expenses', 'Expenses', ''],
+            ['dispatch', 'Pickups & deliveries', 'Also clears delivery cards'],
+            ['messages', 'SMS log', ''],
+            ['inventory', 'Inventory', ''],
+            ['issues', 'Issues', ''],
+            ['approvals', 'Approvals', ''],
+            ['shifts', 'Shifts', ''],
+            ['packages', 'Packages', ''],
+          ].map(([k, label, note]) => {
+            const n = (D[k] || []).length;
+            return (
+              <div key={k} className="safi-clear-row">
+                <div><b>{label}</b>{note && <div className="safi-cell-sub">{note}</div>}</div>
+                <span className="safi-mono safi-cell-sub">{n}</span>
+                <Button kind="ghost" disabled={!n} onClick={() => window.safiPinConfirm({
+                  title: `Clear all ${label.toLowerCase()}?`,
+                  body: `${n} record${n === 1 ? '' : 's'} will be deleted. ${note ? note + '. ' : ''}This cannot be undone.`,
+                  confirmLabel: 'Clear',
+                  onConfirm: () => { window.SAFI_STORE.clearSection(k); toast(`${label} cleared`, 'success'); },
+                })}>Clear</Button>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
       <Card title="Danger zone" className="safi-danger">
         <p className="safi-cell-sub" style={{ marginTop: 0 }}>These actions cannot be undone — back up first.</p>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -705,10 +738,13 @@ function DataScreen({ lang }) {
         footer={<>
           <Button kind="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
           <Button kind="primary" icon="check" onClick={() => {
+            const which = confirm; setConfirm(null);
+            window.safiPinConfirm({ title: 'Confirm with Owner PIN', confirmLabel: 'Confirm', onConfirm: () => {
+            const confirm = which;
             if (confirm === 'golive') { window.SAFI_STORE.goLive(); toast('Demo data cleared — ready for your real customers'); }
             else if (confirm === 'clear') { window.SAFI_STORE.clearAll(); toast('Orders cleared'); }
             else { window.SAFI_STORE.resetAll(); toast('Reset to sample data'); }
-            setConfirm(null);
+            } });
           }}>{confirm === 'golive' ? 'Clear demo data' : confirm === 'clear' ? 'Clear all orders' : 'Reset everything'}</Button>
         </>}>
         <p>

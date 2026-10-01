@@ -66,6 +66,7 @@ function App() {
     terms: t.shopTerms,
     ownerPin: t.ownerPin,
   };
+  window.SAFI_OWNER_PIN = t.ownerPin;
 
   const screen = (() => {
     const props = { setView, setActiveOrderId, lang, money, density: t.density, orderId: activeOrderId, shop, setShop: setTweak };
@@ -120,6 +121,7 @@ function App() {
       <Sidebar role={role} setRole={safeSetRole} view={view} setView={setView} lang={lang} shop={shop}/>
       <main className="safi-main"><UpdateBar/>{window.DispatchReminders && <window.DispatchReminders setView={setView}/>}{screen}</main>
       <ToastHost/>
+      <PinConfirmHost/>
 
       <Modal open={pinPrompt} onClose={() => setPinPrompt(false)} title="Enter Owner PIN" width={360}
         footer={<>

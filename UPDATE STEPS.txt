@@ -1,80 +1,12 @@
-VAZI SAFI LMS v2.0.1 — UPDATE STEPS
-====================================
+VAZI SAFI LMS v2.0.3 (includes everything in 2.0.2)
+- Window title: Vazi Safi LMS
+- Cash removed from customer payments (Collect balance, Payments, rider cards, dashboards)
+- Receipt: no Due line; "M-Pesa Paybill: ... OR Send Money: ..."
+- Owner delete / clear sections with PIN (from 2.0.2)
 
-What is new
-- Price models for Wash & Fold (Current, M7, M2, M6) + Student Thursday 110/kg
-- Two-way sync between laptops, including deletions
-- Stays signed in to the cloud; syncs by itself on open, on wake, every 2 min
-- Dispatch: type-ahead customer, date + month calendar, chime + flash reminders
-- No Collected / Delivered while a balance is owed
-- Win-back SMS, clients by service today, orders & printing counts
-- Walk-in button fixed; front desk can only use packages, not create them
-
-
-STEP 1 — Copy the files into the project (Mac, Terminal)
--------------------------------------------------------
 cd ~/Documents/"Vazi Safi"/"Laundry Management System"
-rsync -av ~/Downloads/vazisafi-lms-v2.0.1/ ./
+rsync -av ~/Downloads/vazisafi-lms-v2.0.3/ ./
+grep '"version"' package.json        (should say 2.0.3)
+git add . && git commit -m "v2.0.3: no cash, receipt pay lines, title" && git push && git tag v2.0.3 && git push origin v2.0.3
 
-Check it landed (both should print 2.0.1 / a number above 0):
-grep '"version"' package.json
-grep -c "studentDayLive" pricing.js
-
-
-STEP 2 — Run the database update (once)
----------------------------------------
-1. Open supabase.com > your project > SQL Editor > New query
-2. Open supabase/05_two_way_sync.sql from the project folder, copy ALL of it, paste, press Run
-3. It should say "Success. No rows returned". Safe to run again if unsure.
-
-
-STEP 3 — Publish the release (Mac, Terminal)
---------------------------------------------
-git add .
-git commit -m "v2.0.1: price models, two-way sync, dispatch calendar, reminders"
-git push
-git tag v2.0.1 && git push origin v2.0.1
-
-Then wait for GitHub > Actions to finish (about 10-15 min, all green).
-
-
-STEP 4 — Install on each laptop
--------------------------------
-Windows: open the app > it shows "Update available" > Install & restart.
-
-Mac: open the app > Install & restart. The updater re-signs the app itself.
-If macOS still blocks it or moves it to the Bin, run once:
-mv ~/.Trash/"VaziSafi LMS.app" /Applications/ 2>/dev/null; xattr -cr "/Applications/VaziSafi LMS.app" && codesign --force --deep --sign - "/Applications/VaziSafi LMS.app" && open "/Applications/VaziSafi LMS.app"
-
-
-STEP 5 — Join two-way sync (once per laptop, IN THIS ORDER)
-----------------------------------------------------------
-1. MAC FIRST (has the real staff names):
-   Management > Cloud & Updates > sign in > "This laptop is correct"
-2. THEN WINDOWS:
-   Management > Cloud & Updates > sign in > "The cloud is correct"
-3. Leave "Keep the cloud up to date automatically" ticked on both.
-   The dot at the top should turn green within a minute.
-
-
-STEP 6 — Quick checks
----------------------
-- Team page on Windows shows the real staff names
-- Pricing page shows 4 model cards + Student Thursday; Current is active
-- Dispatch page shows the calendar; old jobs marked "date estimated · check"
-  (open each, confirm the date, save)
-- Close the app, reopen next day: dot goes green by itself, no sign-in
-
-
-ONE SUPABASE SETTING TO CHECK
------------------------------
-Supabase > Authentication > Sessions (or Settings):
-if "Time-box user sessions" or "Inactivity timeout" has a value, clear it.
-Otherwise Supabase itself forces a fresh sign-in on a timer.
-
-
-If something fails
-------------------
-- Sync dot red "Sync failed": Cloud & Updates shows the reason. Send me a screenshot.
-- "relation deleted_rows does not exist": Step 2 was not run.
-- Mac app won't open: run the Step 4 Mac command.
+When GitHub Actions is green: Install & restart on each laptop. No database step.

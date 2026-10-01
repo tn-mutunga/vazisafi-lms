@@ -142,6 +142,37 @@ const toastListeners = new Set();
 function toast(msg, kind = 'success') {
   toastListeners.forEach(fn => fn({ msg, kind, id: Date.now() }));
 }
+// Owner-PIN confirmation for anything destructive. safiPinConfirm({ title, body, confirmLabel, onConfirm })
+let pinConfirmOpen = null;
+function safiPinConfirm(opts) { if (pinConfirmOpen) pinConfirmOpen(opts); }
+function PinConfirmHost() {
+  const [opts, setOpts] = useState(null);
+  const [pin, setPin] = useState('');
+  const [err, setErr] = useState('');
+  useEffect(() => { pinConfirmOpen = o => { setOpts(o); setPin(''); setErr(''); }; return () => { pinConfirmOpen = null; }; }, []);
+  if (!opts) return null;
+  const go = () => {
+    const want = String(window.SAFI_OWNER_PIN || '');
+    if (want && pin !== want) { setErr('Wrong PIN'); setPin(''); return; }
+    const o = opts; setOpts(null); o.onConfirm && o.onConfirm();
+  };
+  return (
+    <Modal open onClose={() => setOpts(null)} title={opts.title} width={420}
+      footer={<>
+        <Button kind="ghost" onClick={() => setOpts(null)}>Cancel</Button>
+        <Button kind="danger" icon="check" onClick={go}>{opts.confirmLabel || 'Delete'}</Button>
+      </>}>
+      {opts.body && <p style={{ marginTop: 0 }}>{opts.body}</p>}
+      <label className="safi-form">Owner PIN
+        <input className="safi-input safi-mono" type="password" inputMode="numeric" autoFocus value={pin}
+          onChange={e => { setPin(e.target.value); setErr(''); }} onKeyDown={e => { if (e.key === 'Enter') go(); }}/>
+      </label>
+      {err && <p className="safi-pin-err">{err}</p>}
+    </Modal>
+  );
+}
+window.safiPinConfirm = safiPinConfirm;
+
 function ToastHost() {
   const [items, setItems] = useState([]);
   useEffect(() => {
@@ -587,7 +618,7 @@ const Placeholder = ({ label, w = 120, h = 80 }) => (
 );
 
 // ─── Export ───────────────────────────────────────────────────────────────
-Object.assign(window, {
+Object.assign(window, { PinConfirmHost, safiPinConfirm, 
   // contexts
   ThemeCtx, useTheme,
   // hooks

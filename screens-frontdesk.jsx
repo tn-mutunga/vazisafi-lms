@@ -384,7 +384,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
 
               <div className="safi-callout" style={{ marginBottom: 4 }}>
                 <Icon name="wallet" size={14}/>
-                <span>Payment is captured later via <b>Collect balance</b> on the order detail (with M-Pesa / Cash / Bank code).</span>
+                <span>Payment is captured later via <b>Collect balance</b> on the order detail (with M-Pesa / Bank code).</span>
               </div>
 
               {(D.settings?.payTo || '') && (
@@ -909,7 +909,7 @@ function PaymentModal({ open, onClose, orderId, suggested = 0, customerName = ''
       <div className="safi-form">
         <label>Method
           <div className="safi-seg safi-seg--full">
-            {['mpesa', 'cash', 'bank'].map(m => (
+            {['mpesa', 'bank'].map(m => (
               <button key={m} className={`safi-seg__btn ${method === m ? 'is-active' : ''}`} onClick={() => setMethod(m)}>
                 <Icon name={m === 'mpesa' ? 'mpesa' : 'wallet'} size={14}/>
                 {m === 'mpesa' ? 'M-Pesa' : m === 'cash' ? 'Cash' : 'Bank'}
@@ -1243,7 +1243,6 @@ function Receipt({ orderId, setView, lang, money, shop }) {
             {o.tag && <div><span>Tag #</span><b className="safi-mono">{o.tag}</b></div>}
             <div><span>Date</span><b>{o.in}</b></div>
             <div><span>Cashier</span><b>{(D.staff.find(s => s.id === (o.cashier || D.currentStaffId)) || D.staff[0])?.name || '—'}</b></div>
-            <div><span>Due</span><b>{(o.due || '').slice(5, 16)}</b></div>
           </div>
 
           <div className="safi-receipt__rule"/>
@@ -1322,9 +1321,9 @@ function Receipt({ orderId, setView, lang, money, shop }) {
           {(shop?.mpesaTill || shop?.bank) && (
             <div className="safi-receipt__pay">
               <div className="safi-receipt__pay-title">HOW TO PAY THE BALANCE</div>
-              {shop?.mpesaTill && <div className="safi-receipt__pay-line">{shop.mpesaTill}</div>}
-              {shop?.bank && <div className="safi-receipt__pay-line">{shop.bank}</div>}
-              <div className="safi-receipt__pay-line safi-receipt__pay-line--sub">Or pay cash on collection</div>
+              {shop?.mpesaTill && <div className="safi-receipt__pay-line">M-Pesa Paybill: {String(shop.mpesaTill).replace(/^.*?paybill\s*:?\s*/i, '')}</div>}
+              {shop?.mpesaTill && shop?.bank && <div className="safi-receipt__pay-line safi-receipt__pay-line--sub">OR</div>}
+              {shop?.bank && <div className="safi-receipt__pay-line">Send Money: {String(shop.bank).replace(/^.*?send money\s*:?\s*/i, '')}</div>}
             </div>
           )}
 
@@ -1407,7 +1406,18 @@ function CustomersScreen({ lang, money, setView, role }) {
   const [q, setQ] = useStateFD('');
   const [group, setGroup] = useStateFD('all');
   const [showAdd, setShowAdd] = useStateFD(false);
+  const [sel, setSel] = useStateFD([]);
   const fileRef = useRefFD(null);
+  const owner = role === 'owner';
+
+  function del(ids, label) {
+    window.safiPinConfirm({
+      title: `Delete ${label}?`,
+      body: 'They are removed from this laptop and, when sync is on, from the cloud and the other laptops. Their past orders and payments stay in the books. This cannot be undone.',
+      confirmLabel: 'Delete',
+      onConfirm: () => { const n = window.SAFI_STORE.removeCustomers(ids); setSel([]); toast(`Deleted ${n} customer${n === 1 ? '' : 's'}`, 'success'); },
+    });
+  }
 
   const rows = D.customers.filter(c => {
     if (group !== 'all' && c.group !== group) return false;
@@ -1436,6 +1446,8 @@ function CustomersScreen({ lang, money, setView, role }) {
           <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={e => { if (e.target.files[0]) handleImport(e.target.files[0]); e.target.value = ''; }}/>
           {role === 'owner' && <Button kind="ghost" icon="box" onClick={() => fileRef.current?.click()}>Import CSV</Button>}
           {role === 'owner' && <Button kind="ghost" icon="print" onClick={() => exportCustomersCSV(D.customers)}>Export CSV</Button>}
+          {owner && sel.length > 0 && <Button kind="danger" onClick={() => del(sel, `${sel.length} selected customer${sel.length === 1 ? '' : 's'}`)}>Delete selected ({sel.length})</Button>}
+          {owner && sel.length === 0 && D.customers.length > 0 && <Button kind="ghost" onClick={() => del(D.customers.map(c => c.id), `all ${D.customers.length} customers`)}>Delete all</Button>}
           <Button kind="primary" icon="plus" onClick={() => setShowAdd(true)}>{t('add_customer', lang)}</Button>
         </>}
       />
@@ -1461,6 +1473,11 @@ function CustomersScreen({ lang, money, setView, role }) {
         </div>
         <Table
           cols={[
+            ...(owner ? [{ style: { width: 36 }, label: <input type="checkbox" aria-label="Select all shown"
+                checked={rows.length > 0 && rows.every(r => sel.includes(r.id))}
+                onChange={e => setSel(e.target.checked ? [...new Set([...sel, ...rows.map(r => r.id)])] : sel.filter(id => !rows.some(r => r.id === id)))}/>,
+              render: r => <input type="checkbox" aria-label={`Select ${r.name}`} checked={sel.includes(r.id)}
+                onChange={e => setSel(e.target.checked ? [...sel, r.id] : sel.filter(x => x !== r.id))}/> }] : []),
             { label: 'Name', render: r => (
               <div className="safi-cell-cust">
                 <span className="safi-cust-pick__avatar">{r.name.split(' ').map(s => s[0]).slice(0, 2).join('')}</span>
@@ -1478,6 +1495,7 @@ function CustomersScreen({ lang, money, setView, role }) {
               </div>
             )},
             { label: 'Residence', render: r => r.location ? <span className="safi-cell-sub">{r.location}</span> : <span className="safi-cell-sub">—</span> },
+            ...(owner ? [{ label: '', render: r => <button className="safi-rowlink safi-rowlink--danger" onClick={() => del([r.id], r.name)}>Delete</button> }] : []),
           ]}
           rows={rows}
           empty="No customers yet — tap Add Customer or Import CSV."
@@ -1556,7 +1574,7 @@ function PaymentsScreen({ lang, money, role }) {
 
   const rows = D.payments.filter(p => tab === 'all' || p.method === tab);
 
-  const totalsByMethod = ['mpesa', 'cash', 'bank'].map(m => ({
+  const totalsByMethod = ['mpesa', 'bank'].map(m => ({
     m, total: D.payments.filter(p => p.method === m).reduce((s, p) => s + p.amount, 0),
     count: D.payments.filter(p => p.method === m).length,
   }));
@@ -1616,7 +1634,7 @@ function PaymentsScreen({ lang, money, role }) {
           <div className="safi-txn-form__group">
             <label>Method</label>
             <div className="safi-seg">
-              {['mpesa', 'bank', 'cash'].map(m => <button key={m} className={`safi-seg__btn ${form.method === m ? 'is-active' : ''}`} onClick={() => setForm({ ...form, method: m })}>{m === 'mpesa' ? 'M-Pesa' : m === 'bank' ? 'Bank' : 'Cash'}</button>)}
+              {['mpesa', 'bank'].map(m => <button key={m} className={`safi-seg__btn ${form.method === m ? 'is-active' : ''}`} onClick={() => setForm({ ...form, method: m })}>{m === 'mpesa' ? 'M-Pesa' : m === 'bank' ? 'Bank' : 'Cash'}</button>)}
             </div>
           </div>
           <div className="safi-txn-form__group">
@@ -1637,7 +1655,7 @@ function PaymentsScreen({ lang, money, role }) {
 
       <Card pad={false} title="Transaction ledger" action={
         <div className="safi-tabs">
-          {['all', 'mpesa', 'cash', 'bank'].map(x => (
+          {['all', 'mpesa', 'bank'].map(x => (
             <button key={x} className={`safi-tabs__btn ${tab === x ? 'is-active' : ''}`} onClick={() => setTab(x)}>{x === 'all' ? 'All' : x === 'mpesa' ? 'M-Pesa' : x === 'cash' ? 'Cash' : 'Bank'}</button>
           ))}
         </div>

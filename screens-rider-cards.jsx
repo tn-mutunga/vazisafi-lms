@@ -190,7 +190,7 @@ function RiderCardsScreen({ setView, setActiveOrderId, money }) {
   const [tab, setTab] = useStateDC('out');
   const [settle, setSettle] = useStateDC(null);
   const [amt, setAmt] = useStateDC('');
-  const [pm, setPm] = useStateDC('cash');
+  const [pm, setPm] = useStateDC('mpesa');
   const [txn, setTxn] = useStateDC('');
   const [note, setNote] = useStateDC('');
 
@@ -223,7 +223,7 @@ function RiderCardsScreen({ setView, setActiveOrderId, money }) {
   function openSettle(card) {
     setSettle(card);
     setAmt(String(card.amountDue || 0));
-    setPm('cash'); setTxn(''); setNote('');
+    setPm('mpesa'); setTxn(''); setNote('');
   }
   const openSheet = (orderId) => { setActiveOrderId(orderId); setView('job-card'); };
 
@@ -359,7 +359,6 @@ function RiderCardsScreen({ setView, setActiveOrderId, money }) {
             </label>
             <label>How it was paid
               <select className="safi-input" value={pm} onChange={e => setPm(e.target.value)}>
-                <option value="cash">Cash</option>
                 <option value="mpesa">M-Pesa</option>
                 <option value="bank">Bank</option>
               </select>

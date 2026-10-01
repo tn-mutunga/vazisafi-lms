@@ -358,6 +358,28 @@ window.SAFI_STORE = (() => {
     addStaff(s)   { const id = nextId('s'); state.staff = [...state.staff, { id, active: true, ...s }]; save(); return id; },
     updateStaff(id, patch) { state.staff = state.staff.map(s => s.id === id ? { ...s, ...patch } : s); save(); },
     removeStaff(id) { state.staff = state.staff.filter(s => s.id !== id); save(); },
+    // Owner deletes. Orders keep their own record; the customer link just goes empty.
+    removeCustomers(ids) {
+      const set = new Set(ids);
+      const gone = state.customers.filter(c => set.has(c.id));
+      if (!gone.length) return 0;
+      state.customers = state.customers.filter(c => !set.has(c.id));
+      audit('customer.delete', gone.length === 1 ? gone[0].id : gone.length + ' customers',
+        gone.slice(0, 20).map(c => c.name + ' ' + (c.phone || '')).join(', ') + (gone.length > 20 ? ' …' : ''));
+      save();
+      return gone.length;
+    },
+    // Empty one section. Audit log is never cleared.
+    clearSection(key) {
+      const linked = { orders: ['orders', 'payments', 'releases', 'deliveryCards'], dispatch: ['dispatch', 'deliveryCards'] };
+      const keys = linked[key] || [key];
+      const n = (state[key] || []).length;
+      for (const k of keys) if (Array.isArray(state[k])) state[k] = [];
+      if (key === 'orders') state.customers = state.customers.map(c => ({ ...c, orders: 0, spend: 0 }));
+      audit('data.clear', key, `${n} row(s) cleared` + (keys.length > 1 ? ` (with ${keys.slice(1).join(', ')})` : ''));
+      save();
+      return n;
+    },
 
     // ── Orders ─────────────────────────────────────────────
     createOrder({ customerId, items, total, discount, discountPct, paid, method, txn, notes, due, rewashOf, tag }) {
