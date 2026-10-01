@@ -98,7 +98,7 @@ function UpdatesCard() {
 function CloudCard() {
   const [st, setSt] = useStateCl(window.SAFI_CLOUD.status());
   const [cfg, setCfg] = useStateCl(window.SAFI_CLOUD.getConfig());
-  const [email, setEmail] = useStateCl('');
+  const [email, setEmail] = useStateCl(window.SAFI_CLOUD.status().email || '');
   const [pw, setPw] = useStateCl('');
   const [busy, setBusy] = useStateCl('');
   const [backups, setBackups] = useStateCl(null);
@@ -177,7 +177,8 @@ function CloudCard() {
                     onChange={e => setPw(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && email && pw) run('in', () => window.SAFI_CLOUD.signIn(email, pw), 'Signed in'); }}/>
                 </label>
-                <p className="safi-hint">Create the account in Supabase → Authentication → Users.</p>
+                {st.signedOutReason && <p className="safi-hint" style={{ color: 'var(--red)' }}>{st.signedOutReason}</p>}
+                <p className="safi-hint">Create the account in Supabase → Authentication → Users. After signing in, sync resumes by itself.</p>
               </div>
               <Button kind="primary" icon="lock" disabled={busy === 'in' || !email || !pw} onClick={() => run('in', () => window.SAFI_CLOUD.signIn(email, pw), 'Signed in')}>
                 {busy === 'in' ? 'Signing in…' : 'Sign in'}
@@ -223,10 +224,25 @@ function CloudCard() {
       {st.signedIn && (
         <Card title="Live sync">
           <p className="safi-cell-sub" style={{ marginTop: 0 }}>
-            Backup saves one big snapshot. Live sync writes each order, payment and expense into
-            its own table, so the books can be read from another machine and reported on by
-            branch. Leave it off until the three SQL files have been run.
+            Two-way sync: changes made on this laptop go up within seconds, and changes made on
+            other laptops come down every two minutes. Needs supabase/05_two_way_sync.sql run once.
           </p>
+          {st.needsSetup && (
+            <div className="safi-hint" style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+              <b>First time on this laptop: which data is correct?</b>
+              <p className="safi-cell-sub" style={{ margin: '6px 0 10px' }}>Pick once. After that the laptops keep each other up to date.</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Button kind="primary" disabled={st.syncing} onClick={() => {
+                  if (!window.confirm('Send everything on this laptop to the cloud, overwriting matching records there?')) return;
+                  run('join', () => window.SAFI_CLOUD.joinSync('master'), 'This laptop is now in sync');
+                }}>This laptop is correct</Button>
+                <Button kind="ghost" disabled={st.syncing} onClick={() => {
+                  if (!window.confirm('Replace everything on this laptop with what is in the cloud?')) return;
+                  run('join', () => window.SAFI_CLOUD.joinSync('cloud'), 'Downloaded from the cloud');
+                }}>The cloud is correct</Button>
+              </div>
+            </div>
+          )}
           <label className="safi-switchrow">
             <input type="checkbox" checked={!!st.liveSync}
               onChange={e => { window.SAFI_CLOUD.setLiveSync(e.target.checked); }}/>
@@ -234,9 +250,9 @@ function CloudCard() {
               <span className="safi-cell-sub">Changes are sent a few seconds after they are made, and again whenever the internet comes back.</span></span>
           </label>
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-            <Button kind="primary" icon="refresh" disabled={busy === 'sync' || st.syncing}
+            <Button kind="primary" icon="refresh" disabled={busy === 'sync' || st.syncing || st.needsSetup}
               onClick={() => run('sync', () => window.SAFI_CLOUD.syncNow(), 'Cloud is up to date')}>
-              {busy === 'sync' || st.syncing ? 'Sending…' : 'Send everything now'}
+              {busy === 'sync' || st.syncing ? 'Syncing…' : 'Sync now'}
             </Button>
             <Button kind="ghost" icon="list" disabled={busy === 'cmp'}
               onClick={() => run('cmp', async () => setCounts(await window.SAFI_SYNC.compare()))}>Compare row counts</Button>
@@ -249,6 +265,7 @@ function CloudCard() {
               }}>Pull cloud → this laptop</Button>
           </div>
           {st.syncError && <p className="safi-hint" style={{ color: 'var(--danger, #b42318)' }}>Last attempt failed: {st.syncError}</p>}
+          {st.refusedDeletes > 0 && <p className="safi-hint">{st.refusedDeletes} deletion(s) were refused because this laptop uses the shop login, so those records were put back. Delete them from the owner's laptop.</p>}
           {schema && (
             <p className="safi-hint" style={{ marginBottom: 0 }}>
               {schema.ok

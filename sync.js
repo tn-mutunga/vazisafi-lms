@@ -252,8 +252,277 @@
     return rows;
   }
 
+  // ── two-way state ────────────────────────────────────────────────
+  // h: per table, id → fingerprint of the row as it last matched the cloud. A local
+  //    row whose fingerprint differs has changed here and needs sending.
+  // cur: per table, the newest cloud updated_at already downloaded.
+  const BASE_KEY = () => 'safi_sync_base_v1_' + BRANCH;
+  const H = (o) => { const str = JSON.stringify(o); let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + str.length.toString(36); };
+  function loadBase() { try { return JSON.parse(localStorage.getItem(BASE_KEY())) || null; } catch (e) { return null; } }
+  function saveBase(b) { try { localStorage.setItem(BASE_KEY(), JSON.stringify(b)); } catch (e) {} }
+  const newBase = () => ({ setup: true, h: {}, cur: {} });
+  const tick = (b, table, rows) => { for (const r of rows) if (r.updated_at && (!b.cur[table] || r.updated_at > b.cur[table])) b.cur[table] = r.updated_at; };
+  const EXTRA = {
+    settings:      { list: st => Object.entries(st.settings || {}).map(([key, value]) => ({ branch_id: BRANCH, key, value })), id: r => r.key, conflict: 'branch_id,key' },
+    sms_templates: { list: st => Object.entries(st.smsTemplates || {}).map(([key, body]) => ({ branch_id: BRANCH, key, body })), id: r => r.key, conflict: 'branch_id,key' },
+    void_tags:     { list: st => (st.voidTags || []).map(v => ({ branch_id: BRANCH, tag: String(v.tag), reason: s(v.reason), staff_id: s(v.staff), at: ts(v.at) })), id: r => r.tag, conflict: 'branch_id,tag' },
+  };
+  async function selectSince(table, cur, branchOnly) {
+    const rows = [];
+    const page = 1000;
+    let q = `/rest/v1/${table}?select=*&order=updated_at.asc`;
+    if (cur) q += `&updated_at=gt.${encodeURIComponent(cur)}`;
+    if (branchOnly) q += `&branch_id=eq.${encodeURIComponent(BRANCH)}`;
+    for (let from = 0; ; from += page) {
+      const part = await C().raw(q, { method: 'GET', headers: { Range: `${from}-${from + page - 1}` } });
+      if (!part || !part.length) break;
+      rows.push(...part);
+      if (part.length < page) break;
+    }
+    return rows;
+  }
+  async function itemsFor(orderIds) {
+    const out = {};
+    for (const part of chunk(orderIds, 100)) {
+      const list = part.map(id => `"${id}"`).join(',');
+      const rows = await C().raw(`/rest/v1/order_items?select=*&order_id=in.(${list})&order=order_id,line_no`, { method: 'GET' });
+      for (const it of rows || []) (out[it.order_id] = out[it.order_id] || []).push({
+        svc: it.service_id, subtype: it.subtype || '', qty: Number(it.qty),
+        price: Number(it.price), free: it.free, note: it.note || '',
+      });
+    }
+    return out;
+  }
+  async function writeItems(st, orderIds, ids) {
+    if (!orderIds.length) return 0;
+    for (const part of chunk(orderIds, 100)) {
+      const list = part.map(id => `"${id}"`).join(',');
+      await C().raw(`/rest/v1/order_items?order_id=in.(${list})`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+    }
+    const want = new Set(orderIds);
+    const lines = [];
+    for (const o of st.orders) if (want.has(o.id)) (o.items || []).forEach((it, i) => lines.push({
+      order_id: o.id, line_no: i + 1,
+      service_id: it.svc && ids.services.has(it.svc) ? it.svc : null,
+      subtype: s(it.subtype), qty: Number(it.qty) || 1, price: n(it.price),
+      free: !!it.free, note: s(it.note),
+    }));
+    await upsert('order_items', lines, 'order_id,line_no');
+    return lines.length;
+  }
+  // Fingerprint an order with its lines, so editing a line counts as a change.
+  const fp = (t, r) => { const u = t.up(r); return u ? H(t.key === 'orders' ? [u, r.items || []] : u) : null; };
+
+  // Send only rows that changed on this laptop since they last matched the cloud.
+  let refusedCount = 0;
+  let restore = [];
+  async function pushChanged(b) {
+    const st = S().get();
+    const ids = {};
+    for (const k of ['customers', 'orders', 'staff', 'services', 'expenseCategories', 'dispatch'])
+      ids[k] = new Set((st[k] || []).map(r => r.id));
+    let sent = 0;
+    // Deletions first, children before parents.
+    for (const t of [...TABLES].reverse()) {
+      if (t.appendOnly) continue;
+      const hb = b.h[t.table] = b.h[t.table] || {};
+      const gone = Object.keys(hb).filter(id => !(st[t.key] || []).some(r => r.id === id));
+      if (!gone.length) continue;
+      const refused = [];
+      for (const part of chunk(gone, 100)) {
+        const list = part.map(id => `"${id}"`).join(',');
+        let done = [];
+        try {
+          done = await C().raw(`/rest/v1/${t.table}?${t.pk}=in.(${list})`, { method: 'DELETE', headers: { 'Prefer': 'return=representation' } }) || [];
+        } catch (e) { if (!/row-level security|permission denied|42501|403|23503/i.test(e.message)) throw new Error(`${t.table}: ${e.message}`); }
+        const ok = new Set(done.map(r => String(r[t.pk])));
+        for (const id of part) { delete hb[id]; if (!ok.has(id)) refused.push(id); }
+      }
+      // The cloud refused (till login cannot delete). Put the row back so both sides agree.
+      if (refused.length) { restore.push({ t, ids: refused }); refusedCount += refused.length; }
+      saveBase(b);
+    }
+    for (const t of TABLES) {
+      const hb = b.h[t.table] = b.h[t.table] || {};
+      const changed = (st[t.key] || []).filter(r => { const u = t.up(r); return u && hb[u[t.pk]] !== fp(t, r); });
+      if (!changed.length) continue;
+      const rows = clearDangling(t.table, changed.map(t.up), ids);
+      try {
+        if (t.appendOnly) await insertIgnore(t.table, rows, t.pk); else await upsert(t.table, rows, t.pk);
+      } catch (e) {
+        if (OWNER_ONLY.has(t.table) && /row-level security|permission denied|42501|403/i.test(e.message)) {
+          changed.forEach(r => { hb[r.id] = fp(t, r); }); continue;
+        }
+        throw new Error(`${t.table}: ${e.message}`);
+      }
+      if (t.key === 'orders') await writeItems(st, changed.map(r => r.id), ids);
+      changed.forEach(r => { hb[r.id] = fp(t, r); });
+      sent += changed.length;
+      saveBase(b);
+    }
+    for (const [table, x] of Object.entries(EXTRA)) {
+      const hb = b.h[table] = b.h[table] || {};
+      const changed = x.list(st).filter(r => hb[x.id(r)] !== H(r));
+      if (!changed.length) continue;
+      await upsert(table, changed, x.conflict);
+      changed.forEach(r => { hb[x.id(r)] = H(r); });
+      sent += changed.length;
+      saveBase(b);
+    }
+    return sent;
+  }
+
+  // Download rows that changed in the cloud since last time and merge them in. A row
+  // that also changed here (and has not been sent yet) is left alone; it goes up next.
+  async function pullChanged(b) {
+    const next = JSON.parse(S().snapshot());
+    let got = 0;
+    const pulledOrders = [];
+    for (const t of TABLES) {
+      const hb = b.h[t.table] = b.h[t.table] || {};
+      const rows = await selectSince(t.table, b.cur[t.table], !!t.branch);
+      if (!rows.length) continue;
+      const list = next[t.key] = next[t.key] || [];
+      const at = new Map(list.map((r, i) => [r.id, i]));
+      for (const row of rows) {
+        const d = t.down(row);
+        const i = at.get(d.id);
+        const local = i == null ? null : list[i];
+        if (local && hb[d.id] !== fp(t, local)) continue;
+        const merged = local ? { ...local, ...d } : d;
+        if (i == null) { at.set(d.id, list.length); list.push(merged); } else list[i] = merged;
+        if (t.key === 'orders') pulledOrders.push(d.id);
+        else hb[d.id] = fp(t, merged);
+        got++;
+      }
+      tick(b, t.table, rows);
+    }
+    if (pulledOrders.length) {
+      const items = await itemsFor(pulledOrders);
+      const ot = TABLES.find(t => t.key === 'orders');
+      const hb = b.h.orders;
+      for (const o of next.orders) if (pulledOrders.includes(o.id)) { o.items = items[o.id] || o.items || []; hb[o.id] = fp(ot, o); }
+      next.orders.sort((a, z) => String(z.in).localeCompare(String(a.in)));
+    }
+    const st = S().get();
+    for (const [table, x] of Object.entries(EXTRA)) {
+      const hb = b.h[table] = b.h[table] || {};
+      const rows = await selectSince(table, b.cur[table], true);
+      if (!rows.length) continue;
+      const localNow = new Map(x.list(st).map(r => [x.id(r), r]));
+      for (const row of rows) {
+        const k = x.id(row);
+        const local = localNow.get(k);
+        if (local && hb[k] !== H(local)) continue;
+        if (table === 'settings') { next.settings = { ...(next.settings || {}), [k]: row.value }; hb[k] = H({ branch_id: BRANCH, key: k, value: row.value }); }
+        if (table === 'sms_templates') { next.smsTemplates = { ...(next.smsTemplates || {}), [k]: row.body }; hb[k] = H({ branch_id: BRANCH, key: k, body: row.body }); }
+        if (table === 'void_tags') {
+          const v = { tag: row.tag, reason: row.reason, staff: row.staff_id, at: row.at };
+          next.voidTags = [...(next.voidTags || []).filter(x => String(x.tag) !== k), v];
+          hb[k] = H(EXTRA.void_tags.list({ voidTags: [v] })[0]);
+        }
+        got++;
+      }
+      tick(b, table, rows);
+    }
+    // Rows the cloud would not let this login delete come back.
+    for (const { t, ids } of restore.splice(0)) {
+      const hb = b.h[t.table] = b.h[t.table] || {};
+      const list = next[t.key] = next[t.key] || [];
+      for (const part of chunk(ids, 100)) {
+        const rows = await C().raw(`/rest/v1/${t.table}?select=*&${t.pk}=in.(${part.map(id => `"${id}"`).join(',')})`, { method: 'GET' }) || [];
+        const items = t.key === 'orders' ? await itemsFor(rows.map(r => r.id)) : {};
+        for (const row of rows) {
+          const d = t.down(row);
+          if (t.key === 'orders') d.items = items[d.id] || [];
+          if (!list.some(r => r.id === d.id)) list.push(d);
+          hb[d.id] = fp(t, d);
+          got++;
+        }
+      }
+    }
+    // Rows deleted on another laptop.
+    let dels = [];
+    try { dels = await selectSince('deleted_rows', b.cur.__deleted, false); }
+    catch (e) { if (!/not exist|schema cache|404/i.test(e.message)) throw e; }
+    for (const d of dels) {
+      const t = TABLES.find(x => x.table === d.table_name);
+      if (t) {
+        if (t.branch && d.branch_id && d.branch_id !== BRANCH) continue;
+        const hb = b.h[t.table] = b.h[t.table] || {};
+        const list = next[t.key] || [];
+        const i = list.findIndex(r => r.id === d.row_id);
+        if (i < 0) { delete hb[d.row_id]; continue; }
+        if (hb[d.row_id] !== fp(t, list[i])) continue; // edited here since; the edit wins
+        list.splice(i, 1);
+        delete hb[d.row_id];
+        got++;
+      } else if (EXTRA[d.table_name] && d.branch_id === BRANCH) {
+        const hb = b.h[d.table_name] || {};
+        if (d.table_name === 'settings' && next.settings) delete next.settings[d.row_id];
+        if (d.table_name === 'sms_templates' && next.smsTemplates) delete next.smsTemplates[d.row_id];
+        if (d.table_name === 'void_tags') next.voidTags = (next.voidTags || []).filter(v => String(v.tag) !== d.row_id);
+        delete hb[d.row_id];
+        got++;
+      }
+    }
+    tick(b, '__deleted', dels);
+    saveBase(b);
+    if (got) S().importJSON(JSON.stringify(next));
+    return got;
+  }
+
+  async function skipOldDeletions(b) {
+    try { const r = await C().raw('/rest/v1/deleted_rows?select=updated_at&order=updated_at.desc&limit=1', { method: 'GET' }); tick(b, '__deleted', r || []); }
+    catch (e) {}
+  }
+  function baselineAll(b) {
+    const st = S().get();
+    for (const t of TABLES) { const hb = b.h[t.table] = {}; for (const r of st[t.key] || []) { const u = t.up(r); if (u) hb[u[t.pk]] = fp(t, r); } }
+    for (const [table, x] of Object.entries(EXTRA)) { const hb = b.h[table] = {}; for (const r of x.list(st)) hb[x.id(r)] = H(r); }
+  }
+
   const API = {
     TABLES,
+    isSetup() { return !!(loadBase() || {}).setup; },
+
+    // Normal cycle: send what changed here, then fetch what changed elsewhere.
+    async sync() {
+      const b = loadBase();
+      if (!b || !b.setup) throw new Error('Choose how this laptop joins two-way sync (Cloud & Updates)');
+      refusedCount = 0;
+      const sent = await pushChanged(b);
+      const got = await pullChanged(b);
+      C().setConfig({ lastSync: new Date().toISOString(), lastRefusedDeletes: refusedCount || 0 });
+      return { sent, got, refused: refusedCount };
+    },
+
+    // First time on a laptop: its data is the truth. Send all of it, then take in
+    // anything the cloud has that this laptop does not.
+    async setupAsMaster() {
+      const b = newBase();
+      await skipOldDeletions(b);
+      await API.push();
+      baselineAll(b);
+      saveBase(b);
+      const got = await pullChanged(b);
+      C().setConfig({ lastSync: new Date().toISOString() });
+      return { got };
+    },
+
+    // First time on a laptop: the cloud is the truth. Replace local data with it.
+    async setupFromCloud() {
+      const b = newBase();
+      await skipOldDeletions(b);
+      await API.pull();
+      for (const t of TABLES) { const r = await C().raw(`/rest/v1/${t.table}?select=updated_at&order=updated_at.desc&limit=1`, { method: 'GET' }); tick(b, t.table, r || []); }
+      for (const table of Object.keys(EXTRA)) { const r = await C().raw(`/rest/v1/${table}?select=updated_at&branch_id=eq.${encodeURIComponent(BRANCH)}&order=updated_at.desc&limit=1`, { method: 'GET' }); tick(b, table, r || []); }
+      baselineAll(b);
+      saveBase(b);
+      C().setConfig({ lastSync: new Date().toISOString() });
+      return {};
+    },
+
     branch() { return BRANCH; },
     setBranch(id) { BRANCH = id || 'main'; },
 

@@ -85,6 +85,10 @@ function OwnerDashboard({ lang, money, setView }) {
 
       <PeriodSummary money={money}/>
 
+      {window.ServiceClientsToday && <window.ServiceClientsToday/>}
+
+      {window.ActivityCounts && <window.ActivityCounts/>}
+
       <TimeSeries money={money}/>
 
       <Card title={`Today's revenue by category · ${new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}`} action={<span className="safi-cell-sub">Live from today's orders</span>}>
@@ -356,6 +360,7 @@ function PricingScreen({ lang, money }) {
           <Button kind="primary" icon="plus" onClick={() => { setEdit(null); setForm({ name: '', unit: 'piece', icon: 'shirt', category: 'laundry', student: 0, normal: 0, corporate: 0 }); setShowAdd(true); }}>Add service</Button>
         </>}
       />
+      {window.PriceModels && <window.PriceModels money={money}/>}
 
       <Card pad={false}>
         <Table
@@ -373,7 +378,7 @@ function PricingScreen({ lang, money }) {
             { label: 'Subtypes', render: r => r.subtypes ? <span className="safi-cell-sub">{r.subtypes.length} types</span> : <span className="safi-cell-sub">—</span> },
             { label: '', render: r => <button className="safi-rowlink" onClick={() => openEdit(r)}>Edit →</button> },
           ]}
-          rows={D.services}
+          rows={D.services.filter(s => !window.SAFI_PRICING.applies(s))}
           empty="No services yet — add your first one."
         />
       </Card>

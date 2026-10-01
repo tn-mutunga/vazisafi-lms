@@ -411,6 +411,7 @@ const SyncPill = () => {
 
   let tone = 'ok', label = 'Synced';
   if (st.syncing)            { tone = 'busy';  label = 'Saving to cloud'; }
+  else if (st.needsSetup)    { tone = 'bad';   label = 'Sync not set up'; }
   else if (st.syncError)     { tone = 'bad';   label = 'Sync failed'; }
   else if (stale)            { tone = 'bad';   label = 'Not synced'; }
   else if (!st.online)       { tone = 'wait';  label = 'Offline'; }

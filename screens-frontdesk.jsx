@@ -39,6 +39,8 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
         <StatCard label={`${t('in_washing', lang)} / ${t('in_ironing', lang)}`} value={`${washing} / ${ironing}`} icon="wash"/>
       </div>
 
+      {window.ServiceClientsToday && <window.ServiceClientsToday/>}
+
       <div className="safi-grid safi-grid--2-1">
         <Card title={t('todays_queue', lang)} action={<Button kind="ghost" size="sm" onClick={() => setView('orders')}>View all →</Button>}>
           <Table
@@ -135,6 +137,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   const [notes, setNotes] = useStateFD('');
   const [tag, setTag] = useStateFD('');
   const [search, setSearch] = useStateFD('');
+  const [walkIn, setWalkIn] = useStateFD(false);
   const [showAdd, setShowAdd] = useStateFD(false);
   const [subtypePicker, setSubtypePicker] = useStateFD(null);
 
@@ -147,10 +150,10 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
 
   useEffectFD(() => { if (customer) setGroup(customer.group); }, [customerId]);
 
+  const P = window.SAFI_PRICING;
   const subtotal = items.reduce((s, it) => {
     const svc = D.services.find(x => x.id === it.svc);
-    const unit = it.customPrice ?? (svc?.tiers[effGroup] || 0);
-    return s + unit * (it.qty || 0);
+    return s + P.line(svc, it.qty, effGroup, it.customPrice);
   }, 0);
   const discount = Math.round(subtotal * (discountPct / 100));
   const total = Math.max(0, subtotal - discount);
@@ -169,8 +172,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
     }
     const linePriced = items.map(it => {
       const svc = D.services.find(s => s.id === it.svc);
-      const unit = it.customPrice ?? (svc?.tiers[effGroup] || 0);
-      return { svc: it.svc, subtype: it.subtype || '', qty: it.qty, price: Math.round(unit * (it.qty || 0)) };
+      return { svc: it.svc, subtype: it.subtype || '', qty: it.qty, price: P.line(svc, it.qty, effGroup, it.customPrice) };
     });
     const order = window.SAFI_STORE.createOrder({
       customerId, items: linePriced, total, discount, discountPct,
@@ -237,13 +239,13 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
             <div className="safi-cust-pick">
               <div className="safi-cust-pick__search">
                 <Icon name="search" size={16}/>
-                <input placeholder="Search by name or phone…" value={search} onChange={e => setSearch(e.target.value)}/>
-                <button className="safi-cust-pick__walk" onClick={() => { setCustomerId(''); setGroup('normal'); }}>Walk-in</button>
+                <input placeholder="Search by name or phone…" value={search} onChange={e => { setSearch(e.target.value); setWalkIn(false); }}/>
+                <button className={`safi-cust-pick__walk ${walkIn ? 'is-active' : ''}`} onClick={() => { setCustomerId(''); setSearch(''); setGroup('normal'); setWalkIn(true); }}>Walk-in</button>
                 <button className="safi-cust-pick__walk" onClick={() => setShowAdd(true)}>+ New</button>
               </div>
               <div className="safi-cust-pick__list">
-                {filteredCust.slice(0, 8).map(c => (
-                  <button key={c.id} className={`safi-cust-pick__item ${customerId === c.id ? 'is-active' : ''}`} onClick={() => setCustomerId(c.id)}>
+                {!walkIn && filteredCust.slice(0, 8).map(c => (
+                  <button key={c.id} className={`safi-cust-pick__item ${customerId === c.id ? 'is-active' : ''}`} onClick={() => { setCustomerId(c.id); setWalkIn(false); }}>
                     <span className="safi-cust-pick__avatar">{c.name.split(' ').map(s => s[0]).slice(0, 2).join('')}</span>
                     <span className="safi-cust-pick__name">
                       <b>{c.name}</b>
@@ -252,11 +254,12 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                     <GroupBadge group={c.group}/>
                   </button>
                 ))}
-                {filteredCust.length === 0 && <div className="safi-cell-sub" style={{ padding: 12 }}>No match. Use Walk-in or + New.</div>}
+                {!walkIn && filteredCust.length === 0 && <div className="safi-cell-sub" style={{ padding: 12 }}>No match. Use Walk-in or + New.</div>}
+                {walkIn && <div className="safi-cell-sub" style={{ padding: 12 }}>Walk-in selected. No customer record will be saved. <button className="safi-rowlink" onClick={() => setWalkIn(false)}>Pick a customer instead</button></div>}
               </div>
-              {!customerId && (
+              {!customerId && walkIn && (
                 <div className="safi-walkin">
-                  <label>Walk-in pricing tier</label>
+                  <label>Walk-in customer · pricing tier</label>
                   <div className="safi-seg">
                     {['student', 'normal', 'corporate'].map(g => (
                       <button key={g} className={`safi-seg__btn ${group === g ? 'is-active' : ''}`} onClick={() => setGroup(g)}>{t(g, lang)}</button>
@@ -279,7 +282,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                 }}>
                   <span className="safi-svc-tile__ico"><Icon name={s.icon} size={20}/></span>
                   <span className="safi-svc-tile__lbl">{s.name}</span>
-                  <span className="safi-svc-tile__price">{money(s.tiers[effGroup])} / {s.unit}</span>
+                  <span className="safi-svc-tile__price">{P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
                   {s.subtypes && <span className="safi-svc-tile__sub">Pick from {s.subtypes.length} types →</span>}
                 </button>
               ))}
@@ -296,6 +299,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
               {items.map((it, i) => {
                 const svc = D.services.find(x => x.id === it.svc);
                 const unit = it.customPrice ?? (svc?.tiers[effGroup] || 0);
+                const rule = it.customPrice == null ? P.ruleFor(svc, effGroup) : null;
                 return (
                   <div key={i} className="safi-items__row">
                     <div className="safi-items__svc">
@@ -324,8 +328,8 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                       <span className="safi-qty__unit">{svc?.unit}</span>
                       <button onClick={() => { const n = [...items]; n[i].qty = (n[i].qty || 0) + 0.5; setItems(n); }}>+</button>
                     </div>
-                    <span className="safi-mono">{money(unit)}</span>
-                    <span className="safi-mono safi-cell-strong">{money(unit * (it.qty || 0))}</span>
+                    <span className={rule ? 'safi-cell-sub' : 'safi-mono'}>{rule ? P.describe(rule) : money(unit)}</span>
+                    <span className="safi-mono safi-cell-strong">{money(P.line(svc, it.qty, effGroup, it.customPrice))}</span>
                     <button className="safi-items__del" onClick={() => setItems(items.filter((_, j) => j !== i))}>×</button>
                   </div>
                 );
@@ -510,11 +514,13 @@ function NewOrderPreview({ items, subtotal, discount, discountPct, total, deposi
           <tbody>
             {groups.flatMap((g, gi) => {
               const s = services.find(x => x.id === g.svc);
-              const subSum = g.lines.reduce((sum, l) => sum + ((l.customPrice ?? s?.tiers[effGroup] ?? 0) * l.qty), 0);
+              const PR = window.SAFI_PRICING;
+              const subSum = g.lines.reduce((sum, l) => sum + PR.line(s, l.qty, effGroup, l.customPrice), 0);
               if (g.lines.length === 1 && !g.lines[0].subtype) {
                 const l = g.lines[0];
                 const unit = l.customPrice ?? s?.tiers[effGroup] ?? 0;
-                return [<tr key={gi}><td>{s?.name}</td><td>{l.qty} {s?.unit}</td><td className="safi-mono">{money(unit)}</td><td className="safi-mono">{money(unit * l.qty)}</td></tr>];
+                const rule = l.customPrice == null ? PR.ruleFor(s, effGroup) : null;
+                return [<tr key={gi}><td>{s?.name}</td><td>{l.qty} {s?.unit}</td><td className="safi-mono">{rule ? PR.describe(rule) : money(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td></tr>];
               }
               return [
                 <tr key={`gh${gi}`} className="safi-receipt__items-group"><td colSpan="4"><b>{s?.name}</b></td></tr>,
@@ -522,7 +528,7 @@ function NewOrderPreview({ items, subtotal, discount, discountPct, total, deposi
                   const unit = l.customPrice ?? s?.tiers[effGroup] ?? 0;
                   return <tr key={`g${gi}l${li}`} className="safi-receipt__items-sub">
                     <td>{l.subtype || s?.name}</td><td>{l.qty} {s?.unit}</td>
-                    <td className="safi-mono">{money(unit)}</td><td className="safi-mono">{money(unit * l.qty)}</td>
+                    <td className="safi-mono">{money(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td>
                   </tr>;
                 }),
                 g.lines.length > 1 && <tr key={`gs${gi}`} className="safi-receipt__items-subtotal"><td colSpan="3" style={{ textAlign: 'right' }}>Subtotal</td><td className="safi-mono"><b>{money(subSum)}</b></td></tr>,
@@ -709,6 +715,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
 
   function markCollected() {
     const balance = (o.total || 0) - (o.paid || 0);
+    if (balance > 0) { toast(`Balance ${money(balance)} still due. Collect payment before marking Collected.`, 'error'); return; }
     window.SAFI_STORE.updateOrder(o.id, { status: 'collected' });
     window.SAFI_STORE.logRelease({
       orderId: o.id, tag: o.tag || '',
@@ -1101,14 +1108,14 @@ function EditOrderModal({ open, onClose, order, isManagement }) {
     next[idx].qty = qty;
     const svc = D.services.find(s => s.id === next[idx].svc);
     if (svc && !next[idx].free) {
-      next[idx].price = Math.round((svc.tiers[group] || 0) * qty);
+      next[idx].price = window.SAFI_PRICING.line(svc, qty, group);
     }
     setItems(next);
   }
   function removeItem(idx) { setItems(items.filter((_, i) => i !== idx)); }
   function addItem() {
     const svc = D.services[0];
-    setItems([...items, { svc: svc.id, qty: 1, price: svc.tiers[group] || 0, free: false }]);
+    setItems([...items, { svc: svc.id, qty: 1, price: window.SAFI_PRICING.line(svc, 1, group), free: false }]);
   }
 
   function submit() {
@@ -1155,7 +1162,7 @@ function EditOrderModal({ open, onClose, order, isManagement }) {
                   const next = [...items];
                   next[i].svc = e.target.value;
                   const newSvc = D.services.find(s => s.id === e.target.value);
-                  next[i].price = it.free ? 0 : Math.round((newSvc?.tiers[group] || 0) * it.qty);
+                  next[i].price = it.free ? 0 : window.SAFI_PRICING.line(newSvc, it.qty, group);
                   setItems(next);
                 }}>
                   {D.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -1208,7 +1215,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
         subtitle="80mm thermal-printer optimized. Print this, then print the job card & delivery note."
         right={<>
           <Button kind="ghost" onClick={() => setView('order-detail')}><Icon name="arrow-l" size={14}/> Back</Button>
-          <Button kind="secondary" icon="print" onClick={() => window.print()}>{t('print', lang)}</Button>
+          <Button kind="secondary" icon="print" onClick={() => window.printDoc('receipt', o.id)}>{t('print', lang)}</Button>
           <Button kind="primary" icon="card" onClick={() => setView('job-card')}>Job card &amp; delivery note →</Button>
         </>}
       />
@@ -1659,7 +1666,8 @@ function PaymentsScreen({ lang, money, role }) {
 }
 
 // ─── Packages & Discounts ─────────────────────────────────────────────────
-function PackagesScreen({ lang, money }) {
+function PackagesScreen({ lang, money, role }) {
+  const canEdit = role !== 'frontdesk';
   const D = useStore();
   const [showAdd, setShowAdd] = useStateFD(false);
   const [pkg, setPkg] = useStateFD({ name: '', target: 'normal', period: 'month', price: '', includes: '' });
@@ -1676,14 +1684,14 @@ function PackagesScreen({ lang, money }) {
     <>
       <Topbar
         title={t('nav_packages', lang)}
-        subtitle="Subscription bundles for students, families, and corporate clients."
-        right={<>
+        subtitle={canEdit ? 'Subscription bundles for students, families, and corporate clients.' : 'Packages set by management. Ask management to add or change one.'}
+        right={canEdit ? <>
           <Button kind="primary" icon="plus" onClick={() => setShowAdd(true)}>New package</Button>
-        </>}
+        </> : null}
       />
 
       <div className="safi-grid safi-grid--3">
-        {D.packages.map(p => (
+        {D.packages.filter(p => canEdit || p.active).map(p => (
           <div key={p.id} className={`safi-pkg ${!p.active ? 'is-inactive' : ''}`}>
             <div className="safi-pkg__hd">
               <span className={`safi-pkg__period safi-pkg__period--${p.period}`}>{p.period.toUpperCase()}</span>
@@ -1694,15 +1702,15 @@ function PackagesScreen({ lang, money }) {
             <p className="safi-pkg__inc">{p.includes}</p>
             <div className="safi-pkg__foot">
               <span>{p.subscribers || 0} subscribers</span>
-              <button className="safi-pkg__edit" onClick={() => window.SAFI_STORE.addPackage({ ...p, active: !p.active })}>{p.active ? 'Pause →' : 'Activate →'}</button>
+              {canEdit && <button className="safi-pkg__edit" onClick={() => window.SAFI_STORE.updatePackage(p.id, { active: !p.active })}>{p.active ? 'Pause →' : 'Activate →'}</button>}
             </div>
           </div>
         ))}
-        <div className="safi-pkg safi-pkg--add" onClick={() => setShowAdd(true)}>
+        {canEdit && <div className="safi-pkg safi-pkg--add" onClick={() => setShowAdd(true)}>
           <Icon name="plus" size={28}/>
           <span>Create a new package</span>
           <p>Bundle services for repeat customers — monthly, weekly, or one-off.</p>
-        </div>
+        </div>}
       </div>
 
       <Card title="Active discount codes">
@@ -1719,7 +1727,7 @@ function PackagesScreen({ lang, money }) {
         />
       </Card>
 
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="New package"
+      <Modal open={canEdit && showAdd} onClose={() => setShowAdd(false)} title="New package"
         footer={<>
           <Button kind="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
           <Button kind="primary" icon="check" onClick={submit}>Create package</Button>

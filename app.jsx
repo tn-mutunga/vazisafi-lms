@@ -78,7 +78,7 @@ function App() {
         case 'receipt':      return <Receipt {...props}/>;
         case 'customers':    return <CustomersScreen {...props} role="frontdesk"/>;
         case 'payments':     return <PaymentsScreen {...props} role="frontdesk"/>;
-        case 'packages':     return <PackagesScreen {...props}/>;
+        case 'packages':     return <PackagesScreen {...props} role="frontdesk"/>;
         case 'issues':       return <IssuesScreen {...props}/>;
         case 'expenses':     return <ExpensesScreen {...props} role="frontdesk"/>;
         case 'dispatch':     return <DispatchScreen {...props}/>;
@@ -118,7 +118,7 @@ function App() {
   return (
     <div className="safi-app" data-screen-label={`${role}/${view}`}>
       <Sidebar role={role} setRole={safeSetRole} view={view} setView={setView} lang={lang} shop={shop}/>
-      <main className="safi-main"><UpdateBar/>{screen}</main>
+      <main className="safi-main"><UpdateBar/>{window.DispatchReminders && <window.DispatchReminders setView={setView}/>}{screen}</main>
       <ToastHost/>
 
       <Modal open={pinPrompt} onClose={() => setPinPrompt(false)} title="Enter Owner PIN" width={360}

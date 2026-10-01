@@ -20,6 +20,7 @@
   if (cfg.branch === undefined)   cfg.branch = 'main';
   if (cfg.liveSync === undefined) cfg.liveSync = false;
   let session = read(SESSION_KEY);
+  let signedOutReason = '';
   const listeners = new Set();
 
   function emit() { listeners.forEach(fn => { try { fn(status()); } catch {} }); }
@@ -37,7 +38,11 @@
       liveSync: !!cfg.liveSync,
       lastSync: cfg.lastSync || null,
       syncing: syncing,
-      syncError: syncError
+      syncError: syncError,
+      signedOutReason: signedOutReason,
+      email: cfg.email || '',
+      needsSetup: !!(window.SAFI_SYNC && !window.SAFI_SYNC.isSetup()),
+      refusedDeletes: cfg.lastRefusedDeletes || 0
     };
   }
 
@@ -79,6 +84,7 @@
   async function refresh() {
     if (!session?.refresh_token) return false;
     if (refreshing) return refreshing;
+    const sent = session.refresh_token;
     refreshing = (async () => {
       try {
         const res = await fetch(base() + '/auth/v1/token?grant_type=refresh_token', {
@@ -86,8 +92,17 @@
           body: JSON.stringify({ refresh_token: session.refresh_token })
         });
         if (!res.ok) {
-          // Refresh token revoked or used up: the owner must sign in again.
-          if (res.status === 400 || res.status === 401) { session = null; write(SESSION_KEY, null); emit(); }
+          // Another window or an earlier attempt may already have swapped the token
+          // (each one can be used once). If storage holds a newer session, use it.
+          const stored = read(SESSION_KEY);
+          if (stored && stored.refresh_token && stored.refresh_token !== sent) { session = stored; emit(); return true; }
+          let msg = '';
+          try { msg = (await res.json()).error_description || ''; } catch (e) {}
+          // Only a token the server says is gone ends the sign-in. Anything else
+          // (server busy, network blip) is retried on the next cycle.
+          if ((res.status === 400 || res.status === 401) && /not found|revoked|invalid/i.test(msg) && !/already used/i.test(msg)) {
+            session = null; write(SESSION_KEY, null); signedOutReason = 'Cloud sign-in expired. Sign in again to resume sync.'; emit();
+          }
           return false;
         }
         const body = await res.json();
@@ -145,7 +160,11 @@
       });
       session = { ...body, issued_at: Date.now() };
       write(SESSION_KEY, session);
+      signedOutReason = '';
+      API.setConfig({ email });
       emit();
+      // Back in: pick up straight away rather than waiting for the next change.
+      schedule(800);
       return status();
     },
 
@@ -197,13 +216,23 @@
       return status();
     },
 
+    async joinSync(mode) {
+      if (!session) throw new Error('Sign in first');
+      syncing = true; syncError = null; emit();
+      try {
+        window.SAFI_SYNC.setBranch(cfg.branch);
+        return mode === 'cloud' ? await window.SAFI_SYNC.setupFromCloud() : await window.SAFI_SYNC.setupAsMaster();
+      } catch (e) { syncError = e.message || String(e); throw e; }
+      finally { syncing = false; emit(); }
+    },
+
     async syncNow() {
       if (!session) throw new Error('Sign in first');
       if (!window.SAFI_SYNC) throw new Error('Sync module not loaded');
       syncing = true; syncError = null; emit();
       try {
         window.SAFI_SYNC.setBranch(cfg.branch);
-        const report = await window.SAFI_SYNC.push();
+        const report = await window.SAFI_SYNC.sync();
         syncError = null;
         return report;
       } catch (e) {
@@ -215,10 +244,18 @@
 
   // ── Debounced background push ──────────────────────────────────────
   let timer = null;
+  let retryStep = 0;
   function schedule(ms) {
     if (!cfg.liveSync || !session || !navigator.onLine) return;
     clearTimeout(timer);
-    timer = setTimeout(() => { API.syncNow().catch(() => {}); }, ms);
+    // A failed attempt (Wi-Fi still connecting at start-up, a dropped line) retries
+    // on its own after 30 s, then 1, 2 and 5 minutes, instead of waiting for a change.
+    timer = setTimeout(() => {
+      API.syncNow().then(() => { retryStep = 0; }).catch(() => {
+        const waits = [30000, 60000, 120000, 300000];
+        schedule(waits[Math.min(retryStep++, waits.length - 1)]);
+      });
+    }, ms);
   }
 
   // Subscribe once the store exists.
@@ -226,6 +263,16 @@
     if (window.SAFI_STORE) window.SAFI_STORE.subscribe(() => schedule(8000));
     if (window.SAFI_SYNC) window.SAFI_SYNC.setBranch(cfg.branch);
   }, 0);
+
+  // Fetch other laptops' changes even when nobody is typing here.
+  setInterval(() => schedule(0), 120000);
+  // Renew the sign-in in the background every 30 minutes, so a till left open (or
+  // reopened the next morning) never finds an expired token at the counter.
+  setInterval(() => { if (session && navigator.onLine) ensureFresh().catch(() => {}); }, 1800000);
+  // On opening the app: renew, then sync.
+  setTimeout(() => { if (session && navigator.onLine) ensureFresh().then(() => schedule(1500)).catch(() => {}); }, 2000);
+  // Waking from sleep shows up as the window becoming visible again.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && session && navigator.onLine) ensureFresh().then(() => schedule(1500)).catch(() => {}); });
 
   // Coming back online after a spell offline is the moment the cloud is most stale.
   window.addEventListener('online', () => schedule(3000));

@@ -172,7 +172,7 @@ function JobCardSheet({ orderId, setView, shop, lang }) {
         right={<>
           <Button kind="ghost" onClick={() => setView('receipt')}>← Receipt</Button>
           <Button kind="ghost" onClick={() => setView('order-detail')}>Order</Button>
-          <Button kind="primary" icon="print" onClick={() => window.print()}>Print</Button>
+          <Button kind="primary" icon="print" onClick={() => window.printDoc('jobcard', order.id)}>Print</Button>
         </>}
       />
       <div className="safi-jcsheet" id="safi-print-area">

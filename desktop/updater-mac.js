@@ -146,6 +146,8 @@ function init({ app, dialog, getWindow, onStatus }) {
       `mv ${q(bundle)} ${q(bundle + '.old')} || exit 1`,
       `if ! /usr/bin/ditto ${q(staged.appPath)} ${q(bundle)}; then mv ${q(bundle + '.old')} ${q(bundle)}; open ${q(bundle)}; exit 1; fi`,
       `/usr/bin/xattr -cr ${q(bundle)} 2>/dev/null`,
+      // Re-stamp with a local (ad-hoc) signature. Apple silicon refuses to run an
+      // app whose bundle changed after signing, and Gatekeeper bins it as malware.
       `/usr/bin/codesign --force --deep --sign - ${q(bundle)} 2>/dev/null`,
       `rm -rf ${q(bundle + '.old')} ${q(work)}`,
       `open ${q(bundle)}`,

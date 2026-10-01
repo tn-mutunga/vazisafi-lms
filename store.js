@@ -26,6 +26,14 @@ window.SAFI_STORE = (() => {
   // New collections introduced after launch
   if (!state.messages)       state.messages = [];
   if (!state.dispatch)       state.dispatch = [];
+  // Pickups/deliveries from before v2.0.1 have no date. Use the linked order's due
+  // date, else the day it was scheduled.
+  state.dispatch = state.dispatch.map(d => {
+    if (d.slotDate) return d;
+    const o = d.orderId && (state.orders || []).find(x => x.id === d.orderId);
+    const guess = String((d.type === 'delivery' && o && o.due) || d.created || '').slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(guess) ? { ...d, slotDate: guess, slotDateGuessed: true } : d;
+  });
   if (!state.approvals)      state.approvals = [];
   if (!state.settings)       state.settings = { firstTimeBagFree: false, freeBagServiceId: 'laundry-bag' };
   // Integrity controls (added to close the unreceipted-order gap)
@@ -293,12 +301,13 @@ window.SAFI_STORE = (() => {
     subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
 
     // ── Messages / SMS log ─────────────────────────────────
-    logMessage({ to, name, body, orderId, stage, method }) {
+    logPrint(kind, orderId) { audit('print.' + kind, orderId || '', kind + ' printed'); save(); },
+    logMessage({ to, name, body, orderId, stage, method, customerId }) {
       const now = new Date();
       const fmt = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
       const msg = {
         id: nextId('msg'), date: fmt, to, name, body,
-        orderId: orderId || '', stage: stage || '',
+        orderId: orderId || '', stage: stage || '', customerId: customerId || '',
         method: method || 'sms', status: 'sent',
       };
       state.messages = [msg, ...state.messages];
@@ -314,13 +323,13 @@ window.SAFI_STORE = (() => {
     },
 
     // ── Pickup & Delivery dispatch ─────────────────────────
-    addDispatch({ orderId, customerId, type, address, area, rider, slotStart, slotEnd, notes }) {
+    addDispatch({ orderId, customerId, type, address, area, rider, slotDate, slotStart, slotEnd, notes }) {
       const id = nextId('dx');
       const d = {
         id, orderId: orderId || '', customerId: customerId || '',
         type: type || 'delivery', // 'pickup' or 'delivery'
         address: address || '', area: area || '',
-        rider: rider || '', slotStart: slotStart || '', slotEnd: slotEnd || '',
+        rider: rider || '', slotDate: slotDate || '', slotStart: slotStart || '', slotEnd: slotEnd || '',
         notes: notes || '', status: 'scheduled',
         created: new Date().toISOString().slice(0, 16).replace('T', ' '),
       };
@@ -329,6 +338,7 @@ window.SAFI_STORE = (() => {
       return d;
     },
     updateDispatch(id, patch) {
+      if (patch.slotDate) patch = { ...patch, slotDateGuessed: false };
       state.dispatch = state.dispatch.map(d => d.id === id ? { ...d, ...patch } : d);
       save();
     },
@@ -425,6 +435,8 @@ window.SAFI_STORE = (() => {
       }
       // Tag who took the order
       if (state.currentStaffId) order.cashier = state.currentStaffId;
+      order.priceModel = (state.settings || {}).activePriceModel || 'current';
+      { const cu = state.customers.find(c => c.id === customerId); if (window.SAFI_PRICING && window.SAFI_PRICING.studentDayLive() && cu && cu.group === 'student') order.priceModel = 'student-thursday'; }
       audit('order.create', id, `${finalItems.length} line(s), total ${order.total}`, { tag: order.tag || '' });
       // Mark the parent order as having been rewashed
       if (rewashOf) {
@@ -534,6 +546,19 @@ window.SAFI_STORE = (() => {
     // ── Settings (in-store, distinct from cosmetic tweaks) ─
     setSetting(key, value) {
       state.settings = { ...(state.settings || {}), [key]: value };
+      save();
+    },
+    getSettings() { return state.settings || {}; },
+    activatePriceModel(id) {
+      const from = (state.settings || {}).activePriceModel || 'current';
+      if (from === id) return;
+      state.settings = { ...(state.settings || {}), activePriceModel: id };
+      audit('pricing.activate', id, `Price model ${from} → ${id}`);
+      save();
+    },
+    savePriceModels(list) {
+      state.settings = { ...(state.settings || {}), priceModels: list };
+      audit('pricing.edit', 'models', `${list.length} price model(s) saved`);
       save();
     },
 
@@ -658,6 +683,7 @@ window.SAFI_STORE = (() => {
     },
 
     // ── Packages & discounts ───────────────────────────────
+    updatePackage(id, patch) { state.packages = state.packages.map(p => p.id === id ? { ...p, ...patch } : p); save(); },
     addPackage(p)    { state.packages  = [...state.packages,  { id: nextId('pk'), subscribers: 0, active: true, ...p }]; save(); },
     addDiscount(d)   { state.discounts = [...state.discounts, { id: nextId('d'),  uses: 0, ...d }]; save(); },
 

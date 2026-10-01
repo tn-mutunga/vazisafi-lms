@@ -308,8 +308,10 @@ function DispatchScreen({ lang, money, setView }) {
   const [editId, setEdit] = useStateX(null);
   const [form, setForm]   = useStateX({ type: 'delivery', orderId: '', customerId: '', address: '', area: '', rider: D.staff.find(s => s.role === 'Rider')?.id || '', slotStart: '', slotEnd: '', notes: '' });
   const [statusFilter, setStatusFilter] = useStateX('all');
+  const [dayFilter, setDayFilter] = useStateX('');
 
-  const filtered = D.dispatch.filter(d => statusFilter === 'all' || d.status === statusFilter);
+  const filtered = D.dispatch.filter(d => (statusFilter === 'all' || d.status === statusFilter) && (!dayFilter || d.slotDate === dayFilter))
+    .sort((a, b) => String(a.slotDate || '9999').localeCompare(String(b.slotDate || '9999')) || String(a.slotStart || '').localeCompare(String(b.slotStart || '')));
   const counts = {
     scheduled:  D.dispatch.filter(d => d.status === 'scheduled').length,
     'en-route': D.dispatch.filter(d => d.status === 'en-route').length,
@@ -323,7 +325,7 @@ function DispatchScreen({ lang, money, setView }) {
   }
   function openEdit(d) {
     setEdit(d.id);
-    setForm({ type: d.type, orderId: d.orderId, customerId: d.customerId, address: d.address, area: d.area, rider: d.rider, slotStart: d.slotStart, slotEnd: d.slotEnd, notes: d.notes });
+    setForm({ type: d.type, orderId: d.orderId, customerId: d.customerId, address: d.address, area: d.area, rider: d.rider, slotDate: d.slotDate || '', slotStart: d.slotStart, slotEnd: d.slotEnd, notes: d.notes });
     setShow(true);
   }
   function submit() {
@@ -334,6 +336,11 @@ function DispatchScreen({ lang, money, setView }) {
   }
   function changeStatus(id, status) {
     const d = D.dispatch.find(x => x.id === id);
+    if (status === 'completed' && d && d.orderId && d.type === 'delivery') {
+      const o = D.orders.find(x => x.id === d.orderId);
+      const bal = o ? (o.total || 0) - (o.paid || 0) : 0;
+      if (bal > 0) { toast(`Order ${o.id} still owes KES ${bal.toLocaleString('en-KE')}. Record the payment before marking delivered.`, 'error'); return; }
+    }
     window.SAFI_STORE.updateDispatch(id, { status });
     toast(`Marked ${status}`);
 
@@ -406,7 +413,9 @@ function DispatchScreen({ lang, money, setView }) {
         </button>
       </div>
 
-      <Card pad={false} title={`Dispatch board · ${statusFilter === 'all' ? 'all' : statusFilter}`} action={
+      {window.DispatchCalendar && <window.DispatchCalendar value={dayFilter} onPick={setDayFilter}/>}
+
+      <Card pad={false} title={`Dispatch board · ${statusFilter === 'all' ? 'all' : statusFilter}${dayFilter ? ' · ' + dayFilter : ''}`} action={
         <div className="safi-tabs">
           <button className={`safi-tabs__btn ${statusFilter === 'all' ? 'is-active' : ''}`} onClick={() => setStatusFilter('all')}>All</button>
           {['scheduled', 'en-route', 'completed'].map(s => (
@@ -423,7 +432,7 @@ function DispatchScreen({ lang, money, setView }) {
               return c ? <div><div className="safi-cell-strong">{c.name}</div><div className="safi-cell-sub">{c.prefix} {c.phone}</div></div> : <span className="safi-cell-sub">Walk-in</span>;
             }},
             { label: 'Address', render: r => <div><div>{r.address}</div>{r.area && <div className="safi-cell-sub">{r.area}</div>}</div> },
-            { label: 'Slot', render: r => r.slotStart ? <span className="safi-mono">{r.slotStart} – {r.slotEnd}</span> : <span className="safi-cell-sub">—</span> },
+            { label: 'Slot', render: r => (r.slotDate || r.slotStart) ? <div><span className="safi-mono">{r.slotDate ? r.slotDate.slice(5) + ' ' : ''}{r.slotStart}{r.slotEnd ? ' – ' + r.slotEnd : ''}</span>{r.slotDateGuessed && <div className="safi-cell-sub" title="Filled in from the order. Edit to confirm.">date estimated · check</div>}</div> : <span className="safi-cell-sub">—</span> },
             { label: 'Rider', render: r => {
               const s = D.staff.find(x => x.id === r.rider);
               return s ? <span className="safi-cell-cust"><Icon name="rider" size={14}/> &nbsp;<b>{s.name}</b></span> : <span className="safi-cell-sub">Unassigned</span>;
@@ -458,15 +467,16 @@ function DispatchScreen({ lang, money, setView }) {
           <div className="safi-form__row">
             <label>Order # (optional)<input className="safi-input safi-mono" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value.toUpperCase() })} placeholder="SF-2425"/></label>
             <label>Customer
-              <select className="safi-input" value={form.customerId} onChange={e => setForm({ ...form, customerId: e.target.value })}>
-                <option value="">— Select —</option>
-                {D.customers.map(c => <option key={c.id} value={c.id}>{c.name} · {c.prefix} {c.phone}</option>)}
-              </select>
+              <window.CustomerTypeahead value={form.customerId} onChange={id => {
+                const lastOrder = id ? D.orders.find(o => o.customer === id && o.status !== 'collected') : null;
+                setForm(f => ({ ...f, customerId: id, orderId: f.orderId || (lastOrder ? lastOrder.id : '') }));
+              }}/>
             </label>
           </div>
           <label>Address<input className="safi-input" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Block & house number, gate / landmark"/></label>
           <label>Area / Estate<input className="safi-input" value={form.area} onChange={e => setForm({ ...form, area: e.target.value })} placeholder="Kilimani · Karen · Ngong Rd…"/></label>
           <div className="safi-form__row">
+            <label>Date<input type="date" className="safi-input safi-mono" value={form.slotDate || ''} onChange={e => setForm({ ...form, slotDate: e.target.value })}/></label>
             <label>Slot start<input type="time" className="safi-input safi-mono" value={form.slotStart} onChange={e => setForm({ ...form, slotStart: e.target.value })}/></label>
             <label>Slot end<input type="time" className="safi-input safi-mono" value={form.slotEnd} onChange={e => setForm({ ...form, slotEnd: e.target.value })}/></label>
           </div>
@@ -502,10 +512,11 @@ function MessagesScreen({ lang }) {
         <StatCard label="Delivery alerts" value={D.messages.filter(m => m.stage === 'delivery').length} icon="truck"/>
         <StatCard label="Last sent" value={D.messages[0]?.date.slice(11) || '—'} icon="clock"/>
       </div>
+      {window.WinbackCard && <window.WinbackCard/>}
 
       <Card pad={false} title="Message log" action={
         <div className="safi-tabs">
-          {['all', 'ready', 'washing', 'ironing', 'collected', 'delivery'].map(x => (
+          {['all', 'ready', 'washing', 'ironing', 'collected', 'delivery', 'winback'].map(x => (
             <button key={x} className={`safi-tabs__btn ${tab === x ? 'is-active' : ''}`} onClick={() => setTab(x)}>{x}</button>
           ))}
         </div>
