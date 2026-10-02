@@ -1,10 +1,9 @@
-VAZI SAFI LMS v2.0.4 (includes 2.0.2 and 2.0.3)
-- Quantity +/- moves in whole numbers (1, 2, 3...); no negatives
-- Bulk SMS code included but switched OFF (nothing changes for texts yet)
+VAZI SAFI LMS v2.0.5 (includes 2.0.2 to 2.0.4)
+- kg +/- moves by 0.1 (1.1, 1.2 ... 23.6); typed weights keep one decimal
 
 cd ~/Documents/"Vazi Safi"/"Laundry Management System"
-rsync -av ~/Downloads/vazisafi-lms-v2.0.4/ ./
-grep '"version"' package.json        (should say 2.0.4)
-git add . && git commit -m "v2.0.4: whole-number quantities" && git push && git tag v2.0.4 && git push origin v2.0.4
+rsync -av ~/Downloads/vazisafi-lms-v2.0.5/ ./
+grep '"version"' package.json        (should say 2.0.5)
+git add . && git commit -m "v2.0.5: kg in 0.1 steps" && git push && git tag v2.0.5 && git push origin v2.0.5
 
 When GitHub Actions is green: Install & restart on each laptop. No database step.

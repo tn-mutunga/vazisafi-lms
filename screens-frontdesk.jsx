@@ -323,10 +323,10 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                       )}
                     </div>
                     <div className="safi-qty">
-                      <button onClick={() => { const n = [...items]; n[i].qty = Math.max(1, Math.round(n[i].qty || 0) - 1); setItems(n); }}>−</button>
-                      <input type="number" step="1" min="1" value={it.qty} onChange={e => { const n = [...items]; n[i].qty = Math.max(0, parseFloat(e.target.value) || 0); setItems(n); }}/>
+                      <button onClick={() => { const n = [...items]; n[i].qty = Math.max(0.1, Math.round(((n[i].qty || 0) - 0.1) * 10) / 10); setItems(n); }}>−</button>
+                      <input type="number" step="0.1" min="0" value={it.qty} onChange={e => { const n = [...items]; n[i].qty = Math.max(0, Math.round((parseFloat(e.target.value) || 0) * 10) / 10); setItems(n); }}/>
                       <span className="safi-qty__unit">{svc?.unit}</span>
-                      <button onClick={() => { const n = [...items]; n[i].qty = Math.round(n[i].qty || 0) + 1; setItems(n); }}>+</button>
+                      <button onClick={() => { const n = [...items]; n[i].qty = Math.round(((n[i].qty || 0) + 0.1) * 10) / 10; setItems(n); }}>+</button>
                     </div>
                     <span className={rule ? 'safi-cell-sub' : 'safi-mono'}>{rule ? P.describe(rule) : money(unit)}</span>
                     <span className="safi-mono safi-cell-strong">{money(P.line(svc, it.qty, effGroup, it.customPrice))}</span>
@@ -1168,10 +1168,10 @@ function EditOrderModal({ open, onClose, order, isManagement }) {
                   {D.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 <div className="safi-qty">
-                  <button onClick={() => changeQty(i, Math.max(1, Math.round(it.qty || 0) - 1))}>−</button>
-                  <input type="number" step="1" min="1" value={it.qty} onChange={e => changeQty(i, Math.max(0, parseFloat(e.target.value) || 0))}/>
+                  <button onClick={() => changeQty(i, Math.max(0.1, Math.round(((it.qty || 0) - 0.1) * 10) / 10))}>−</button>
+                  <input type="number" step="0.1" min="0" value={it.qty} onChange={e => changeQty(i, Math.max(0, Math.round((parseFloat(e.target.value) || 0) * 10) / 10))}/>
                   <span className="safi-qty__unit">{svc?.unit}</span>
-                  <button onClick={() => changeQty(i, Math.round(it.qty || 0) + 1)}>+</button>
+                  <button onClick={() => changeQty(i, Math.round(((it.qty || 0) + 0.1) * 10) / 10)}>+</button>
                 </div>
                 <span className="safi-mono">{it.free ? 'FREE' : `KES ${unit}`}</span>
                 <span className="safi-mono safi-cell-strong">{it.free ? '—' : `KES ${(it.price || 0).toLocaleString()}`}</span>
