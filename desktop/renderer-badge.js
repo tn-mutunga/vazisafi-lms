@@ -20,4 +20,33 @@
   btn('Open cash drawer', () => window.lms.openDrawer());
   btn('List printers', async () => { const p = await window.lms.printers(); alert(p.length ? p.map(x => '• ' + (x.displayName || x.name)).join('\n') : 'No printers found'); });
   el.querySelector('#lms-hw').onclick = () => { tray.style.display = tray.style.display === 'none' ? 'flex' : 'none'; };
+
+  // ── Update-ready banner (all screens, pulses until installed) ──
+  if (!document.getElementById('lms-upd-css')) {
+    const st = document.createElement('style'); st.id = 'lms-upd-css';
+    st.textContent = '@keyframes lmsPulse{0%,100%{background:#0f766e}50%{background:#14b8a6}}' +
+      '#lms-upd{position:fixed;top:0;left:0;right:0;z-index:99998;display:none;align-items:center;justify-content:center;gap:14px;padding:8px 16px;color:#fff;font:600 14px/1.3 system-ui,sans-serif;animation:lmsPulse 1.6s ease-in-out infinite;box-shadow:0 2px 10px rgba(0,0,0,.2)}' +
+      '#lms-upd button{all:unset;cursor:pointer;background:#fff;color:#0f766e;padding:6px 14px;border-radius:999px;font:700 13px system-ui,sans-serif}' +
+      '#lms-upd .lms-upd-x{background:transparent;color:#fff;padding:6px 8px;font-weight:500;text-decoration:underline}' +
+      'body.lms-upd-on{padding-top:42px}';
+    document.head.appendChild(st);
+  }
+  const bar = document.createElement('div'); bar.id = 'lms-upd';
+  bar.innerHTML = '<span id="lms-upd-t"></span><button id="lms-upd-go">Install and restart</button><button class="lms-upd-x" id="lms-upd-later">Later</button>';
+  document.body.appendChild(bar);
+  let hiddenFor = null;
+  const show = (s) => {
+    const on = s && s.state === 'ready' && hiddenFor !== s.version;
+    bar.style.display = on ? 'flex' : 'none';
+    document.body.classList.toggle('lms-upd-on', !!on);
+    if (on) bar.querySelector('#lms-upd-t').textContent = `Update ${s.version} is ready`;
+  };
+  bar.querySelector('#lms-upd-go').onclick = () => window.lms.installUpdate();
+  // "Later" hides it for 30 minutes, then it comes back.
+  bar.querySelector('#lms-upd-later').onclick = async () => {
+    const s = await window.lms.updateStatus(); hiddenFor = s && s.version; show(s);
+    setTimeout(async () => { hiddenFor = null; show(await window.lms.updateStatus()); }, 30 * 60 * 1000);
+  };
+  window.lms.onUpdate(show);
+  window.lms.updateStatus().then(show).catch(() => {});
 })();

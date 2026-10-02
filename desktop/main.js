@@ -59,6 +59,7 @@ function createWindow() {
   });
 
   // Support shortcut only (not in any menu): Ctrl+Shift+Alt+I / Cmd+Shift+Option+I
+  win.on('focus', () => { try { win.flashFrame(false); } catch {} });
   win.webContents.on('before-input-event', (e, input) => {
     if (input.type === 'keyDown' && input.shift && input.alt && (input.control || input.meta) && String(input.key).toLowerCase() === 'i') {
       e.preventDefault(); win.webContents.toggleDevTools();
@@ -272,6 +273,37 @@ ipcMain.handle('lms:info', () => ({
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  // ── Update ready: flash the taskbar / bounce the Dock, and remind every 2 h ──
+  let remindTimer = null;
+  const nudgeIcon = () => {
+    if (!win || win.isDestroyed()) return;
+    if (process.platform === 'darwin') { try { app.dock.bounce('critical'); } catch {} }
+    else { try { win.flashFrame(true); } catch {} }
+  };
+  const orderOpen = async () => {
+    if (!win || win.isDestroyed()) return false;
+    try {
+      return await win.webContents.executeJavaScript(
+        "!!(document.querySelector('.safi-items__row') || document.querySelector('.safi-modal, [role=dialog]'))", true);
+    } catch { return false; }
+  };
+  const remind = async () => {
+    if (!updateStatus || updateStatus.state !== 'ready') { clearInterval(remindTimer); remindTimer = null; return; }
+    nudgeIcon();
+    if (await orderOpen()) return;              // never interrupt a sale; try again next round
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'info', title: 'Update waiting',
+      message: `VaziSafi LMS ${updateStatus.version} is still waiting to install`,
+      detail: 'It takes under a minute and nothing is lost.',
+      buttons: ['Install and restart', 'Remind me later'], defaultId: 0, cancelId: 1
+    });
+    if (response === 0) updateCtl && updateCtl.install();
+  };
+  function onUpdateReady() {
+    nudgeIcon();
+    if (!remindTimer) remindTimer = setInterval(remind, 2 * 60 * 60 * 1000);
+  }
+
   app.on('second-instance', () => { if (win) { win.show(); win.focus(); } });
   app.whenReady().then(() => {
     console.log('[safi] ready, electron', process.versions.electron);
@@ -283,6 +315,7 @@ if (!app.requestSingleInstanceLock()) {
       onStatus: (s) => {
         updateStatus = s;
         if (win && !win.isDestroyed()) win.webContents.send('lms:update', s);
+        if (s.state === 'ready') onUpdateReady(s.version);
       }
     });
   });

@@ -58,7 +58,7 @@ function init({ app, dialog, getWindow, onStatus }) {
       defaultId: 1,
       cancelId: 1
     });
-    if (response === 0) { setImmediate(() => autoUpdater.quitAndInstall()); }
+    if (response === 0) { setImmediate(() => autoUpdater.quitAndInstall(true, true)); }
   });
 
   const askInstall = async (version) => {
@@ -67,7 +67,7 @@ function init({ app, dialog, getWindow, onStatus }) {
       detail: 'Installing restarts the app. Finish the order on screen first.',
       buttons: ['Install and restart', 'Later'], defaultId: 0, cancelId: 1
     });
-    if (response === 0) setImmediate(() => autoUpdater.quitAndInstall());
+    if (response === 0) setImmediate(() => autoUpdater.quitAndInstall(true, true));
   };
   const check = (interactive) => {
     if (interactive && last.state === 'ready') { askInstall(last.version); return; }
@@ -96,7 +96,7 @@ function init({ app, dialog, getWindow, onStatus }) {
   setTimeout(() => check(false), 10_000);        // shortly after boot
   setInterval(() => check(false), CHECK_INTERVAL_MS);
 
-  return { check, install: () => autoUpdater.quitAndInstall(), available: true };
+  return { check, install: () => autoUpdater.quitAndInstall(true, true), available: true };
 }
 
 module.exports = { init };

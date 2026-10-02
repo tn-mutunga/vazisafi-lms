@@ -1,21 +1,31 @@
-VAZI SAFI LMS v2.0.8 — fixes "ON CONFLICT DO UPDATE command cannot affect row a second time"
+VAZI SAFI LMS v2.0.9 — Windows updates install by themselves
 
-Cause: the CSV import gave some customers the same internal id (125 rows created in the
-same instant). The cloud refused the batch. Nothing was lost.
+Why Windows needed a fresh install each time:
+- the build made two Windows files: an installer and a "portable" .exe. The portable one can never update itself.
+- the installer was the step-by-step kind, so updates opened the full setup wizard.
+Now: one installer only, updates install silently and reopen the app.
 
-This update:
-- repairs the duplicate ids on the laptop automatically when it opens
-- makes every new id unique, even in bulk imports
-- sync skips repeated rows in a batch instead of failing
-- prefix "254" in the CSV is stored as "+254"
-Full folder: includes everything up to this version.
+Also new (Windows + Mac), when an update is ready:
+- a pulsing green bar across the top of every screen: "Update x is ready · Install and restart"
+  ("Later" hides it for 30 min)
+- the taskbar icon flashes (Windows) / the Dock icon bounces (Mac)
+- a reminder pop-up every 2 hours until installed; skipped while an order or window is open
 
-1. cd ~/Documents/"Vazi Safi"/"Laundry Management System"
-   rsync -av ~/Downloads/vazisafi-lms-v2.0.8/ ./
-   grep '"version"' package.json        (should say 2.0.8)
-2. git add . && git commit -m "v2.0.8: unique customer ids, sync dedupe" && git push && git tag v2.0.8 && git push origin v2.0.8
-3. When GitHub Actions is green: Install & restart on the laptop that did the import.
-4. Cloud & Updates > Sync now. The red line should clear.
+1. Mac Terminal:
+cd ~/Documents/"Vazi Safi"/"Laundry Management System"
+rsync -av ~/Downloads/vazisafi-lms-v2.0.9/ ./
+grep '"version"' package.json        (should say 2.0.9)
+git add . && git commit -m "v2.0.9: silent Windows updates, drop portable build" && git push && git tag v2.0.9 && git push origin v2.0.9
 
-Do NOT import the CSV again — the customers are already on the laptop.
-No database step.
+2. Windows, ONE LAST manual install (when GitHub Actions is green):
+   a. Close VaziSafi LMS.
+   b. Settings > Apps > VaziSafi LMS > Uninstall. Your data is kept.
+   c. If you used a "VaziSafi LMS 2.0.x.exe" with no "Setup" in the name, delete it and any shortcut to it.
+   d. From GitHub Releases download VaziSafi-LMS-Setup-2.0.9.exe and run it.
+      If SmartScreen appears: More info > Run anyway.
+   e. Sign in to the cloud once if asked; choose "The cloud is correct".
+
+From 2.0.10 onwards: Windows downloads in the background, asks "Install and restart",
+closes, updates and reopens by itself. No setup screens.
+
+Mac: Install & restart as usual.
