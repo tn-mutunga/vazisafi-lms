@@ -1,17 +1,17 @@
-VAZI SAFI LMS v2.0.5 (includes 2.0.2 - 2.0.4)
-- Curtains charged per kg
-- kg items move in 0.1 kg; pieces, pairs, bags and hangers in whole numbers
-- New "Other" tile: describe the item, charge by pieces or kg, type the price
-- Developer tools removed from the menu
-- "Check for updates..." always answers (up to date / downloading / install now)
+VAZI SAFI LMS v2.0.6 — Mac "malware" fix (includes everything in 2.0.5)
 
+A) Get the Mac app back NOW (Terminal):
+mv ~/.Trash/"VaziSafi LMS.app" /Applications/ 2>/dev/null; xattr -cr "/Applications/VaziSafi LMS.app" && codesign --force --deep --sign - "/Applications/VaziSafi LMS.app" && open "/Applications/VaziSafi LMS.app"
+
+If it says "No such file": download the arm64 .dmg from GitHub Releases, drag to Applications, DO NOT open, run the line above.
+
+B) Publish v2.0.6:
 cd ~/Documents/"Vazi Safi"/"Laundry Management System"
-rsync -av ~/Downloads/vazisafi-lms-v2.0.5/ ./
-grep '"version"' package.json        (should say 2.0.5)
-git add . && git commit -m "v2.0.5: Other items, curtains per kg, whole-number items, menu tidy" && git push && git tag v2.0.5 && git push origin v2.0.5
+rsync -av ~/Downloads/vazisafi-lms-v2.0.6/ ./
+grep '"version"' package.json        (should say 2.0.6)
+git add . && git commit -m "v2.0.6: Mac build ad-hoc signed, no hardened runtime; safer updater" && git push && git tag v2.0.6 && git push origin v2.0.6
 
-If git says "tag v2.0.5 already exists" (you pushed it earlier), run instead:
-git tag -d v2.0.5 && git push origin :refs/tags/v2.0.5 && git tag v2.0.5 && git push origin v2.0.5
+C) When Actions is green: Install & restart on each laptop.
 
-When GitHub Actions is green: Install & restart on each laptop. No database step.
-After installing: Management > Pricing > Curtains: set your PER-KG price.
+If the Mac ever bins it again, send me the file:
+~/Library/Logs/VaziSafi-update.log
