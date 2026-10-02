@@ -143,9 +143,11 @@
       key: 'messages', table: 'messages', pk: 'id', branch: true,
       up: (r) => ({ id: r.id, branch_id: BRANCH, order_id: r.orderId || null, to_phone: s(r.to),
         name: s(r.name), body: s(r.body) || '—', stage: s(r.stage), method: r.method || 'sms',
-        status: r.status || 'sent', sent_at: tsNow(r.date) }),
+        status: r.status || 'sent', sent_at: tsNow(r.date), gateway_id: s(r.gatewayId),
+        cost: r.cost == null ? null : Number(r.cost) }),
       down: (r) => ({ id: r.id, date: fromTs(r.sent_at), to: r.to_phone, name: r.name, body: r.body,
-        orderId: r.order_id || '', stage: r.stage, method: r.method, status: r.status }),
+        orderId: r.order_id || '', stage: r.stage, method: r.method, status: r.status,
+        gatewayId: r.gateway_id || '', cost: r.cost == null ? null : Number(r.cost), error: r.error || '', campaignId: r.campaign_id || '' }),
     },
     {
       key: 'inventory', table: 'inventory', pk: 'id', branch: true,

@@ -1,12 +1,10 @@
-VAZI SAFI LMS v2.0.3 (includes everything in 2.0.2)
-- Window title: Vazi Safi LMS
-- Cash removed from customer payments (Collect balance, Payments, rider cards, dashboards)
-- Receipt: no Due line; "M-Pesa Paybill: ... OR Send Money: ..."
-- Owner delete / clear sections with PIN (from 2.0.2)
+VAZI SAFI LMS v2.0.4 (includes 2.0.2 and 2.0.3)
+- Quantity +/- moves in whole numbers (1, 2, 3...); no negatives
+- Bulk SMS code included but switched OFF (nothing changes for texts yet)
 
 cd ~/Documents/"Vazi Safi"/"Laundry Management System"
-rsync -av ~/Downloads/vazisafi-lms-v2.0.3/ ./
-grep '"version"' package.json        (should say 2.0.3)
-git add . && git commit -m "v2.0.3: no cash, receipt pay lines, title" && git push && git tag v2.0.3 && git push origin v2.0.3
+rsync -av ~/Downloads/vazisafi-lms-v2.0.4/ ./
+grep '"version"' package.json        (should say 2.0.4)
+git add . && git commit -m "v2.0.4: whole-number quantities" && git push && git tag v2.0.4 && git push origin v2.0.4
 
 When GitHub Actions is green: Install & restart on each laptop. No database step.

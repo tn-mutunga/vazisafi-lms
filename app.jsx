@@ -85,7 +85,7 @@ function App() {
         case 'dispatch':     return <DispatchScreen {...props}/>;
         case 'rider-cards':        return <RiderCardsScreen {...props}/>;
         case 'job-card':           return <JobCardSheet {...props}/>;
-        case 'messages':     return <MessagesScreen {...props}/>;
+        case 'messages':     return <MessagesScreen {...props} role="frontdesk"/>;
         default:             return <FrontDeskDashboard {...props}/>;
       }
     } else {
@@ -101,7 +101,7 @@ function App() {
         case 'issues':     return <IssuesScreen {...props}/>;
         case 'expenses':   return <ExpensesScreen {...props} role="owner"/>;
         case 'dispatch':   return <DispatchScreen {...props}/>;
-        case 'messages':   return <MessagesScreen {...props}/>;
+        case 'messages':   return <MessagesScreen {...props} role="owner"/>;
         case 'approvals':  return <ApprovalsScreen {...props}/>;
         case 'settings':   return <SettingsScreen {...props}/>;
         case 'data':       return <DataScreen {...props}/>;

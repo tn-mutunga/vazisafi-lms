@@ -302,17 +302,32 @@ window.SAFI_STORE = (() => {
 
     // ── Messages / SMS log ─────────────────────────────────
     logPrint(kind, orderId) { audit('print.' + kind, orderId || '', kind + ' printed'); save(); },
-    logMessage({ to, name, body, orderId, stage, method, customerId }) {
+    logMessage({ to, name, body, orderId, stage, method, customerId, campaignId }) {
       const now = new Date();
       const fmt = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
       const msg = {
         id: nextId('msg'), date: fmt, to, name, body,
         orderId: orderId || '', stage: stage || '', customerId: customerId || '',
-        method: method || 'sms', status: 'sent',
+        method: method || 'sms', status: (state.settings || {}).smsLive ? 'queued' : 'logged',
+        campaignId: campaignId || '', gatewayId: '', cost: null, error: '',
       };
       state.messages = [msg, ...state.messages];
       save();
+      if (window.SAFI_SMS) window.SAFI_SMS.kick();
       return msg;
+    },
+    queuedMessages() { return (state.messages || []).filter(m => m.status === 'queued').slice().reverse(); },
+    updateMessages(patches) {
+      if (!patches.length) return;
+      const by = Object.fromEntries(patches.map(p => [p.id, p]));
+      state.messages = state.messages.map(m => by[m.id] ? { ...m, ...by[m.id] } : m);
+      save();
+    },
+    retryMessages(ids) {
+      const set = new Set(ids);
+      state.messages = state.messages.map(m => set.has(m.id) ? { ...m, status: 'queued', error: '' } : m);
+      save();
+      if (window.SAFI_SMS) window.SAFI_SMS.kick();
     },
     setSmsTemplate(key, body) {
       const next = { ...state.smsTemplates };

@@ -494,17 +494,20 @@ function DispatchScreen({ lang, money, setView }) {
 }
 
 // ─── Messages (SMS log) ───────────────────────────────────────────────────
-function MessagesScreen({ lang }) {
+function MessagesScreen({ lang, role }) {
   const D = useStore();
   const [tab, setTab] = useStateX('all');
-  const rows = D.messages.filter(m => tab === 'all' || m.stage === tab);
+  const rows = D.messages.filter(m => tab === 'all' || (tab === 'failed' ? m.status === 'failed' : m.stage === tab));
+  const failed = D.messages.filter(m => m.status === 'failed');
 
   return (
     <>
       <Topbar
         title="Messages"
-        subtitle="Every SMS the system has prepared. Real sending requires an SMS gateway (Africa's Talking) — connect that in the cloud upgrade."
+        subtitle={(D.settings || {}).smsLive ? 'Texts go out through Africa\'s Talking. Offline texts wait in the queue and send when the internet is back.' : 'Real sending is off. Texts are only logged here.'}
       />
+      {role === 'owner' && window.SAFI_SMS_READY && window.SmsGatewayCard && <window.SmsGatewayCard/>}
+      {role === 'owner' && window.SAFI_SMS_READY && window.SmsCampaignCard && <window.SmsCampaignCard/>}
 
       <div className="safi-grid safi-grid--4">
         <StatCard label="Total messages" value={D.messages.length} icon="sms"/>
@@ -514,9 +517,15 @@ function MessagesScreen({ lang }) {
       </div>
       {window.WinbackCard && <window.WinbackCard/>}
 
+      {failed.length > 0 && (D.settings || {}).smsLive && (
+        <div className="safi-sms-fail">
+          <span><b>{failed.length}</b> text{failed.length === 1 ? '' : 's'} failed to send.</span>
+          <Button kind="ghost" size="sm" onClick={() => { window.SAFI_STORE.retryMessages(failed.map(m => m.id)); toast('Retrying'); }}>Retry all</Button>
+        </div>
+      )}
       <Card pad={false} title="Message log" action={
         <div className="safi-tabs">
-          {['all', 'ready', 'washing', 'ironing', 'collected', 'delivery', 'winback'].map(x => (
+          {['all', 'intake', 'ready', 'washing', 'ironing', 'collected', 'delivery', 'winback', 'campaign', 'failed'].map(x => (
             <button key={x} className={`safi-tabs__btn ${tab === x ? 'is-active' : ''}`} onClick={() => setTab(x)}>{x}</button>
           ))}
         </div>
@@ -528,7 +537,7 @@ function MessagesScreen({ lang }) {
             { label: 'Stage', render: r => <span className={`safi-tag safi-tag--blue`}>{r.stage}</span> },
             { label: 'Order', render: r => r.orderId ? <span className="safi-mono">{r.orderId}</span> : <span className="safi-cell-sub">—</span> },
             { label: 'Body', render: r => <div className="safi-msg-body">{r.body}</div> },
-            { label: 'Status', render: r => <span className="safi-pill safi-pill--green"><Icon name="check" size={10}/> {r.status}</span> },
+            { label: 'Status', render: r => window.SmsStatus ? <window.SmsStatus m={r}/> : r.status },
           ]}
           rows={rows}
           empty="No messages yet. They appear here when you advance an order's stage."
