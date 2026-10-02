@@ -1476,8 +1476,27 @@ function CustomersScreen({ lang, money, setView, role }) {
   const [group, setGroup] = useStateFD('all');
   const [showAdd, setShowAdd] = useStateFD(false);
   const [sel, setSel] = useStateFD([]);
+  const [editC, setEditC] = useStateFD(null);
   const fileRef = useRefFD(null);
   const owner = role === 'owner';
+
+  function saveEdit() {
+    const e = editC;
+    const name = e.name.trim(), phone = String(e.phone || '').replace(/\D/g, '').replace(/^0+/, '');
+    if (!name) { toast('Name is required', 'error'); return; }
+    if (phone.length < 9) { toast('Phone number looks too short', 'error'); return; }
+    const clash = D.customers.find(c => c.id !== e.id && String(c.phone).replace(/\D/g, '').slice(-9) === phone.slice(-9));
+    if (clash) { toast(`That number already belongs to ${clash.name}`, 'error'); return; }
+    const before = D.customers.find(c => c.id === e.id) || {};
+    const patch = { name, phone, prefix: e.prefix || '+254', location: e.location.trim(), group: e.group };
+    const changed = Object.keys(patch).filter(k => String(before[k] ?? '') !== String(patch[k] ?? ''));
+    if (!changed.length) { setEditC(null); return; }
+    window.SAFI_STORE.updateCustomer(e.id, patch);
+    window.SAFI_STORE.audit && window.SAFI_STORE.audit('customer.edit', e.id,
+      changed.map(k => `${k}: ${before[k] ?? '—'} → ${patch[k] || '—'}`).join('; '));
+    setEditC(null);
+    toast('Customer updated', 'success');
+  }
 
   function del(ids, label) {
     window.safiPinConfirm({
@@ -1564,7 +1583,12 @@ function CustomersScreen({ lang, money, setView, role }) {
               </div>
             )},
             { label: 'Residence', render: r => r.location ? <span className="safi-cell-sub">{r.location}</span> : <span className="safi-cell-sub">—</span> },
-            ...(owner ? [{ label: '', render: r => <button className="safi-rowlink safi-rowlink--danger" onClick={() => del([r.id], r.name)}>Delete</button> }] : []),
+            { label: '', render: r => (
+              <div className="safi-rowacts">
+                <button className="safi-rowlink" onClick={() => setEditC({ id: r.id, name: r.name, prefix: r.prefix || '+254', phone: r.phone, location: r.location || '', group: r.group })}>Edit</button>
+                {owner && <button className="safi-rowlink safi-rowlink--danger" onClick={() => del([r.id], r.name)}>Delete</button>}
+              </div>
+            )},
           ]}
           rows={rows}
           empty="No customers yet — tap Add Customer or Import CSV."
@@ -1572,6 +1596,32 @@ function CustomersScreen({ lang, money, setView, role }) {
       </Card>
 
       <AddCustomerModal open={showAdd} onClose={() => setShowAdd(false)} onCreated={() => setShowAdd(false)}/>
+
+      <Modal open={!!editC} onClose={() => setEditC(null)} title="Edit customer" width={460}
+        footer={<>
+          <Button kind="ghost" onClick={() => setEditC(null)}>Cancel</Button>
+          <Button kind="primary" icon="check" onClick={saveEdit}>Save changes</Button>
+        </>}>
+        {editC && (
+          <div className="safi-form">
+            <label>Name<input className="safi-input" autoFocus value={editC.name} onChange={e => setEditC({ ...editC, name: e.target.value })}/></label>
+            <div className="safi-form__row safi-form__row--phone">
+              <label>Code<input className="safi-input safi-mono" value={editC.prefix} onChange={e => setEditC({ ...editC, prefix: e.target.value })}/></label>
+              <label>Phone<input className="safi-input safi-mono" inputMode="tel" value={editC.phone} onChange={e => setEditC({ ...editC, phone: e.target.value })}/></label>
+            </div>
+            <label>Residence<input className="safi-input" placeholder="e.g. Qwetu, Ruaraka" value={editC.location} onChange={e => setEditC({ ...editC, location: e.target.value })}/></label>
+            <div>
+              <div className="safi-cell-sub" style={{ marginBottom: 6 }}>Tier</div>
+              <div className="safi-seg">
+                {['student', 'normal', 'corporate'].map(g => (
+                  <button key={g} className={`safi-seg__btn ${editC.group === g ? 'is-active' : ''}`} onClick={() => setEditC({ ...editC, group: g })}>{t(g, lang)}</button>
+                ))}
+              </div>
+            </div>
+            <p className="safi-cell-sub" style={{ margin: 0 }}>Past orders and receipts keep their history. Changes are recorded in the audit log.</p>
+          </div>
+        )}
+      </Modal>
     </>
   );
 }

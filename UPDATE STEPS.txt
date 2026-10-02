@@ -1,31 +1,14 @@
-VAZI SAFI LMS v2.0.9 — Windows updates install by themselves
+VAZI SAFI LMS v2.1.0 — edit customers from both desks
 
-Why Windows needed a fresh install each time:
-- the build made two Windows files: an installer and a "portable" .exe. The portable one can never update itself.
-- the installer was the step-by-step kind, so updates opened the full setup wizard.
-Now: one installer only, updates install silently and reopen the app.
+- Customers page: "Edit" on every row, for Front Desk and Management
+  (name, phone, residence, tier). Each change is written to the audit log.
+- Delete stays Management only.
+- Warns if the new phone number already belongs to another customer.
 
-Also new (Windows + Mac), when an update is ready:
-- a pulsing green bar across the top of every screen: "Update x is ready · Install and restart"
-  ("Later" hides it for 30 min)
-- the taskbar icon flashes (Windows) / the Dock icon bounces (Mac)
-- a reminder pop-up every 2 hours until installed; skipped while an order or window is open
-
-1. Mac Terminal:
 cd ~/Documents/"Vazi Safi"/"Laundry Management System"
-rsync -av ~/Downloads/vazisafi-lms-v2.0.9/ ./
-grep '"version"' package.json        (should say 2.0.9)
-git add . && git commit -m "v2.0.9: silent Windows updates, drop portable build" && git push && git tag v2.0.9 && git push origin v2.0.9
+rsync -av ~/Downloads/vazisafi-lms-v2.1.0/ ./
+grep '"version"' package.json        (should say 2.1.0)
+git add . && git commit -m "v2.1.0: edit customers from both desks" && git push && git tag v2.1.0 && git push origin v2.1.0
 
-2. Windows, ONE LAST manual install (when GitHub Actions is green):
-   a. Close VaziSafi LMS.
-   b. Settings > Apps > VaziSafi LMS > Uninstall. Your data is kept.
-   c. If you used a "VaziSafi LMS 2.0.x.exe" with no "Setup" in the name, delete it and any shortcut to it.
-   d. From GitHub Releases download VaziSafi-LMS-Setup-2.0.9.exe and run it.
-      If SmartScreen appears: More info > Run anyway.
-   e. Sign in to the cloud once if asked; choose "The cloud is correct".
-
-From 2.0.10 onwards: Windows downloads in the background, asks "Install and restart",
-closes, updates and reopens by itself. No setup screens.
-
-Mac: Install & restart as usual.
+When GitHub Actions is green: the update banner appears on each laptop > Install and restart.
+No database step.

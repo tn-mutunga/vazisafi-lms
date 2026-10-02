@@ -2891,3 +2891,5 @@ button { font-family: inherit; }
 .safi-other-inline{display:flex;gap:6px;margin-top:6px}.safi-other-inline input{flex:1;min-width:0}.safi-other-inline select{width:96px}
 .safi-other-price{width:110px;padding:6px 8px}
 .safi-other-total{display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--line-2)}.safi-other-total b{font-size:18px}
+.safi-rowacts{display:flex;gap:14px;justify-content:flex-end}
+.safi-form__row--phone{grid-template-columns:90px 1fr}
