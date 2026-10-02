@@ -79,8 +79,10 @@ function createWindow() {
 
   // Inject the desktop-mode badge without touching the web app's own files.
   win.webContents.on('did-finish-load', () => {
-    const badge = fs.readFileSync(path.join(__dirname, 'renderer-badge.js'), 'utf8');
-    win.webContents.executeJavaScript(badge).catch(() => {});
+    try {
+      const badge = fs.readFileSync(path.join(__dirname, 'renderer-badge.js'), 'utf8');
+      win.webContents.executeJavaScript(badge).catch(() => {});
+    } catch { /* optional; never block start-up */ }
   });
 
   // External links open in the real browser, never inside the POS shell.

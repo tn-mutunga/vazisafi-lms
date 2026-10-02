@@ -1,17 +1,24 @@
-VAZI SAFI LMS v2.0.6 — Mac "malware" fix (includes everything in 2.0.5)
+VAZI SAFI LMS v2.0.7 (includes 2.0.5 + 2.0.6)
+Fix: "renderer-badge.js not found" at start-up.
 
-A) Get the Mac app back NOW (Terminal):
-mv ~/.Trash/"VaziSafi LMS.app" /Applications/ 2>/dev/null; xattr -cr "/Applications/VaziSafi LMS.app" && codesign --force --deep --sign - "/Applications/VaziSafi LMS.app" && open "/Applications/VaziSafi LMS.app"
-
-If it says "No such file": download the arm64 .dmg from GitHub Releases, drag to Applications, DO NOT open, run the line above.
-
-B) Publish v2.0.6:
+1. Publish:
 cd ~/Documents/"Vazi Safi"/"Laundry Management System"
-rsync -av ~/Downloads/vazisafi-lms-v2.0.6/ ./
-grep '"version"' package.json        (should say 2.0.6)
-git add . && git commit -m "v2.0.6: Mac build ad-hoc signed, no hardened runtime; safer updater" && git push && git tag v2.0.6 && git push origin v2.0.6
+rsync -av ~/Downloads/vazisafi-lms-v2.0.7/ ./
+ls desktop/renderer-badge.js         (must exist)
+grep '"version"' package.json        (should say 2.0.7)
+git add . && git commit -m "v2.0.7: include renderer-badge.js, start-up never blocked" && git push && git tag v2.0.7 && git push origin v2.0.7
 
-C) When Actions is green: Install & restart on each laptop.
+2. Wait for GitHub Actions to go green.
 
-If the Mac ever bins it again, send me the file:
-~/Library/Logs/VaziSafi-update.log
+3. Mac (app cannot start, so install by hand once):
+rm -rf "/Applications/VaziSafi LMS.app"
+# download VaziSafi-LMS-2.0.7-arm64.dmg from GitHub Releases, then:
+xattr -c ~/Downloads/VaziSafi-LMS-2.0.7-arm64.dmg
+hdiutil attach ~/Downloads/VaziSafi-LMS-2.0.7-arm64.dmg -nobrowse -mountpoint /tmp/vazi
+ditto --noextattr --noqtn "/tmp/vazi/VaziSafi LMS.app" "/Applications/VaziSafi LMS.app"
+hdiutil detach /tmp/vazi
+xattr -cr "/Applications/VaziSafi LMS.app" && codesign --force --deep --sign - "/Applications/VaziSafi LMS.app"
+open "/Applications/VaziSafi LMS.app"
+If "Not Opened": Done > System Settings > Privacy & Security > Open Anyway.
+
+4. Windows: Install & restart when offered.
