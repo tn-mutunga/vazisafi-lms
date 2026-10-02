@@ -58,6 +58,13 @@ function createWindow() {
     dialog.showErrorBox('Could not load the app', `${ENTRY}\n\n${err}`);
   });
 
+  // Support shortcut only (not in any menu): Ctrl+Shift+Alt+I / Cmd+Shift+Option+I
+  win.webContents.on('before-input-event', (e, input) => {
+    if (input.type === 'keyDown' && input.shift && input.alt && (input.control || input.meta) && String(input.key).toLowerCase() === 'i') {
+      e.preventDefault(); win.webContents.toggleDevTools();
+    }
+  });
+
   win.webContents.on('did-fail-load', (_e, code, desc, url) => {
     console.error('[safi] did-fail-load', code, desc, url);
   });
@@ -127,7 +134,7 @@ function buildMenu() {
           click: () => { if (win) win.setFullScreen(!win.isFullScreen()); }
         },
         { type: 'separator' },
-        { label: 'Developer tools', accelerator: 'CmdOrCtrl+Shift+I', click: () => win && win.webContents.toggleDevTools() },
+        ...(app.isPackaged ? [] : [{ label: 'Developer tools', accelerator: 'CmdOrCtrl+Shift+I', click: () => win && win.webContents.toggleDevTools() }]),
         ...(mac ? [] : [{ type: 'separator' }, { role: 'quit', label: 'Quit VaziSafi LMS' }])
       ]
     },

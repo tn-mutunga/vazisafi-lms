@@ -665,8 +665,8 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
                       const svc = D.services.find(s => s.id === it.svc);
                       return (
                         <tr key={i}>
-                          <td>{svc?.name || it.svc}{it.free && <span className="safi-tag safi-tag--green" style={{ marginLeft: 4 }}>FREE</span>}</td>
-                          <td>{it.qty} {svc?.unit}</td>
+                          <td>{it.svc === 'other' && it.subtype ? it.subtype : (svc?.name || it.svc)}{it.free && <span className="safi-tag safi-tag--green" style={{ marginLeft: 4 }}>FREE</span>}</td>
+                          <td>{it.qty} {it.unit || svc?.unit}</td>
                           <td className="safi-mono" style={{ textAlign: 'right' }}>{money(it.price)}</td>
                         </tr>
                       );
@@ -684,8 +684,8 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
                           const svc = D.services.find(s => s.id === it.svc);
                           return (
                             <tr key={i}>
-                              <td>{svc?.name || it.svc}{it.free && <span className="safi-tag safi-tag--green" style={{ marginLeft: 4 }}>FREE</span>}</td>
-                              <td>{it.qty} {svc?.unit}</td>
+                              <td>{it.svc === 'other' && it.subtype ? it.subtype : (svc?.name || it.svc)}{it.free && <span className="safi-tag safi-tag--green" style={{ marginLeft: 4 }}>FREE</span>}</td>
+                              <td>{it.qty} {it.unit || svc?.unit}</td>
                               <td className="safi-mono" style={{ textAlign: 'right' }}>{money(it.price)}</td>
                             </tr>
                           );

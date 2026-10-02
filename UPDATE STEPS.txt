@@ -1,9 +1,17 @@
-VAZI SAFI LMS v2.0.5 (includes 2.0.2 to 2.0.4)
-- kg +/- moves by 0.1 (1.1, 1.2 ... 23.6); typed weights keep one decimal
+VAZI SAFI LMS v2.0.5 (includes 2.0.2 - 2.0.4)
+- Curtains charged per kg
+- kg items move in 0.1 kg; pieces, pairs, bags and hangers in whole numbers
+- New "Other" tile: describe the item, charge by pieces or kg, type the price
+- Developer tools removed from the menu
+- "Check for updates..." always answers (up to date / downloading / install now)
 
 cd ~/Documents/"Vazi Safi"/"Laundry Management System"
 rsync -av ~/Downloads/vazisafi-lms-v2.0.5/ ./
 grep '"version"' package.json        (should say 2.0.5)
-git add . && git commit -m "v2.0.5: kg in 0.1 steps" && git push && git tag v2.0.5 && git push origin v2.0.5
+git add . && git commit -m "v2.0.5: Other items, curtains per kg, whole-number items, menu tidy" && git push && git tag v2.0.5 && git push origin v2.0.5
+
+If git says "tag v2.0.5 already exists" (you pushed it earlier), run instead:
+git tag -d v2.0.5 && git push origin :refs/tags/v2.0.5 && git tag v2.0.5 && git push origin v2.0.5
 
 When GitHub Actions is green: Install & restart on each laptop. No database step.
+After installing: Management > Pricing > Curtains: set your PER-KG price.

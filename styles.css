@@ -2888,3 +2888,6 @@ button { font-family: inherit; }
 .safi-sms-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .safi-sms-fail{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border:1px solid #F4C7C3;background:#FEF3F2;color:#912018;border-radius:var(--r-md);margin-bottom:16px}
 .safi-pill--gray{background:#EEF0F3;color:#4B5565}.safi-pill--amber{background:#FEF0C7;color:#93370D}.safi-pill--blue{background:#E0EAFF;color:#2D3282}.safi-pill--red{background:#FEE4E2;color:#912018}
+.safi-other-inline{display:flex;gap:6px;margin-top:6px}.safi-other-inline input{flex:1;min-width:0}.safi-other-inline select{width:96px}
+.safi-other-price{width:110px;padding:6px 8px}
+.safi-other-total{display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--line-2)}.safi-other-total b{font-size:18px}

@@ -67,6 +67,12 @@ window.SAFI_STORE = (() => {
       s.category = fromSample?.category || 'other';
     }
   }
+  // One-time: curtains are charged by weight.
+  if (!state.settings) state.settings = {};
+  if (!state.settings.curtainKgV1) {
+    state.services = state.services.map(x => x.id === 'curtain' ? { ...x, unit: 'kg' } : x);
+    state.settings = { ...state.settings, curtainKgV1: true };
+  }
   // Backfill new services (hanger, laundry-bag) if missing from older saves
   for (const sampleSvc of SAMPLE.services) {
     if (!state.services.find(s => s.id === sampleSvc.id)) {

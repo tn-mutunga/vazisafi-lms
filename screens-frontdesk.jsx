@@ -1,4 +1,13 @@
 // Vazi Safi — Front Desk screens (live-data version, backed by SAFI_STORE)
+// Weight moves in 0.1 kg; pieces, pairs, bags and hangers in whole numbers.
+function qtyStep(svc, q, dir) {
+  if (svc?.unit === 'kg') return Math.max(0.1, Math.round(((Number(q) || 0) + dir * 0.1) * 10) / 10);
+  return Math.max(1, Math.round(Number(q) || 0) + dir);
+}
+function qtyClean(svc, raw) {
+  const v = Math.max(0, parseFloat(raw) || 0);
+  return svc?.unit === 'kg' ? Math.round(v * 10) / 10 : Math.round(v);
+}
 const { useState: useStateFD, useMemo: useMemoFD, useEffect: useEffectFD, useRef: useRefFD } = React;
 
 // ─── Front Desk Dashboard ─────────────────────────────────────────────────
@@ -140,6 +149,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   const [walkIn, setWalkIn] = useStateFD(false);
   const [showAdd, setShowAdd] = useStateFD(false);
   const [subtypePicker, setSubtypePicker] = useStateFD(null);
+  const [otherForm, setOtherForm] = useStateFD(null);
 
   const [showPreview, setShowPreview] = useStateFD(false);
 
@@ -172,7 +182,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
     }
     const linePriced = items.map(it => {
       const svc = D.services.find(s => s.id === it.svc);
-      return { svc: it.svc, subtype: it.subtype || '', qty: it.qty, price: P.line(svc, it.qty, effGroup, it.customPrice) };
+      return { svc: it.svc, subtype: it.subtype || '', qty: it.qty, price: P.line(svc, it.qty, effGroup, it.customPrice), ...(it.unit ? { unit: it.unit } : {}) };
     });
     const order = window.SAFI_STORE.createOrder({
       customerId, items: linePriced, total, discount, discountPct,
@@ -274,7 +284,9 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
             <div className="safi-svc-grid">
               {D.services.map(s => (
                 <button key={s.id} className="safi-svc-tile" onClick={() => {
-                  if (s.subtypes && s.subtypes.length) {
+                  if (s.id === 'other') {
+                    setOtherForm({ desc: '', unit: 'piece', qty: 1, price: '' });
+                  } else if (s.subtypes && s.subtypes.length) {
                     setSubtypePicker({ svc: s });
                   } else {
                     setItems([...items, { svc: s.id, qty: 1 }]);
@@ -282,8 +294,8 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                 }}>
                   <span className="safi-svc-tile__ico"><Icon name={s.icon} size={20}/></span>
                   <span className="safi-svc-tile__lbl">{s.name}</span>
-                  <span className="safi-svc-tile__price">{P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
-                  {s.subtypes && <span className="safi-svc-tile__sub">Pick from {s.subtypes.length} types →</span>}
+                  <span className="safi-svc-tile__price">{s.id === 'other' ? 'Any item · kg or pieces' : P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
+                  {s.subtypes && s.subtypes.length > 0 && <span className="safi-svc-tile__sub">Pick from {s.subtypes.length} types →</span>}
                 </button>
               ))}
             </div>
@@ -298,20 +310,33 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
               )}
               {items.map((it, i) => {
                 const svc = D.services.find(x => x.id === it.svc);
+                const isOther = it.svc === 'other';
+                const qsvc = it.unit ? { unit: it.unit } : svc;
                 const unit = it.customPrice ?? (svc?.tiers[effGroup] || 0);
                 const rule = it.customPrice == null ? P.ruleFor(svc, effGroup) : null;
+                const upd = patch => { const n = [...items]; n[i] = { ...n[i], ...patch }; setItems(n); };
                 return (
                   <div key={i} className="safi-items__row">
                     <div className="safi-items__svc">
                       <select value={it.svc} onChange={e => {
                         const next = [...items];
                         const newSvc = D.services.find(s => s.id === e.target.value);
-                        next[i] = { ...next[i], svc: e.target.value, subtype: newSvc?.subtypes?.[0] || '' };
+                        next[i] = e.target.value === 'other'
+                          ? { ...next[i], svc: 'other', subtype: '', unit: 'piece', customPrice: next[i].customPrice ?? 0 }
+                          : { svc: e.target.value, qty: next[i].qty, subtype: newSvc?.subtypes?.[0] || '' };
                         setItems(next);
                       }}>
                         {D.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
-                      {svc?.subtypes && (
+                      {isOther && (
+                        <div className="safi-other-inline">
+                          <input className="safi-items__subtype" placeholder="What is it? e.g. Wedding dress" value={it.subtype || ''} onChange={e => upd({ subtype: e.target.value })}/>
+                          <select className="safi-items__subtype" value={it.unit || 'piece'} onChange={e => upd({ unit: e.target.value, qty: e.target.value === 'kg' ? it.qty : Math.max(1, Math.round(it.qty || 1)) })}>
+                            <option value="piece">Pieces</option><option value="kg">Kg</option>
+                          </select>
+                        </div>
+                      )}
+                      {!isOther && svc?.subtypes && svc.subtypes.length > 0 && (
                         <select className="safi-items__subtype" value={it.subtype || ''} onChange={e => {
                           const next = [...items]; next[i] = { ...next[i], subtype: e.target.value }; setItems(next);
                         }}>
@@ -323,12 +348,14 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                       )}
                     </div>
                     <div className="safi-qty">
-                      <button onClick={() => { const n = [...items]; n[i].qty = Math.max(0.1, Math.round(((n[i].qty || 0) - 0.1) * 10) / 10); setItems(n); }}>−</button>
-                      <input type="number" step="0.1" min="0" value={it.qty} onChange={e => { const n = [...items]; n[i].qty = Math.max(0, Math.round((parseFloat(e.target.value) || 0) * 10) / 10); setItems(n); }}/>
-                      <span className="safi-qty__unit">{svc?.unit}</span>
-                      <button onClick={() => { const n = [...items]; n[i].qty = Math.round(((n[i].qty || 0) + 0.1) * 10) / 10; setItems(n); }}>+</button>
+                      <button onClick={() => { const n = [...items]; n[i].qty = qtyStep(qsvc, n[i].qty, -1); setItems(n); }}>−</button>
+                      <input type="number" step={qsvc?.unit === 'kg' ? '0.1' : '1'} min="0" value={it.qty} onChange={e => { const n = [...items]; n[i].qty = qtyClean(qsvc, e.target.value); setItems(n); }}/>
+                      <span className="safi-qty__unit">{qsvc?.unit}</span>
+                      <button onClick={() => { const n = [...items]; n[i].qty = qtyStep(qsvc, n[i].qty, 1); setItems(n); }}>+</button>
                     </div>
-                    <span className={rule ? 'safi-cell-sub' : 'safi-mono'}>{rule ? P.describe(rule) : money(unit)}</span>
+                    {isOther
+                      ? <input type="number" min="0" className="safi-input safi-mono safi-other-price" placeholder={`KES / ${it.unit || 'piece'}`} value={it.customPrice ?? ''} onChange={e => upd({ customPrice: e.target.value === '' ? 0 : Math.max(0, +e.target.value || 0) })}/>
+                      : <span className={rule ? 'safi-cell-sub' : 'safi-mono'}>{rule ? P.describe(rule) : money(unit)}</span>}
                     <span className="safi-mono safi-cell-strong">{money(P.line(svc, it.qty, effGroup, it.customPrice))}</span>
                     <button className="safi-items__del" onClick={() => setItems(items.filter((_, j) => j !== i))}>×</button>
                   </div>
@@ -435,6 +462,48 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
           services={D.services} money={money}/>
       </Modal>
 
+      <Modal open={!!otherForm} onClose={() => setOtherForm(null)} title="Other item or service" width={460}
+        footer={<>
+          <Button kind="ghost" onClick={() => setOtherForm(null)}>Cancel</Button>
+          <Button kind="primary" icon="check" onClick={() => {
+            const o = otherForm;
+            if (!o.desc.trim()) { toast('Say what the item is', 'error'); return; }
+            if (!(+o.price > 0)) { toast('Enter a price', 'error'); return; }
+            if (!(+o.qty > 0)) { toast('Enter a quantity', 'error'); return; }
+            setItems([...items, { svc: 'other', subtype: o.desc.trim(), unit: o.unit, qty: qtyClean({ unit: o.unit }, o.qty), customPrice: +o.price }]);
+            setOtherForm(null);
+          }}>Add to order</Button>
+        </>}>
+        {otherForm && (() => {
+          const o = otherForm, set = p => setOtherForm({ ...o, ...p });
+          const total = Math.round((+o.qty || 0) * (+o.price || 0));
+          return (
+            <div className="safi-form">
+              <label>What is it?<input className="safi-input" autoFocus placeholder="e.g. Wedding dress, apron, carpet" value={o.desc} onChange={e => set({ desc: e.target.value })}/></label>
+              <div>
+                <div className="safi-cell-sub" style={{ marginBottom: 6 }}>Charge by</div>
+                <div className="safi-seg">
+                  <button className={`safi-seg__btn ${o.unit === 'piece' ? 'is-active' : ''}`} onClick={() => set({ unit: 'piece', qty: Math.max(1, Math.round(+o.qty || 1)) })}>Count (pieces)</button>
+                  <button className={`safi-seg__btn ${o.unit === 'kg' ? 'is-active' : ''}`} onClick={() => set({ unit: 'kg' })}>Weight (kg)</button>
+                </div>
+              </div>
+              <div className="safi-form__row">
+                <label>{o.unit === 'kg' ? 'Weight (kg)' : 'How many'}
+                  <div className="safi-qty">
+                    <button onClick={() => set({ qty: qtyStep({ unit: o.unit }, o.qty, -1) })}>−</button>
+                    <input type="number" step={o.unit === 'kg' ? '0.1' : '1'} min="0" value={o.qty} onChange={e => set({ qty: qtyClean({ unit: o.unit }, e.target.value) })}/>
+                    <span className="safi-qty__unit">{o.unit}</span>
+                    <button onClick={() => set({ qty: qtyStep({ unit: o.unit }, o.qty, 1) })}>+</button>
+                  </div>
+                </label>
+                <label>Price per {o.unit === 'kg' ? 'kg' : 'piece'} (KES)<input type="number" min="0" className="safi-input safi-mono" value={o.price} onChange={e => set({ price: e.target.value })}/></label>
+              </div>
+              <div className="safi-other-total"><span>Line total</span><b className="safi-mono">{money(total)}</b></div>
+            </div>
+          );
+        })()}
+      </Modal>
+
       <Modal open={!!subtypePicker} onClose={() => setSubtypePicker(null)}
         title={subtypePicker ? `Choose ${subtypePicker.svc.name} types & quantities` : ''} width={560}
         footer={<>
@@ -520,14 +589,14 @@ function NewOrderPreview({ items, subtotal, discount, discountPct, total, deposi
                 const l = g.lines[0];
                 const unit = l.customPrice ?? s?.tiers[effGroup] ?? 0;
                 const rule = l.customPrice == null ? PR.ruleFor(s, effGroup) : null;
-                return [<tr key={gi}><td>{s?.name}</td><td>{l.qty} {s?.unit}</td><td className="safi-mono">{rule ? PR.describe(rule) : money(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td></tr>];
+                return [<tr key={gi}><td>{s?.name}</td><td>{l.qty} {l.unit || s?.unit}</td><td className="safi-mono">{rule ? PR.describe(rule) : money(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td></tr>];
               }
               return [
                 <tr key={`gh${gi}`} className="safi-receipt__items-group"><td colSpan="4"><b>{s?.name}</b></td></tr>,
                 ...g.lines.map((l, li) => {
                   const unit = l.customPrice ?? s?.tiers[effGroup] ?? 0;
                   return <tr key={`g${gi}l${li}`} className="safi-receipt__items-sub">
-                    <td>{l.subtype || s?.name}</td><td>{l.qty} {s?.unit}</td>
+                    <td>{l.subtype || s?.name}</td><td>{l.qty} {l.unit || s?.unit}</td>
                     <td className="safi-mono">{money(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td>
                   </tr>;
                 }),
@@ -1168,10 +1237,10 @@ function EditOrderModal({ open, onClose, order, isManagement }) {
                   {D.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 <div className="safi-qty">
-                  <button onClick={() => changeQty(i, Math.max(0.1, Math.round(((it.qty || 0) - 0.1) * 10) / 10))}>−</button>
-                  <input type="number" step="0.1" min="0" value={it.qty} onChange={e => changeQty(i, Math.max(0, Math.round((parseFloat(e.target.value) || 0) * 10) / 10))}/>
-                  <span className="safi-qty__unit">{svc?.unit}</span>
-                  <button onClick={() => changeQty(i, Math.round(((it.qty || 0) + 0.1) * 10) / 10)}>+</button>
+                  <button onClick={() => changeQty(i, qtyStep(it.unit ? { unit: it.unit } : svc, it.qty, -1))}>−</button>
+                  <input type="number" step={(it.unit || svc?.unit) === 'kg' ? '0.1' : '1'} min="0" value={it.qty} onChange={e => changeQty(i, qtyClean(it.unit ? { unit: it.unit } : svc, e.target.value))}/>
+                  <span className="safi-qty__unit">{it.unit || svc?.unit}</span>
+                  <button onClick={() => changeQty(i, qtyStep(it.unit ? { unit: it.unit } : svc, it.qty, 1))}>+</button>
                 </div>
                 <span className="safi-mono">{it.free ? 'FREE' : `KES ${unit}`}</span>
                 <span className="safi-mono safi-cell-strong">{it.free ? '—' : `KES ${(it.price || 0).toLocaleString()}`}</span>
@@ -1275,7 +1344,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
                     return [
                       <tr key={`g${gi}`}>
                         <td>{s?.name}{l.free && ' (free)'}</td>
-                        <td>{l.qty} {s?.unit}</td>
+                        <td>{l.qty} {l.unit || s?.unit}</td>
                         <td className="safi-mono">{money(l.qty ? l.price / l.qty : 0)}</td>
                         <td className="safi-mono">{money(l.price)}</td>
                       </tr>
@@ -1288,7 +1357,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
                     ...g.lines.map((l, li) => (
                       <tr key={`g${gi}l${li}`} className="safi-receipt__items-sub">
                         <td>{l.subtype || s?.name}{l.free && ' (free)'}</td>
-                        <td>{l.qty} {s?.unit}</td>
+                        <td>{l.qty} {l.unit || s?.unit}</td>
                         <td className="safi-mono">{money(l.qty ? l.price / l.qty : 0)}</td>
                         <td className="safi-mono">{money(l.price)}</td>
                       </tr>

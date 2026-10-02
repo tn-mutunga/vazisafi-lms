@@ -33,16 +33,19 @@ function init({ app, dialog, getWindow, onStatus }) {
   autoUpdater.logger = null;
 
   let notified = false;
+  let last = { state: 'idle' };
+  const say0 = say;
+  const sayT = (s) => { last = s; say0(s); };
 
-  autoUpdater.on('checking-for-update', () => say({ state: 'checking' }));
-  autoUpdater.on('update-not-available', () => say({ state: 'current', version: app.getVersion() }));
-  autoUpdater.on('download-progress', (p) => say({ state: 'downloading', percent: Math.round(p.percent) }));
-  autoUpdater.on('error', (err) => say({ state: 'error', message: String(err && err.message || err) }));
+  autoUpdater.on('checking-for-update', () => sayT({ state: 'checking' }));
+  autoUpdater.on('update-not-available', () => sayT({ state: 'current', version: app.getVersion() }));
+  autoUpdater.on('download-progress', (p) => sayT({ state: 'downloading', percent: Math.round(p.percent) }));
+  autoUpdater.on('error', (err) => sayT({ state: 'error', message: String(err && err.message || err) }));
 
-  autoUpdater.on('update-available', (info) => say({ state: 'available', version: info.version }));
+  autoUpdater.on('update-available', (info) => sayT({ state: 'available', version: info.version }));
 
   autoUpdater.on('update-downloaded', async (info) => {
-    say({ state: 'ready', version: info.version });
+    sayT({ state: 'ready', version: info.version });
     if (notified) return;
     notified = true;
     const win = getWindow();
@@ -58,10 +61,30 @@ function init({ app, dialog, getWindow, onStatus }) {
     if (response === 0) { setImmediate(() => autoUpdater.quitAndInstall()); }
   });
 
+  const askInstall = async (version) => {
+    const { response } = await dialog.showMessageBox(getWindow(), {
+      type: 'info', title: 'Update ready', message: `VaziSafi LMS ${version} is ready to install`,
+      detail: 'Installing restarts the app. Finish the order on screen first.',
+      buttons: ['Install and restart', 'Later'], defaultId: 0, cancelId: 1
+    });
+    if (response === 0) setImmediate(() => autoUpdater.quitAndInstall());
+  };
   const check = (interactive) => {
+    if (interactive && last.state === 'ready') { askInstall(last.version); return; }
+    if (interactive && last.state === 'downloading') {
+      dialog.showMessageBox(getWindow(), { type: 'info', message: 'Downloading update…', detail: `${last.percent || 0}% done. You will be asked to install when it finishes.` });
+      return;
+    }
     autoUpdater.checkForUpdates().then((r) => {
-      if (interactive && !r) {
-        dialog.showMessageBox(getWindow(), { type: 'info', message: 'No update found', detail: `Running v${app.getVersion()}.` });
+      if (!interactive) return;
+      const v = r && r.updateInfo && r.updateInfo.version;
+      const newer = r && (r.isUpdateAvailable === true || (r.isUpdateAvailable === undefined && v && v !== app.getVersion()));
+      if (!newer) {
+        dialog.showMessageBox(getWindow(), { type: 'info', message: 'You are up to date', detail: `Running v${app.getVersion()}.` });
+      } else if (last.state === 'ready') {
+        askInstall(last.version);
+      } else {
+        dialog.showMessageBox(getWindow(), { type: 'info', message: `Update ${v} found`, detail: 'Downloading in the background. You will be asked to install when it finishes.' });
       }
     }).catch((err) => {
       if (interactive) {

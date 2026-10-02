@@ -8,9 +8,10 @@ window.SAFI_DATA = (() => {
     { id: 'ironing',   name: 'Ironing Only',  unit: 'piece', icon: 'iron',    category: 'laundry',     tiers: { student: 30,  normal: 50,  corporate: 40 },   subtypes: [{name:'Shirt', price:50},{name:'Trouser', price:50},{name:'Dress', price:70},{name:'Suit', price:100},{name:'Linen', price:80},{name:'Other'}] },
     { id: 'shoe',      name: 'Shoe Washing',  unit: 'pair',  icon: 'shoe',    category: 'shoes',       tiers: { student: 250, normal: 350, corporate: 300 }, subtypes: [{name:'Sneakers', price:350},{name:'Leather', price:500},{name:'Boots', price:600},{name:'Sandals', price:250},{name:'Canvas', price:300},{name:'Suede', price:550},{name:'Other'}] },
     { id: 'duvet',     name: 'Duvet / Bedding', unit: 'piece', icon: 'duvet', category: 'laundry',     tiers: { student: 400, normal: 600, corporate: 500 }, subtypes: [{name:'Single', price:500},{name:'Double', price:600},{name:'Queen', price:700},{name:'King', price:800},{name:'Comforter', price:700},{name:'Blanket', price:400},{name:'Pillow', price:200},{name:'Bedsheet set', price:400},{name:'Other'}] },
-    { id: 'curtain',   name: 'Curtains',      unit: 'piece', icon: 'curtain', category: 'laundry',     tiers: { student: 300, normal: 450, corporate: 380 } },
+    { id: 'curtain',   name: 'Curtains',      unit: 'kg', icon: 'curtain', category: 'laundry',     tiers: { student: 300, normal: 450, corporate: 380 } },
     { id: 'hanger',    name: 'Hanger',        unit: 'piece', icon: 'hanger',  category: 'supplies',    tiers: { student: 30,  normal: 30,  corporate: 30 } },
     { id: 'laundry-bag', name: 'Laundry Bag', unit: 'piece', icon: 'bag',     category: 'supplies',    tiers: { student: 150, normal: 150, corporate: 150 } },
+    { id: 'other', name: 'Other', unit: 'piece', icon: 'plus', category: 'other', tiers: { student: 0, normal: 0, corporate: 0 } },
     { id: 'dryclean-bag', name: 'Dry Cleaning Bag', unit: 'piece', icon: 'bag', category: 'supplies', tiers: { student: 0, normal: 0, corporate: 0 } },
   ];
 
