@@ -211,6 +211,11 @@
 
   async function upsert(table, rows, onConflict) {
     if (!rows.length) return 0;
+    // Postgres refuses a batch that touches the same row twice. Keep the last copy.
+    const keys = String(onConflict).split(',');
+    const byKey = new Map();
+    for (const r of rows) byKey.set(keys.map(k => r[k]).join('\u0001'), r);
+    rows = [...byKey.values()];
     let done = 0;
     for (const part of chunk(rows, CHUNK)) {
       await C().raw(`/rest/v1/${table}?on_conflict=${onConflict}`, {

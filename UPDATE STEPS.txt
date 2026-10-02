@@ -1,24 +1,21 @@
-VAZI SAFI LMS v2.0.7 (includes 2.0.5 + 2.0.6)
-Fix: "renderer-badge.js not found" at start-up.
+VAZI SAFI LMS v2.0.8 — fixes "ON CONFLICT DO UPDATE command cannot affect row a second time"
 
-1. Publish:
-cd ~/Documents/"Vazi Safi"/"Laundry Management System"
-rsync -av ~/Downloads/vazisafi-lms-v2.0.7/ ./
-ls desktop/renderer-badge.js         (must exist)
-grep '"version"' package.json        (should say 2.0.7)
-git add . && git commit -m "v2.0.7: include renderer-badge.js, start-up never blocked" && git push && git tag v2.0.7 && git push origin v2.0.7
+Cause: the CSV import gave some customers the same internal id (125 rows created in the
+same instant). The cloud refused the batch. Nothing was lost.
 
-2. Wait for GitHub Actions to go green.
+This update:
+- repairs the duplicate ids on the laptop automatically when it opens
+- makes every new id unique, even in bulk imports
+- sync skips repeated rows in a batch instead of failing
+- prefix "254" in the CSV is stored as "+254"
+Full folder: includes everything up to this version.
 
-3. Mac (app cannot start, so install by hand once):
-rm -rf "/Applications/VaziSafi LMS.app"
-# download VaziSafi-LMS-2.0.7-arm64.dmg from GitHub Releases, then:
-xattr -c ~/Downloads/VaziSafi-LMS-2.0.7-arm64.dmg
-hdiutil attach ~/Downloads/VaziSafi-LMS-2.0.7-arm64.dmg -nobrowse -mountpoint /tmp/vazi
-ditto --noextattr --noqtn "/tmp/vazi/VaziSafi LMS.app" "/Applications/VaziSafi LMS.app"
-hdiutil detach /tmp/vazi
-xattr -cr "/Applications/VaziSafi LMS.app" && codesign --force --deep --sign - "/Applications/VaziSafi LMS.app"
-open "/Applications/VaziSafi LMS.app"
-If "Not Opened": Done > System Settings > Privacy & Security > Open Anyway.
+1. cd ~/Documents/"Vazi Safi"/"Laundry Management System"
+   rsync -av ~/Downloads/vazisafi-lms-v2.0.8/ ./
+   grep '"version"' package.json        (should say 2.0.8)
+2. git add . && git commit -m "v2.0.8: unique customer ids, sync dedupe" && git push && git tag v2.0.8 && git push origin v2.0.8
+3. When GitHub Actions is green: Install & restart on the laptop that did the import.
+4. Cloud & Updates > Sync now. The red line should clear.
 
-4. Windows: Install & restart when offered.
+Do NOT import the CSV again — the customers are already on the laptop.
+No database step.

@@ -67,6 +67,17 @@ window.SAFI_STORE = (() => {
       s.category = fromSample?.category || 'other';
     }
   }
+  // Repair duplicate customer ids from earlier bulk imports.
+  {
+    const seen = new Set(); let fixed = 0;
+    state.customers = (state.customers || []).map(c => {
+      if (!seen.has(c.id)) { seen.add(c.id); return c; }
+      fixed++;
+      const id = 'c-' + Date.now().toString(36) + fixed.toString(36) + Math.random().toString(36).slice(2, 6);
+      seen.add(id); return { ...c, id };
+    });
+    if (fixed) { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} console.info('[safi] repaired', fixed, 'duplicate customer ids'); }
+  }
   // One-time: curtains are charged by weight.
   if (!state.settings) state.settings = {};
   if (!state.settings.curtainKgV1) {
@@ -138,7 +149,9 @@ window.SAFI_STORE = (() => {
     }, 2400);
     return `SF-${max + 1}`;
   };
-  const nextId = (prefix) => `${prefix}-${Date.now().toString(36)}${Math.floor(Math.random() * 999)}`;
+  // Counter + random so ids made in the same millisecond (bulk imports) never collide.
+  let idSeq = 0;
+  const nextId = (prefix) => `${prefix}-${Date.now().toString(36)}${(idSeq++ % 1296).toString(36).padStart(2, '0')}${Math.random().toString(36).slice(2, 6)}`;
 
   // Client number: position in today's queue. Resets each morning, so "client 7" means
   // the seventh customer served today — what staff and customers actually say out loud.
@@ -626,16 +639,16 @@ window.SAFI_STORE = (() => {
         // A leading 0 is a local-dialling artefact — the prefix replaces it.
         if (digits.length > 9 && digits[0] === '0') digits = digits.replace(/^0+/, '');
         let formatted = digits;
-        if (r.prefix === '+254' || !r.prefix) {
+        if (!r.prefix || String(r.prefix).replace(/\D/g, '') === '254') {
           if (digits.length === 9) formatted = digits.slice(0, 3) + ' ' + digits.slice(3, 6) + ' ' + digits.slice(6);
           else formatted = digits.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
         } else {
           formatted = digits.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
         }
         return {
-          id: 'c-' + Date.now().toString(36) + Math.floor(Math.random() * 999),
+          id: nextId('c'),
           name: r.name,
-          prefix: r.prefix || '+254',
+          prefix: !r.prefix ? '+254' : /^\d+$/.test(String(r.prefix).trim()) ? '+' + String(r.prefix).trim() : String(r.prefix).trim(),
           phone: formatted,
           group: r.group || 'normal',
           location: r.location || '',
