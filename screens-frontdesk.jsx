@@ -455,7 +455,13 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
           <Button kind="primary" icon="print" onClick={() => { setShowPreview(false); handleSave(true); }}>Save & print</Button>
         </>}>
         <NewOrderPreview
-          items={items} subtotal={subtotal} discount={discount} discountPct={discountPct}
+          items={(() => {
+            const bag = D.settings?.freeBagServiceId || 'laundry-bag';
+            const hasLaundry = items.some(it => D.services.find(s => s.id === it.svc)?.category === 'laundry');
+            return isFirstTime && freeBagEnabled && hasLaundry && !items.some(i => i.svc === bag && i.free)
+              ? [...items, { svc: bag, qty: 1, free: true, subtype: 'Free welcome bag', customPrice: 0 }]
+              : items;
+          })()} subtotal={subtotal} discount={discount} discountPct={discountPct}
           total={total} deposit={deposit} balance={balance}
           method={method} txn={txn} notes={notes}
           customer={customer} effGroup={effGroup}

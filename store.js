@@ -435,7 +435,7 @@ window.SAFI_STORE = (() => {
         });
         if (isFirstTime && state.settings?.firstTimeBagFree && hasLaundry) {
           const bagSvc = state.settings.freeBagServiceId || 'laundry-bag';
-          const hasBag = finalItems.some(i => i.svc === bagSvc);
+          const hasBag = finalItems.some(i => i.svc === bagSvc && i.free);
           if (!hasBag) finalItems.push({ svc: bagSvc, qty: 1, price: 0, free: true, note: 'Welcome gift — first laundry order' });
         }
         // Rule 2: any order with a dry cleaning item gets a free DRY CLEANING BAG (always)
@@ -444,7 +444,7 @@ window.SAFI_STORE = (() => {
           return svc?.category === 'drycleaning';
         });
         if (hasDryClean && state.services.find(s => s.id === 'dryclean-bag')) {
-          const hasDcBag = finalItems.some(i => i.svc === 'dryclean-bag');
+          const hasDcBag = finalItems.some(i => i.svc === 'dryclean-bag' && i.free);
           if (!hasDcBag) finalItems.push({ svc: 'dryclean-bag', qty: 1, price: 0, free: true, note: 'Complimentary dry cleaning bag' });
         }
       }

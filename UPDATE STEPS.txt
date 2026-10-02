@@ -1,19 +1,14 @@
-VAZI SAFI LMS v2.1.1 (includes 2.1.0)
-- Customers: Sort by Name A-Z (default), Z-A, Newest joined, Oldest joined. Remembered per laptop.
-- Mac updater: fixed "ENOTDIR ... app.asar" when a previous download was left behind.
-- (2.1.0) Edit customers from both desks.
+VAZI SAFI LMS v2.1.2 (includes 2.1.1)
+- First-time customer who also BUYS laundry bags now still gets the free welcome bag
+  (e.g. buys 3 = 3 charged + 1 free). Same for the free dry cleaning bag.
 
-1. Publish (Mac Terminal):
+Publish (Mac Terminal):
 cd ~/Documents/"Vazi Safi"/"Laundry Management System" && \
-rsync -av ~/Downloads/vazisafi-lms-v2.1.1/ ./ && \
-grep -q '"version": "2.1.1"' package.json && \
-git add . && git commit -m "v2.1.1: customer sort, Mac updater cleanup fix" && \
-git push && git tag v2.1.1 && git push origin v2.1.1 && echo "PUSHED v2.1.1"
+rsync -av ~/Downloads/vazisafi-lms-v2.1.2/ ./ && \
+grep -q '"version": "2.1.2"' package.json && \
+git add . && git commit -m "v2.1.2: free welcome bag even when bags are bought" && \
+git push && git tag v2.1.2 && git push origin v2.1.2 && echo "PUSHED v2.1.2"
 
-2. Mac, once (the old 2.0.9 updater still has the bug):
-   Quit VaziSafi LMS, then in Terminal:
-rm -rf ~/Library/"Application Support"/"VaziSafi LMS"/pending-update && open "/Applications/VaziSafi LMS.app"
-   When GitHub Actions is green: VaziSafi LMS menu > Check for updates > Install and restart.
-   If macOS blocks it after restart, run fixvazi then open the app.
-
-3. Windows: the update banner appears > Install and restart.
+If 2.1.1 was never pushed, this covers it too.
+Mac still on 2.0.9? Do the one-time step from 2.1.1 first:
+rm -rf ~/Library/"Application Support"/"VaziSafi LMS"/pending-update
