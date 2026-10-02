@@ -89,7 +89,7 @@ function init({ app, dialog, getWindow, onStatus }) {
       say({ state: 'available', version });
 
       // Download, streaming so progress can be shown.
-      fs.rmSync(work, { recursive: true, force: true });
+      await run('/bin/rm', ['-rf', work]);
       fs.mkdirSync(work, { recursive: true });
       const zipPath = path.join(work, 'update.zip');
       const dl = await fetch(asset.browser_download_url, { headers: { 'User-Agent': 'VaziSafi-LMS' } });
@@ -113,7 +113,7 @@ function init({ app, dialog, getWindow, onStatus }) {
       await run('/usr/bin/ditto', ['-x', '-k', zipPath, unpack]);
       const appName = fs.readdirSync(unpack).find(n => n.endsWith('.app'));
       if (!appName) throw new Error('Downloaded zip did not contain an app');
-      fs.rmSync(zipPath, { force: true });
+      await run('/bin/rm', ['-f', zipPath]);
 
       staged = { version, appPath: path.join(unpack, appName) };
       say({ state: 'ready', version });

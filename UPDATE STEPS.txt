@@ -1,14 +1,19 @@
-VAZI SAFI LMS v2.1.0 — edit customers from both desks
+VAZI SAFI LMS v2.1.1 (includes 2.1.0)
+- Customers: Sort by Name A-Z (default), Z-A, Newest joined, Oldest joined. Remembered per laptop.
+- Mac updater: fixed "ENOTDIR ... app.asar" when a previous download was left behind.
+- (2.1.0) Edit customers from both desks.
 
-- Customers page: "Edit" on every row, for Front Desk and Management
-  (name, phone, residence, tier). Each change is written to the audit log.
-- Delete stays Management only.
-- Warns if the new phone number already belongs to another customer.
+1. Publish (Mac Terminal):
+cd ~/Documents/"Vazi Safi"/"Laundry Management System" && \
+rsync -av ~/Downloads/vazisafi-lms-v2.1.1/ ./ && \
+grep -q '"version": "2.1.1"' package.json && \
+git add . && git commit -m "v2.1.1: customer sort, Mac updater cleanup fix" && \
+git push && git tag v2.1.1 && git push origin v2.1.1 && echo "PUSHED v2.1.1"
 
-cd ~/Documents/"Vazi Safi"/"Laundry Management System"
-rsync -av ~/Downloads/vazisafi-lms-v2.1.0/ ./
-grep '"version"' package.json        (should say 2.1.0)
-git add . && git commit -m "v2.1.0: edit customers from both desks" && git push && git tag v2.1.0 && git push origin v2.1.0
+2. Mac, once (the old 2.0.9 updater still has the bug):
+   Quit VaziSafi LMS, then in Terminal:
+rm -rf ~/Library/"Application Support"/"VaziSafi LMS"/pending-update && open "/Applications/VaziSafi LMS.app"
+   When GitHub Actions is green: VaziSafi LMS menu > Check for updates > Install and restart.
+   If macOS blocks it after restart, run fixvazi then open the app.
 
-When GitHub Actions is green: the update banner appears on each laptop > Install and restart.
-No database step.
+3. Windows: the update banner appears > Install and restart.

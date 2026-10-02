@@ -1474,6 +1474,7 @@ function CustomersScreen({ lang, money, setView, role }) {
   const D = useStore();
   const [q, setQ] = useStateFD('');
   const [group, setGroup] = useStateFD('all');
+  const [sort, setSort] = useStateFD(() => localStorage.getItem('safi_cust_sort') || 'name');
   const [showAdd, setShowAdd] = useStateFD(false);
   const [sel, setSel] = useStateFD([]);
   const [editC, setEditC] = useStateFD(null);
@@ -1507,11 +1508,16 @@ function CustomersScreen({ lang, money, setView, role }) {
     });
   }
 
+  const joinedTs = c => { const t = Date.parse(c.joined); return isNaN(t) ? 0 : t; };
   const rows = D.customers.filter(c => {
     if (group !== 'all' && c.group !== group) return false;
     if (q && !(c.name.toLowerCase().includes(q.toLowerCase()) || c.phone.includes(q))) return false;
     return true;
-  });
+  }).sort((a, b) =>
+    sort === 'name-desc' ? b.name.localeCompare(a.name, undefined, { sensitivity: 'base' })
+    : sort === 'joined-new' ? joinedTs(b) - joinedTs(a)
+    : sort === 'joined-old' ? joinedTs(a) - joinedTs(b)
+    : a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
   function handleImport(file) {
     const reader = new FileReader();
@@ -1558,6 +1564,14 @@ function CustomersScreen({ lang, money, setView, role }) {
               <button key={g} className={`safi-chip ${group === g ? 'is-active' : ''}`} onClick={() => setGroup(g)}>{g === 'all' ? 'All' : t(g, lang)}</button>
             ))}
           </div>
+          <label className="safi-sort">Sort
+            <select className="safi-input" value={sort} onChange={e => { setSort(e.target.value); localStorage.setItem('safi_cust_sort', e.target.value); }}>
+              <option value="name">Name A–Z</option>
+              <option value="name-desc">Name Z–A</option>
+              <option value="joined-new">Newest joined</option>
+              <option value="joined-old">Oldest joined</option>
+            </select>
+          </label>
         </div>
         <Table
           cols={[
