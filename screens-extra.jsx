@@ -683,7 +683,7 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
               <div className="safi-approval-detail">
                 <h4 className="safi-section-h">Current order — {orig.id}</h4>
                 <div className="safi-approval-meta">
-                  <div><span>Customer</span><b>{cust?.name || 'Walk-in'}</b></div>
+                  <div><span>Customer</span><b>{cust?.name || orig.id}</b></div>
                   <div><span>Placed</span><b>{orig.in.slice(5, 16)}</b></div>
                   <div><span>Status</span><b>{orig.status}</b></div>
                   <div><span>Current total</span><b className="safi-mono">{money(orig.total)}</b></div>

@@ -201,7 +201,7 @@ function RiderCardsScreen({ setView, setActiveOrderId, money }) {
   const shop = cards.filter(c => !c.rider && !c.returnedAt);
   const back = cards.filter(c => c.returnedAt);
   const staffName = (id) => D.staff.find(s => s.id === id)?.name || '—';
-  const custName = (id) => D.customers.find(c => c.id === id)?.name || 'Walk-in';
+  const custName = (id, orderId) => D.customers.find(c => c.id === id)?.name || orderId || 'No name';
 
   const byRider = useMemoDC(() => {
     const riders = [...new Set(cards.map(c => c.rider).filter(Boolean))];

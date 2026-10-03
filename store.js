@@ -172,12 +172,23 @@ window.SAFI_STORE = (() => {
   }
 
   // ID helpers
+  // Order numbers must be unique across laptops. Each laptop numbers on its own, so two
+  // tills could both make SF-2428 before syncing and one would overwrite the other in the
+  // cloud. A short per-laptop code (e.g. SF-2428-K) keeps them apart.
+  const DEVICE_KEY = 'safi_device_code_v1';
+  const deviceCode = (() => {
+    let c = localStorage.getItem(DEVICE_KEY);
+    if (!c) { const L = 'ABCDEFGHJKMNPQRSTUVWXYZ'; c = L[Math.floor(Math.random() * L.length)] + L[Math.floor(Math.random() * L.length)]; localStorage.setItem(DEVICE_KEY, c); }
+    return c;
+  })();
   const nextOrderId = () => {
     const max = state.orders.reduce((m, o) => {
-      const n = parseInt(o.id.replace(/\D/g, ''), 10) || 0;
+      const n = parseInt(String(o.id).replace(/^\D*(\d+).*$/, '$1'), 10) || 0;
       return n > m ? n : m;
     }, 2400);
-    return `SF-${max + 1}`;
+    let id = `SF-${max + 1}-${deviceCode}`;
+    while (state.orders.some(o => o.id === id)) id = `SF-${parseInt(id.slice(3), 10) + 1}-${deviceCode}`;
+    return id;
   };
   // Counter + random so ids made in the same millisecond (bulk imports) never collide.
   let idSeq = 0;
@@ -507,7 +518,7 @@ window.SAFI_STORE = (() => {
           id: nextId('p'),
           date: fmt(now),
           order: id,
-          customer: cust?.name || 'Walk-in',
+          customer: cust?.name || id,
           method, amount: Math.round(paid),
           txn: txn || '',
           verified: false,
