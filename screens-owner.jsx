@@ -2,9 +2,50 @@
 const { useState: useStateOw, useRef: useRefOw } = React;
 
 // ─── Owner Dashboard ─────────────────────────────────────────────────────
+// ─── Daily revenue for a chosen month ────────────────────────────────────
+function MonthRevenue({ orders, money }) {
+  const now = new Date();
+  const [ym, setYm] = useStateOw({ y: now.getFullYear(), m: now.getMonth() });
+  const days = new Date(ym.y, ym.m + 1, 0).getDate();
+  const pad = n => String(n).padStart(2, '0');
+  const prefix = `${ym.y}-${pad(ym.m + 1)}`;
+  const todayKey = SAFI_TIME.day(now);
+  const data = Array.from({ length: days }, (_, i) => {
+    const key = `${prefix}-${pad(i + 1)}`;
+    const list = orders.filter(o => String(o.in).startsWith(key));
+    return { day: i + 1, key, v: list.reduce((s, o) => s + (o.total || 0), 0), n: list.length, future: key > todayKey };
+  });
+  const max = Math.max(1, ...data.map(d => d.v));
+  const total = data.reduce((s, d) => s + d.v, 0);
+  const isCurrent = ym.y === now.getFullYear() && ym.m === now.getMonth();
+  const label = new Date(ym.y, ym.m, 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' });
+  const shift = d => setYm(p => { const x = new Date(p.y, p.m + d, 1); return { y: x.getFullYear(), m: x.getMonth() }; });
+  return (
+    <Card title={`Daily revenue · ${label}`} action={
+      <div className="safi-month-nav">
+        <span className="safi-cell-sub">Total <b className="safi-mono">{money(total)}</b></span>
+        <button onClick={() => shift(-1)} aria-label="Previous month">‹</button>
+        <button onClick={() => shift(1)} disabled={isCurrent} aria-label="Next month">›</button>
+      </div>
+    }>
+      <div className="safi-mbars" style={{ gridTemplateColumns: `repeat(${days}, minmax(0, 1fr))` }}>
+        {data.map(d => (
+          <div key={d.key} className={`safi-mbars__col${d.key === todayKey ? ' is-today' : ''}${d.future ? ' is-future' : ''}`} title={`${d.day} ${label}: ${money(d.v)} · ${d.n} orders`}>
+            <div className="safi-mbars__track">
+              {d.v > 0 && <span className="safi-mbars__val">{d.v >= 1000 ? (d.v / 1000).toFixed(1) + 'k' : d.v}</span>}
+              <div className="safi-mbars__bar" style={{ height: `${(d.v / max) * 100}%` }}/>
+            </div>
+            <div className="safi-mbars__lbl">{d.day}</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function OwnerDashboard({ lang, money, setView }) {
   const D = useStore();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = SAFI_TIME.day();
   // Revenue = value of orders taken (sales). Collected = money actually received.
   const today = D.orders.filter(o => o.in.startsWith(todayStr)).reduce((s, o) => s + (o.total || 0), 0);
   const collectedToday = D.payments.filter(p => String(p.date).startsWith(todayStr)).reduce((s, p) => s + (p.amount || 0), 0);
@@ -55,7 +96,7 @@ function OwnerDashboard({ lang, money, setView }) {
   const last14 = [];
   for (let i = 13; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = SAFI_TIME.day(d);
     const label = d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
     const v = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.total || 0), 0);
     last14.push({ d: label, v });
@@ -109,11 +150,7 @@ function OwnerDashboard({ lang, money, setView }) {
       </Card>
 
       <div className="safi-grid safi-grid--2-1">
-        <Card title="Revenue · last 14 days" action={
-          <div className="safi-legend"><span><i style={{ background: 'var(--brand)' }}/>Revenue</span></div>
-        }>
-          <BarChart data={last14} height={220}/>
-        </Card>
+        <MonthRevenue orders={D.orders} money={money}/>
 
         <Card title={`Today: ${t('by_method', lang)}`}>
           {byMethodWithPct.length > 0
@@ -191,10 +228,10 @@ function OwnerDashboard({ lang, money, setView }) {
 function ReportsScreen({ lang, money }) {
   const D = useStore();
   const [tab, setTab] = useStateOw('daily');
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = SAFI_TIME.day();
   const todays = D.orders.filter(o => o.in.startsWith(todayStr));
   const periodDays = tab === 'daily' ? 1 : tab === 'weekly' ? 7 : tab === 'monthly' ? 30 : 36500;
-  const cutoff = new Date(Date.now() - (periodDays - 1) * 86400e3).toISOString().slice(0, 10);
+  const cutoff = SAFI_TIME.daysAgo(periodDays - 1);
   const periodOrders = tab === 'daily' ? todays : D.orders.filter(o => o.in.slice(0, 10) >= cutoff);
   const todayRev = periodOrders.reduce((s, o) => s + (o.total || 0), 0);
   const periodCollected = periodOrders.reduce((s, o) => s + (o.paid || 0), 0);
@@ -651,6 +688,59 @@ function StaffScreen({ lang }) {
   );
 }
 
+// ─── Correct order dates (e.g. a till whose clock was wrong) ──────────────
+function RedateCard() {
+  const D = useStore();
+  const [from, setFrom] = useStateOw(SAFI_TIME.day());
+  const [to, setTo] = useStateOw(SAFI_TIME.daysAgo(1));
+  const [picked, setPicked] = useStateOw({});
+  const list = D.orders.filter(o => String(o.in).startsWith(from));
+  const n = Object.values(picked).filter(Boolean).length;
+  function apply() {
+    if (!n || !to || to === from) return;
+    for (const o of list) if (picked[o.id]) {
+      const time = String(o.in).slice(10);
+      const patch = { in: to + time };
+      if (o.due && String(o.due).startsWith(from)) patch.due = to + String(o.due).slice(10);
+      window.SAFI_STORE.updateOrder(o.id, patch);
+      for (const p of D.payments.filter(p => p.order === o.id && String(p.date).startsWith(from)))
+        window.SAFI_STORE.get().payments.find(x => x.id === p.id).date = to + String(p.date).slice(10);
+    }
+    window.SAFI_STORE.updateOrder(list[0].id, {});
+    toast(`${n} order${n > 1 ? 's' : ''} moved to ${to}`, 'success');
+    setPicked({});
+  }
+  return (
+    <Card title="Correct order dates" action={<span className="safi-cell-sub">Use when a till's clock was set wrong</span>}>
+      <div className="safi-redate">
+        <div className="safi-redate__row">
+          <label>Orders saved on<input type="date" className="safi-input" value={from} onChange={e => { setFrom(e.target.value); setPicked({}); }}/></label>
+          <label>Move ticked orders to<input type="date" className="safi-input" value={to} onChange={e => setTo(e.target.value)}/></label>
+          <Button kind="ghost" size="sm" onClick={() => setPicked(Object.fromEntries(list.map(o => [o.id, true])))}>Tick all</Button>
+          <Button kind="ghost" size="sm" onClick={() => setPicked({})}>Clear</Button>
+          <Button kind="primary" icon="check" onClick={apply} disabled={!n || to === from}>Move {n || ''} order{n === 1 ? '' : 's'}</Button>
+        </div>
+        <div className="safi-redate__list">
+          {list.length === 0 && <p className="safi-cell-sub" style={{ padding: 12, margin: 0 }}>No orders saved on {from}.</p>}
+          {list.map(o => {
+            const c = D.customers.find(x => x.id === o.customer);
+            return (
+              <label key={o.id} className="safi-redate__item">
+                <input type="checkbox" checked={!!picked[o.id]} onChange={e => setPicked({ ...picked, [o.id]: e.target.checked })}/>
+                <span className="safi-mono">{o.id}</span>
+                <span>{c?.name || 'Walk-in'}</span>
+                <span className="safi-mono safi-cell-sub">{String(o.in).slice(11, 16)}</span>
+                <span className="safi-mono">KES {(o.total || 0).toLocaleString('en-KE')}</span>
+              </label>
+            );
+          })}
+        </div>
+        <p className="safi-hint">Keeps each order's time; only the day changes. Linked payments from that day move too. The change syncs to the other laptop.</p>
+      </div>
+    </Card>
+  );
+}
+
 // ─── Data Management ──────────────────────────────────────────────────────
 function DataScreen({ lang }) {
   const D = useStore();
@@ -675,6 +765,8 @@ function DataScreen({ lang }) {
         <StatCard label="Customers" value={D.customers.length} icon="users"/>
         <StatCard label="Payments" value={D.payments.length} icon="wallet"/>
       </div>
+
+      <RedateCard/>
 
       <Card title="Backup">
         <p className="safi-cell-sub" style={{ marginTop: 0 }}>

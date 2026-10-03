@@ -555,6 +555,23 @@ function renderSmsTemplate(tpl, ctx) {
 // ─── Approvals queue (Management) ─────────────────────────────────────────
 function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
   const D = useStore();
+  const [cloud, setCloud] = useStateX(null);
+  const [checking, setChecking] = useStateX(false);
+  useEffectX(() => window.SAFI_CLOUD ? window.SAFI_CLOUD.subscribe(setCloud) : undefined, []);
+  async function checkNow() {
+    if (!window.SAFI_CLOUD) return;
+    setChecking(true);
+    try { await window.SAFI_CLOUD.syncNow(); toast('Requests checked'); }
+    catch (e) { toast(e.message || 'Could not reach the cloud', 'error'); }
+    finally { setChecking(false); }
+  }
+  // While this screen is open, look for new requests every 30 seconds.
+  useEffectX(() => {
+    if (!window.SAFI_CLOUD) return;
+    const id = setInterval(() => window.SAFI_CLOUD.syncNow().catch(() => {}), 30000);
+    return () => clearInterval(id);
+  }, []);
+  const cfg = window.SAFI_CLOUD ? window.SAFI_CLOUD.getConfig() : {};
   const [tab, setTab] = useStateX('pending');
   const rows = D.approvals.filter(a => tab === 'all' || a.status === tab);
   const pendingCount = D.approvals.filter(a => a.status === 'pending').length;
@@ -584,8 +601,22 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
       <Topbar
         title="Approvals"
         subtitle={pendingCount > 0 ? `${pendingCount} pending request${pendingCount === 1 ? '' : 's'} from staff` : 'No pending requests'}
-        right={<Button kind="ghost" icon="alert">{pendingCount} pending</Button>}
+        right={<>
+          <span className="safi-cell-sub">{cfg.lastSync ? 'Last checked ' + SAFI_TIME.stamp(new Date(cfg.lastSync)).slice(11) : 'Not synced yet'}</span>
+          <Button kind="primary" icon="arrow" onClick={checkNow} disabled={checking}>{checking ? 'Checking…' : 'Check for new requests'}</Button>
+        </>}
       />
+      {window.SAFI_CLOUD && !cfg.liveSync && (
+        <div className="safi-callout" style={{ background: 'var(--amber-soft)', color: '#92450C', borderLeft: '3px solid var(--amber)' }}>
+          <Icon name="alert" size={14}/>
+          <span><b>Live sync is off on this laptop.</b> Requests from the other till only arrive when you press Check, or turn Live sync on in Cloud & Updates. It must be on at the front desk too.</span>
+        </div>
+      )}
+      {cloud && cloud.syncError && (
+        <div className="safi-callout" style={{ background: 'var(--red-soft)', color: '#99211B', borderLeft: '3px solid var(--red)' }}>
+          <Icon name="alert" size={14}/><span>Last sync problem: {cloud.syncError}</span>
+        </div>
+      )}
 
       <div className="safi-grid safi-grid--3">
         <button className="safi-stat" style={{ borderLeft: '4px solid var(--amber)', cursor: 'pointer', textAlign: 'left' }} onClick={() => setTab('pending')}>

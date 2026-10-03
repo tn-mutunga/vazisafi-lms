@@ -23,7 +23,7 @@ function SmsGatewayCard() {
   const [busy, setBusy] = useStateSMS(false);
   useEffectSMS(() => window.SAFI_SMS ? window.SAFI_SMS.subscribe(setLast) : undefined, []);
   const queued = D.messages.filter(m => m.status === 'queued').length;
-  const month = new Date().toISOString().slice(0, 7);
+  const month = SAFI_TIME.day().slice(0, 7);
   const spent = D.messages.filter(m => (m.date || '').startsWith(month) && m.cost).reduce((s, m) => s + Number(m.cost || 0), 0);
 
   async function test() {
@@ -59,7 +59,7 @@ function SmsCampaignCard() {
 
   const last = {};
   for (const o of D.orders) if (o.customer && (!last[o.customer] || o.in > last[o.customer])) last[o.customer] = o.in;
-  const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  const cutoff = SAFI_TIME.daysAgo(days);
   const seen = new Set();
   const list = D.customers.filter(c => {
     if (!c.phone) return false;

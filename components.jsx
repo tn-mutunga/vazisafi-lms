@@ -312,6 +312,16 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
   const store = useStore();
   const current = window.SAFI_STORE.getCurrentStaff();
   const [showSwitch, setShowSwitch] = useState(false);
+  // Tell Management the moment a new staff request arrives (from this till or another).
+  const pendingNow = (store.approvals || []).filter(a => a.status === 'pending').length;
+  const pendingSeen = useRef(pendingNow);
+  useEffect(() => {
+    if (role === 'owner' && pendingNow > pendingSeen.current) {
+      toast(`New approval request · ${pendingNow} waiting`, 'success');
+      try { const c = new (window.AudioContext || window.webkitAudioContext)(); const o = c.createOscillator(); const g = c.createGain(); o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + 0.25); } catch (e) {}
+    }
+    pendingSeen.current = pendingNow;
+  }, [pendingNow, role]);
 
   const items = role === 'frontdesk'
     ? [
@@ -591,7 +601,7 @@ const HBar = ({ data, max }) => {
 };
 
 // ─── Tables ───────────────────────────────────────────────────────────────
-const Table = ({ cols, rows, onRow, empty }) => (
+const Table = ({ cols, rows, onRow, empty, rowClass }) => (
   <div className="safi-table-wrap">
     <table className="safi-table">
       <thead>
@@ -601,7 +611,7 @@ const Table = ({ cols, rows, onRow, empty }) => (
         {rows.length === 0 ? (
           <tr><td colSpan={cols.length} className="safi-table__empty">{empty || 'No data'}</td></tr>
         ) : rows.map((r, i) => (
-          <tr key={i} onClick={() => onRow && onRow(r)} className={onRow ? 'is-clickable' : ''}>
+          <tr key={i} onClick={() => onRow && onRow(r)} className={[onRow ? 'is-clickable' : '', rowClass ? rowClass(r) : ''].join(' ').trim()}>
             {cols.map((c, j) => <td key={j} style={c.style}>{c.render ? c.render(r) : r[c.key]}</td>)}
           </tr>
         ))}

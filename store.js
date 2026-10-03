@@ -1,3 +1,13 @@
+
+// Local-time date helpers. Never use toISOString() for shop dates: it is UTC, so
+// anything done 00:00-03:00 in Nairobi lands on the previous day.
+window.SAFI_TIME = (() => {
+  const p = n => String(n).padStart(2, '0');
+  const day = (d = new Date()) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  const stamp = (d = new Date()) => `${day(d)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return day(d); };
+  return { day, stamp, daysAgo };
+})();
 // Vazi Safi — persistent local store
 // Backed by localStorage (works offline, persists across sessions on this browser/laptop).
 // On first run, seeded from window.SAFI_DATA (sample data).
@@ -136,6 +146,26 @@ window.SAFI_STORE = (() => {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn('Safi: storage full', e); }
     listeners.forEach(fn => fn(state));
   }
+  // One-time fix (v2.1.4): the shop PC's clock ran a day ahead on 2–3 Oct 2026.
+  // SF-2416 (Alvin) and SF-2417 (Diana) were taken on 3 Oct; every earlier
+  // order dated 3 or 4 Oct was really taken on 2 Oct.
+  if (!state.fixOct2026Dates) {
+    const num = (id) => parseInt(String(id).replace(/\D/g, ''), 10) || 0;
+    const shift = (s, to) => to + String(s).slice(10);
+    for (const o of state.orders || []) {
+      const d = String(o.in || '').slice(0, 10);
+      const n = num(o.id);
+      let to = null;
+      if (n >= 2416 && n <= 2417 && d === '2026-10-04') to = '2026-10-03';
+      else if (n > 0 && n < 2416 && (d === '2026-10-03' || d === '2026-10-04')) to = '2026-10-02';
+      if (!to) continue;
+      o.in = shift(o.in, to);
+      if (o.due && /^2026-10-0[34]/.test(o.due) && n < 2416) o.due = shift(o.due, '2026-10-03');
+      for (const p of state.payments || []) if (p.order === o.id && /^2026-10-0[34]/.test(p.date || '')) p.date = shift(p.date, to);
+    }
+    state.fixOct2026Dates = true;
+    migrated = true;
+  }
   // Persist any migration changes immediately
   if (migrated) {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
@@ -156,13 +186,13 @@ window.SAFI_STORE = (() => {
   // Client number: position in today's queue. Resets each morning, so "client 7" means
   // the seventh customer served today — what staff and customers actually say out loud.
   const nextQueueNo = () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = SAFI_TIME.day();
     return state.orders.filter(o => String(o.in || '').startsWith(today)).length + 1;
   };
 
   const STAGES = ['intake', 'washing', 'drying', 'ironing', 'ready', 'collected'];
 
-  const stamp = (d) => (d || new Date()).toISOString().slice(0, 16).replace('T', ' ');
+  const stamp = (d) => SAFI_TIME.stamp(d || new Date());
 
   // Append-only trail. Every write that could hide money leaves a line here. Nothing in
   // the front-desk UI reads it, so it costs staff nothing to be honest and nothing to
@@ -205,9 +235,10 @@ window.SAFI_STORE = (() => {
     // Expected cash = float + cash taken in during the shift − cash expenses paid out.
     shiftExpected(sh) {
       if (!sh) return 0;
-      const from = sh.openedAt, to = sh.closedAt || new Date().toISOString();
-      const inWin = (iso) => iso >= from && iso <= to;
-      const toIso = (d) => (d || '').replace(' ', 'T');
+      const from = new Date(sh.openedAt).getTime() - 60e3, to = sh.closedAt ? new Date(sh.closedAt).getTime() + 60e3 : Date.now() + 60e3;
+      // Payment/expense dates are shop-local "YYYY-MM-DD HH:MM"; parse as local, compare as instants.
+      const inWin = (local) => { const t = new Date(String(local || '').replace(' ', 'T')).getTime(); return t >= from && t <= to; };
+      const toIso = (d) => d;
       const cashIn = (state.payments || [])
         .filter(p => p.method === 'cash' && inWin(toIso(p.date)))
         .reduce((n, p) => n + (p.amount || 0), 0);
@@ -253,7 +284,7 @@ window.SAFI_STORE = (() => {
       return `${order.id}-${q}`;
     },
     nextCardSerial() {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = SAFI_TIME.day();
       const n = state.orders.filter(o => String(o.in || '').startsWith(today)).length + 1;
       return `${nextOrderId()}-${String(n).padStart(2, '0')}`;
     },
@@ -323,7 +354,7 @@ window.SAFI_STORE = (() => {
     logPrint(kind, orderId) { audit('print.' + kind, orderId || '', kind + ' printed'); save(); },
     logMessage({ to, name, body, orderId, stage, method, customerId, campaignId }) {
       const now = new Date();
-      const fmt = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
+      const fmt = SAFI_TIME.stamp(now);
       const msg = {
         id: nextId('msg'), date: fmt, to, name, body,
         orderId: orderId || '', stage: stage || '', customerId: customerId || '',
@@ -419,7 +450,7 @@ window.SAFI_STORE = (() => {
     createOrder({ customerId, items, total, discount, discountPct, paid, method, txn, notes, due, rewashOf, tag }) {
       const id = nextOrderId();
       const now = new Date();
-      const fmt = (d) => d.toISOString().slice(0, 10) + ' ' + d.toTimeString().slice(0, 5);
+      const fmt = (d) => SAFI_TIME.stamp(d);
 
       // Pre-existing customer counts (used to detect first-timer)
       const cust = customerId ? state.customers.find(c => c.id === customerId) : null;
@@ -567,7 +598,7 @@ window.SAFI_STORE = (() => {
     // ── Approvals queue (management approval for destructive actions) ────
     requestApproval({ action, target, reason, payload }) {
       const now = new Date();
-      const fmt = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
+      const fmt = SAFI_TIME.stamp(now);
       const a = {
         id: nextId('ap'), action, target,
         reason: reason || '',
@@ -579,11 +610,13 @@ window.SAFI_STORE = (() => {
       };
       state.approvals = [a, ...state.approvals];
       save();
+      // Send it to the cloud straight away so Management sees it within seconds.
+      setTimeout(() => window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && window.SAFI_CLOUD.syncNow().catch(() => {}), 300);
       return a;
     },
     decideApproval(id, decision, note) {
       const now = new Date();
-      const fmt = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
+      const fmt = SAFI_TIME.stamp(now);
       const ap = state.approvals.find(a => a.id === id);
       if (!ap) return;
       ap.status = decision;
@@ -621,7 +654,7 @@ window.SAFI_STORE = (() => {
     // ── Customers ──────────────────────────────────────────
     addCustomer({ name, phone, prefix, group, location }) {
       const id = nextId('c');
-      const today = new Date().toISOString().slice(0, 10);
+      const today = SAFI_TIME.day();
       const c = { id, name, phone, prefix: prefix || '+254', group: group || 'normal', location: location || '', joined: today, orders: 0, spend: 0, loyalty: 0 };
       state.customers = [c, ...state.customers];
       save();
@@ -632,7 +665,7 @@ window.SAFI_STORE = (() => {
       save();
     },
     importCustomers(rows) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = SAFI_TIME.day();
       const added = rows.map((r) => {
         // Auto-format phone with spaces based on prefix
         let digits = (r.phone || '').replace(/\D/g, '');
@@ -663,7 +696,7 @@ window.SAFI_STORE = (() => {
     // ── Payments ───────────────────────────────────────────
     recordPayment({ orderId, method, amount, txn, customer }) {
       const now = new Date();
-      const fmt = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
+      const fmt = SAFI_TIME.stamp(now);
       const p = {
         id: nextId('p'), date: fmt, order: orderId,
         customer: customer || '', method, amount: Math.round(amount),
@@ -690,7 +723,7 @@ window.SAFI_STORE = (() => {
     // ── Expenses ───────────────────────────────────────────
     addExpense({ category, label, amount, method, txn, paidBy, notes, linkedOrder, linkedCustomer }) {
       const now = new Date();
-      const fmt = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
+      const fmt = SAFI_TIME.stamp(now);
       const e = {
         id: nextId('ex'), date: fmt, category, label,
         amount: Math.round(amount), method: method || 'cash',
@@ -753,7 +786,7 @@ window.SAFI_STORE = (() => {
     // ── Issues ─────────────────────────────────────────────
     addIssue({ subject, priority, status, order, raisedBy, details }) {
       const now = new Date();
-      const fmt = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
+      const fmt = SAFI_TIME.stamp(now);
       const i = {
         id: nextId('is'), date: fmt, subject,
         priority: priority || 'medium', status: status || 'open',
@@ -775,7 +808,7 @@ window.SAFI_STORE = (() => {
       const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const date = new Date().toISOString().slice(0, 10);
+      const date = SAFI_TIME.day();
       a.href = url;
       a.download = `vazi-safi-backup-${date}.json`;
       a.click();

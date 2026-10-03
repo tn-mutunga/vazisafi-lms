@@ -13,13 +13,13 @@ function ExpensesScreen({ lang, money, role }) {
   const isManagement = role === 'owner';
 
   // Filter
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = SAFI_TIME.day();
   const periodCutoff = period === 'today'
     ? todayStr
     : period === 'week'
-      ? new Date(Date.now() - 7 * 86400e3).toISOString().slice(0, 10)
+      ? SAFI_TIME.day(new Date(Date.now() - 7 * 86400e3))
       : period === 'month'
-        ? new Date(Date.now() - 30 * 86400e3).toISOString().slice(0, 10)
+        ? SAFI_TIME.day(new Date(Date.now() - 30 * 86400e3))
         : null;
   const filtered = D.expenses.filter(e => {
     if (periodCutoff && e.date.slice(0, 10) < periodCutoff) return false;
@@ -248,7 +248,7 @@ function exportExpensesCSV(expenses, cats) {
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `vazi-safi-expenses-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  a.href = url; a.download = `vazi-safi-expenses-${SAFI_TIME.day()}.csv`; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 

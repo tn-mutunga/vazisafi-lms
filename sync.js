@@ -31,7 +31,14 @@
   };
   // For columns that may not be null: fall back to now rather than fail the push.
   const tsNow = (v) => ts(v) || new Date().toISOString();
-  const fromTs = (v) => (v ? String(v).slice(0, 16).replace('T', ' ') : '');
+  // Cloud returns timestamptz in UTC ("...T06:30:00+00:00"). Convert to shop-local
+  // "YYYY-MM-DD HH:MM"; slicing the string kept UTC time and could move the day.
+  const fromTs = (v) => {
+    if (!v) return '';
+    const str = String(v);
+    if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(str)) { const d = new Date(str); if (!isNaN(d)) return SAFI_TIME.stamp(d); }
+    return str.slice(0, 16).replace('T', ' ');
+  };
   const day = (v) => (v ? String(v).slice(0, 10) : null);
 
   let BRANCH = 'main';
@@ -265,7 +272,14 @@
   // cur: per table, the newest cloud updated_at already downloaded.
   const BASE_KEY = () => 'safi_sync_base_v1_' + BRANCH;
   const H = (o) => { const str = JSON.stringify(o); let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + str.length.toString(36); };
-  function loadBase() { try { return JSON.parse(localStorage.getItem(BASE_KEY())) || null; } catch (e) { return null; } }
+  function loadBase() {
+    try {
+      const b = JSON.parse(localStorage.getItem(BASE_KEY())) || null;
+      // v2.1.3: earlier pulls stored UTC times. Re-download everything once with the fix.
+      if (b && !localStorage.getItem('safi_tz_fix_v1_' + BRANCH)) { b.cur = {}; localStorage.setItem('safi_tz_fix_v1_' + BRANCH, '1'); localStorage.setItem(BASE_KEY(), JSON.stringify(b)); }
+      return b;
+    } catch (e) { return null; }
+  }
   function saveBase(b) { try { localStorage.setItem(BASE_KEY(), JSON.stringify(b)); } catch (e) {} }
   const newBase = () => ({ setup: true, h: {}, cur: {} });
   const tick = (b, table, rows) => { for (const r of rows) if (r.updated_at && (!b.cur[table] || r.updated_at > b.cur[table])) b.cur[table] = r.updated_at; };
@@ -360,7 +374,8 @@
         if (OWNER_ONLY.has(t.table) && /row-level security|permission denied|42501|403/i.test(e.message)) {
           changed.forEach(r => { hb[r.id] = fp(t, r); }); continue;
         }
-        throw new Error(`${t.table}: ${e.message}`);
+        // One bad table must not stop the rest (approvals sit near the end of the list).
+        pushErrors.push(`${t.table}: ${e.message}`); continue;
       }
       if (t.key === 'orders') await writeItems(st, changed.map(r => r.id), ids);
       changed.forEach(r => { hb[r.id] = fp(t, r); });
@@ -371,7 +386,7 @@
       const hb = b.h[table] = b.h[table] || {};
       const changed = x.list(st).filter(r => hb[x.id(r)] !== H(r));
       if (!changed.length) continue;
-      await upsert(table, changed, x.conflict);
+      try { await upsert(table, changed, x.conflict); } catch (e) { pushErrors.push(`${table}: ${e.message}`); continue; }
       changed.forEach(r => { hb[x.id(r)] = H(r); });
       sent += changed.length;
       saveBase(b);
@@ -489,6 +504,7 @@
     for (const [table, x] of Object.entries(EXTRA)) { const hb = b.h[table] = {}; for (const r of x.list(st)) hb[x.id(r)] = H(r); }
   }
 
+  let pushErrors = [];
   const API = {
     TABLES,
     isSetup() { return !!(loadBase() || {}).setup; },
@@ -498,9 +514,12 @@
       const b = loadBase();
       if (!b || !b.setup) throw new Error('Choose how this laptop joins two-way sync (Cloud & Updates)');
       refusedCount = 0;
+      pushErrors = [];
       const sent = await pushChanged(b);
+      // Always pull, even when part of the push failed, so requests from other tills arrive.
       const got = await pullChanged(b);
-      C().setConfig({ lastSync: new Date().toISOString(), lastRefusedDeletes: refusedCount || 0 });
+      C().setConfig({ lastSync: new Date().toISOString(), lastRefusedDeletes: refusedCount || 0, lastPushErrors: pushErrors.slice() });
+      if (pushErrors.length) throw new Error('Some changes did not send. ' + pushErrors.join(' | '));
       return { sent, got, refused: refusedCount };
     },
 

@@ -8,7 +8,7 @@
 // window.SAFI_INTEGRITY.scan({ from, to }) -> { flags, staff, totals }
 
 window.SAFI_INTEGRITY = (() => {
-  const iso = (d) => d.toISOString().slice(0, 10);
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const toIso = (s) => String(s || '').replace(' ', 'T');
 
   function range(days) {

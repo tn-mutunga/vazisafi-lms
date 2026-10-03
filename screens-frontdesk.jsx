@@ -13,14 +13,20 @@ const { useState: useStateFD, useMemo: useMemoFD, useEffect: useEffectFD, useRef
 // ─── Front Desk Dashboard ─────────────────────────────────────────────────
 function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
   const D = useStore();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = SAFI_TIME.day();
   const todayOrders = D.orders.filter(o => o.in.startsWith(todayStr));
   const revenueToday = todayOrders.reduce((s, o) => s + (o.total || 0), 0);
-  const pending = D.orders.filter(o => o.status === 'ready').length;
+  const readyOrders = D.orders.filter(o => o.status === 'ready');
+  const pending = readyOrders.length;
+  const pendingBalance = readyOrders.reduce((s, o) => s + Math.max(0, (o.total || 0) - (o.paid || 0)), 0);
+  const collectedToday = (D.payments || []).filter(p => String(p.date).startsWith(todayStr)).reduce((s, p) => s + (p.amount || 0), 0);
   const washing = D.orders.filter(o => o.status === 'washing').length;
   const ironing = D.orders.filter(o => o.status === 'ironing').length;
 
-  const queue = D.orders.filter(o => o.status !== 'collected').slice(0, 6);
+  // Today's intake first, then older work still in the shop.
+  const active = D.orders.filter(o => o.status !== 'collected');
+  const queue = [...active.filter(o => String(o.in).startsWith(todayStr)), ...active.filter(o => !String(o.in).startsWith(todayStr))].slice(0, 8);
+  const isToday = (o) => String(o.in).startsWith(todayStr);
 
   const openShift = window.SAFI_STORE.getOpenShift();
   const [shiftModal, setShiftModal] = useStateFD(false);
@@ -42,9 +48,9 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
       <ShiftModal open={shiftModal} onClose={() => setShiftModal(false)} money={money}/>
 
       <div className="safi-grid safi-grid--4">
-        <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" sparkline={<Sparkline data={D.revenueTrend.slice(-7)} width={140} height={32}/>}/>
-        <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" sparkline={<Sparkline data={D.revenueTrend.slice(-7)} width={140} height={32}/>}/>
-        <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta="ready now"/>
+        <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" delta={`${D.orders.filter(o => o.status !== 'collected').length} active in the shop`}/>
+        <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" delta={`${todayOrders.length} orders · ${money(collectedToday)} collected`}/>
+        <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${pending} ready · ${money(pendingBalance)} to collect`}/>
         <StatCard label={`${t('in_washing', lang)} / ${t('in_ironing', lang)}`} value={`${washing} / ${ironing}`} icon="wash"/>
       </div>
 
@@ -57,7 +63,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
               { label: '#', render: r => <span className="safi-mono">{r.id}</span> },
               { label: 'Customer', render: r => {
                 const c = D.customers.find(x => x.id === r.customer);
-                return <div><div className="safi-cell-strong">{c?.name || 'Walk-in'}</div><div className="safi-cell-sub">{c?.phone || ''}</div></div>;
+                return <div><div className="safi-cell-strong">{c?.name || 'Walk-in'}{isToday(r) ? <span className="safi-today-pill">Today</span> : <span className="safi-cell-sub" style={{ marginLeft: 6 }}>{String(r.in).slice(8, 10)}/{String(r.in).slice(5, 7)}</span>}</div><div className="safi-cell-sub">{c?.phone || ''}</div></div>;
               }},
               { label: 'Items', render: r => <span className="safi-cell-sub">{r.items.reduce((s, i) => s + i.qty, 0)} × items</span> },
               { label: 'Total', render: r => <span className="safi-mono">{money(r.total)}</span> },
@@ -66,6 +72,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
               { label: '', render: r => <button className="safi-rowlink" onClick={(e) => { e.stopPropagation(); setActiveOrderId(r.id); setView('order-detail'); }}>Open →</button> },
             ]}
             rows={queue}
+            rowClass={r => isToday(r) ? 'is-today' : 'is-earlier'}
             onRow={(r) => { setActiveOrderId(r.id); setView('order-detail'); }}
             empty="No active orders. Tap New Order to start one."
           />
@@ -704,8 +711,8 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
   const statusCounts = ['intake', 'washing', 'drying', 'ironing', 'ready', 'collected'].map(s => ({ s, n: D.orders.filter(o => o.status === s).length }));
   const activeCount = D.orders.filter(o => o.status !== 'collected').length;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const yesterdayStr = new Date(Date.now() - 86400e3).toISOString().slice(0, 10);
+  const todayStr = SAFI_TIME.day();
+  const yesterdayStr = SAFI_TIME.day(new Date(Date.now() - 86400e3));
 
   return (
     <>
@@ -1700,7 +1707,7 @@ function exportCustomersCSV(customers) {
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `vazi-safi-customers-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  a.href = url; a.download = `vazi-safi-customers-${SAFI_TIME.day()}.csv`; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
@@ -1709,7 +1716,7 @@ function PaymentsScreen({ lang, money, role }) {
   const D = useStore();
   const isManagement = role === 'owner';
   const [tab, setTab] = useStateFD('all');
-  const [form, setForm] = useStateFD({ order: '', method: 'mpesa', amount: '', txn: '', date: new Date().toISOString().slice(0, 10) });
+  const [form, setForm] = useStateFD({ order: '', method: 'mpesa', amount: '', txn: '', date: SAFI_TIME.day() });
 
   const rows = D.payments.filter(p => tab === 'all' || p.method === tab);
 
@@ -1730,7 +1737,7 @@ function PaymentsScreen({ lang, money, role }) {
       customer: cust?.name || 'Walk-in',
     });
     toast('Payment recorded', 'success');
-    setForm({ order: '', method: 'mpesa', amount: '', txn: '', date: new Date().toISOString().slice(0, 10) });
+    setForm({ order: '', method: 'mpesa', amount: '', txn: '', date: SAFI_TIME.day() });
   }
 
   return (
