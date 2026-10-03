@@ -16,9 +16,12 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
   const todayStr = SAFI_TIME.day();
   const todayOrders = D.orders.filter(o => o.in.startsWith(todayStr));
   const revenueToday = todayOrders.reduce((s, o) => s + (o.total || 0), 0);
-  const readyOrders = D.orders.filter(o => o.status === 'ready');
+  // Pending collection = every order not yet handed back. Drops as each is collected.
+  const readyOrders = D.orders.filter(o => o.status !== 'collected');
   const pending = readyOrders.length;
   const pendingBalance = readyOrders.reduce((s, o) => s + Math.max(0, (o.total || 0) - (o.paid || 0)), 0);
+  const todayExpenses = (D.expenses || []).filter(e => String(e.date).startsWith(todayStr));
+  const expensesToday = todayExpenses.reduce((s, e) => s + (e.amount || 0), 0);
   const collectedToday = (D.payments || []).filter(p => String(p.date).startsWith(todayStr)).reduce((s, p) => s + (p.amount || 0), 0);
   const washing = D.orders.filter(o => o.status === 'washing').length;
   const ironing = D.orders.filter(o => o.status === 'ironing').length;
@@ -50,7 +53,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
       <div className="safi-grid safi-grid--4">
         <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" delta={`${D.orders.filter(o => o.status !== 'collected').length} active in the shop`}/>
         <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" delta={`${todayOrders.length} orders · ${money(collectedToday)} collected`}/>
-        <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${pending} ready · ${money(pendingBalance)} to collect`}/>
+        <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} ready now`}/>
         <StatCard label={`${t('in_washing', lang)} / ${t('in_ironing', lang)}`} value={`${washing} / ${ironing}`} icon="wash"/>
       </div>
 

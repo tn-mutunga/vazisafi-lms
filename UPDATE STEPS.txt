@@ -1,4 +1,4 @@
-VAZI SAFI LMS v2.1.5
+VAZI SAFI LMS v2.1.6
 - Missing orders fixed: each laptop re-downloads everything from the cloud once
   per app start, and later checks overlap 30 minutes, so orders made on the other
   laptop are no longer skipped.

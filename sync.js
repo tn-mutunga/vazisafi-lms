@@ -288,11 +288,22 @@
     sms_templates: { list: st => Object.entries(st.smsTemplates || {}).map(([key, body]) => ({ branch_id: BRANCH, key, body })), id: r => r.key, conflict: 'branch_id,key' },
     void_tags:     { list: st => (st.voidTags || []).map(v => ({ branch_id: BRANCH, tag: String(v.tag), reason: s(v.reason), staff_id: s(v.staff), at: ts(v.at) })), id: r => r.tag, conflict: 'branch_id,tag' },
   };
+  // Rows written by another computer can land with an updated_at slightly older than
+  // our cursor (clock drift / transaction timing) and would be skipped forever.
+  // So: the first pull of each app session re-reads everything, and later pulls
+  // overlap the cursor by 30 minutes. Re-reading a row is harmless.
+  const fullPulled = new Set();
+  const OVERLAP_MS = 30 * 60 * 1000;
   async function selectSince(table, cur, branchOnly) {
     const rows = [];
     const page = 1000;
     let q = `/rest/v1/${table}?select=*&order=updated_at.asc`;
-    if (cur) q += `&updated_at=gt.${encodeURIComponent(cur)}`;
+    if (!fullPulled.has(table)) { fullPulled.add(table); cur = null; }
+    if (cur) {
+      const t = Date.parse(cur);
+      if (!isNaN(t)) cur = new Date(t - OVERLAP_MS).toISOString();
+      q += `&updated_at=gt.${encodeURIComponent(cur)}`;
+    }
     if (branchOnly) q += `&branch_id=eq.${encodeURIComponent(BRANCH)}`;
     for (let from = 0; ; from += page) {
       const part = await C().raw(q, { method: 'GET', headers: { Range: `${from}-${from + page - 1}` } });
