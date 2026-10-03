@@ -1,3 +1,3 @@
-VAZI SAFI LMS v2.1.10
-- Includes 2.1.9 (unique order numbers per laptop) and 2.1.8 (frequent clients first).
-- Orders with no customer (old walk-ins) now show the order number as the name, e.g. SF-2426.
+VAZI SAFI LMS v2.1.11
+- Management edit/delete of an order now asks for the Management PIN.
+- Includes 2.1.8-2.1.10.

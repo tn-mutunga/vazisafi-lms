@@ -338,6 +338,7 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
       ]
     : [
         ['dashboard',  'nav_dashboard', 'dashboard'],
+        ['orders',     'nav_orders',    'list'],
         ['reports',    'nav_reports',   'chart'],
         ['approvals',  'Approvals',     'lock'],
         ['payments',   'nav_payments',  'wallet'],

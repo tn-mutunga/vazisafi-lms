@@ -30,6 +30,7 @@ function App() {
 
   // expose setTweak globally so Management Settings screen can call it
   useAppEffect(() => { window.__safiSetTweak = setTweak; }, [setTweak]);
+  useAppEffect(() => { window.__safiOwnerPin = String(t.ownerPin || ''); }, [t.ownerPin]);
 
   // Apply direction + density to root
   useAppEffect(() => {

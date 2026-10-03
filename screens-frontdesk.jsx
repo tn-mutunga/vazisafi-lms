@@ -1137,15 +1137,30 @@ function AdvanceModal({ open, onClose, order, customer, stages, curIdx }) {
   );
 }
 
+// ─── Management PIN re-entry for edits and deletes ────────────────────────
+function MgmtPinField({ value, onChange }) {
+  if (!window.__safiOwnerPin) return null;
+  return (
+    <label className="safi-mgmt-pin">
+      <span><Icon name="lock" size={13}/> Management PIN</span>
+      <input className="safi-input safi-mono" type="password" inputMode="numeric" maxLength={6} autoComplete="off"
+        value={value} onChange={e => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="••••••"/>
+    </label>
+  );
+}
+
 // ─── Approval request modal ───────────────────────────────────────────────
 function ApprovalRequestModal({ open, onClose, action, target, title, description, confirmLabel, isManagement, danger, onDirectApprove }) {
   const [reason, setReason] = useStateFD('');
+  const [pin, setPin] = useStateFD('');
 
   useEffectFD(() => { if (open) setReason(''); }, [open]);
 
   function submit() {
     if (isManagement) {
+      if (window.__safiOwnerPin && pin !== window.__safiOwnerPin) { toast('Wrong Management PIN', 'error'); return; }
       onDirectApprove();
+      setPin('');
       onClose();
       return;
     }
@@ -1162,6 +1177,7 @@ function ApprovalRequestModal({ open, onClose, action, target, title, descriptio
         <Button kind={danger ? 'primary' : 'primary'} icon="check" onClick={submit}>{confirmLabel}</Button>
       </>}>
       <p className="safi-cell-sub" style={{ marginTop: 0 }}>{description}</p>
+      {isManagement && <MgmtPinField value={pin} onChange={setPin}/>}
       {!isManagement && (
         <div className="safi-form">
           <div className="safi-callout">
@@ -1178,6 +1194,7 @@ function ApprovalRequestModal({ open, onClose, action, target, title, descriptio
 // ─── Edit Order modal (with approval if not management) ──────────────────
 function EditOrderModal({ open, onClose, order, isManagement }) {
   const D = useStore();
+  const [pin, setPin] = useStateFD('');
   const [items, setItems]   = useStateFD([]);
   const [notes, setNotes]   = useStateFD('');
   const [reason, setReason] = useStateFD('');
@@ -1215,6 +1232,8 @@ function EditOrderModal({ open, onClose, order, isManagement }) {
   function submit() {
     const payload = { items, total: newTotal, notes };
     if (isManagement) {
+      if (window.__safiOwnerPin && pin !== window.__safiOwnerPin) { toast('Wrong Management PIN', 'error'); return; }
+      setPin('');
       window.SAFI_STORE.updateOrder(order.id, payload);
       toast('Order updated', 'success');
       onClose();
@@ -1235,6 +1254,8 @@ function EditOrderModal({ open, onClose, order, isManagement }) {
         <Button kind="primary" icon="check" onClick={submit}>{isManagement ? 'Save changes' : 'Request approval'}</Button>
       </>}>
       <div className="safi-form">
+        {isManagement && order.status === 'collected' && <div className="safi-callout"><Icon name="alert" size={14}/><span>This order has already been collected. Edit only to correct a mistake.</span></div>}
+        {isManagement && <MgmtPinField value={pin} onChange={setPin}/>}
         {!isManagement && (
           <div className="safi-callout">
             <Icon name="lock" size={14}/>
