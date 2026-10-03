@@ -408,6 +408,7 @@
   // Download rows that changed in the cloud since last time and merge them in. A row
   // that also changed here (and has not been sent yet) is left alone; it goes up next.
   async function pullChanged(b) {
+    const myGen = pullGen;
     const next = JSON.parse(S().snapshot());
     let got = 0;
     const pulledOrders = [];
@@ -501,6 +502,9 @@
     }
     tick(b, '__deleted', dels);
     saveBase(b);
+    // A full "Pull cloud" ran while this sync was in flight: our snapshot is stale and
+    // would undo it. Skip; the next sync picks up anything still missing.
+    if (myGen !== pullGen) return 0;
     if (got) S().importJSON(JSON.stringify(next));
     return got;
   }
@@ -516,6 +520,7 @@
   }
 
   let pushErrors = [];
+  let pullGen = 0;
   const API = {
     TABLES,
     isSetup() { return !!(loadBase() || {}).setup; },
@@ -643,6 +648,7 @@
     // Replaces the local collections outright. The caller confirms first — this is
     // "the cloud is right, make this laptop match", not a merge.
     async pull(onProgress) {
+      pullGen++;
       const next = JSON.parse(S().snapshot());
       for (const t of TABLES) {
         onProgress && onProgress(t.table);
@@ -672,7 +678,20 @@
       next.voidTags = tags.filter(r => r.branch_id === BRANCH)
         .map(r => ({ tag: r.tag, reason: r.reason, staff: r.staff_id, at: r.at }));
 
-      return S().importJSON(JSON.stringify(next));
+      pullGen++;
+      const ok = S().importJSON(JSON.stringify(next));
+      // This laptop now matches the cloud: record that, so the next sync neither
+      // re-sends every row nor skips cloud rows as "changed here".
+      const b = loadBase();
+      if (b) {
+        const now = S().get();
+        for (const t of TABLES) {
+          const hb = b.h[t.table] = {};
+          for (const r of (now[t.key] || [])) hb[r.id] = fp(t, r);
+        }
+        saveBase(b);
+      }
+      return ok;
     },
 
     // Row counts on both sides, so the owner can see at a glance whether the

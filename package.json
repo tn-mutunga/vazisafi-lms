@@ -1,6 +1,6 @@
 {
   "name": "vazisafi-lms",
-  "version": "2.1.11",
+  "version": "2.2.1",
   "description": "VaziSafi Laundry Management System — desktop POS shell",
   "productName": "VaziSafi LMS",
   "main": "desktop/main.js",
