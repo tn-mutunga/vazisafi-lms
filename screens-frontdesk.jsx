@@ -53,8 +53,8 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
       <div className="safi-grid safi-grid--4">
         <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" delta={`${D.orders.filter(o => o.status !== 'collected').length} active in the shop`}/>
         <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" delta={`${todayOrders.length} orders · ${money(collectedToday)} collected`}/>
-        <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} ready now`}/>
-        <StatCard label={`${t('in_washing', lang)} / ${t('in_ironing', lang)}`} value={`${washing} / ${ironing}`} icon="wash"/>
+        <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} orders ready now`}/>
+        <StatCard label="Washing / Drying / Ready / Collected" value={`${washing} / ${D.orders.filter(o => o.status === 'drying').length} / ${D.orders.filter(o => o.status === 'ready').length} / ${todayOrders.filter(o => o.status === 'collected').length}`} icon="wash" delta="Today's Orders Stats"/>
       </div>
 
       {window.ServiceClientsToday && <window.ServiceClientsToday/>}
@@ -179,9 +179,12 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   const total = Math.max(0, subtotal - discount);
   const balance = total;
 
-  const filteredCust = D.customers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search));
+  const filteredCust = D.customers
+    .filter(c => (c.name || '').toLowerCase().includes(search.toLowerCase()) || String(c.phone || '').includes(search))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base' }));
 
   function handleSave(thenPrint) {
+    if (!customerId) { toast('Pick a customer or add a new one first', 'error'); return; }
     if (items.length === 0 || subtotal <= 0) {
       toast('Add at least one priced service', 'error');
       return;
@@ -260,8 +263,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
               <div className="safi-cust-pick__search">
                 <Icon name="search" size={16}/>
                 <input placeholder="Search by name or phone…" value={search} onChange={e => { setSearch(e.target.value); setWalkIn(false); }}/>
-                <button className={`safi-cust-pick__walk ${walkIn ? 'is-active' : ''}`} onClick={() => { setCustomerId(''); setSearch(''); setGroup('normal'); setWalkIn(true); }}>Walk-in</button>
-                <button className="safi-cust-pick__walk" onClick={() => setShowAdd(true)}>+ New</button>
+                <button className="safi-cust-pick__walk" onClick={() => setShowAdd(true)}>+ New customer</button>
               </div>
               <div className="safi-cust-pick__list">
                 {!walkIn && filteredCust.slice(0, 8).map(c => (
@@ -274,7 +276,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                     <GroupBadge group={c.group}/>
                   </button>
                 ))}
-                {!walkIn && filteredCust.length === 0 && <div className="safi-cell-sub" style={{ padding: 12 }}>No match. Use Walk-in or + New.</div>}
+                {!walkIn && filteredCust.length === 0 && <div className="safi-cell-sub" style={{ padding: 12 }}>No match. Tap + New customer.</div>}
                 {walkIn && <div className="safi-cell-sub" style={{ padding: 12 }}>Walk-in selected. No customer record will be saved. <button className="safi-rowlink" onClick={() => setWalkIn(false)}>Pick a customer instead</button></div>}
               </div>
               {!customerId && walkIn && (
@@ -694,7 +696,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
   const D = useStore();
   const [filter, setFilter] = useStateFD('active'); // default: active orders only
   const [q, setQ] = useStateFD('');
-  const [dateFilter, setDateFilter] = useStateFD(''); // empty = no date filter
+  const [dateFilter, setDateFilter] = useStateFD(SAFI_TIME.day()); // default: today; empty = any date
 
   const filtered = D.orders.filter(o => {
     // Status filter
@@ -711,8 +713,10 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
     return true;
   });
 
-  const statusCounts = ['intake', 'washing', 'drying', 'ironing', 'ready', 'collected'].map(s => ({ s, n: D.orders.filter(o => o.status === s).length }));
-  const activeCount = D.orders.filter(o => o.status !== 'collected').length;
+  // Counts follow the chosen day (Today / Yesterday / a date); Any date = everything.
+  const dateOrders = dateFilter ? D.orders.filter(o => String(o.in).startsWith(dateFilter)) : D.orders;
+  const statusCounts = ['intake', 'washing', 'drying', 'ironing', 'ready', 'collected'].map(s => ({ s, n: dateOrders.filter(o => o.status === s).length }));
+  const activeCount = dateOrders.filter(o => o.status !== 'collected').length;
 
   const todayStr = SAFI_TIME.day();
   const yesterdayStr = SAFI_TIME.day(new Date(Date.now() - 86400e3));
@@ -721,7 +725,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
     <>
       <Topbar
         title={t('nav_orders', lang)}
-        subtitle={`${activeCount} active · ${D.orders.length} all-time${dateFilter ? ` · viewing ${dateFilter}` : ''}`}
+        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter} · ` : ''}${activeCount} active · ${D.orders.length} all-time`}
         right={<>
           {role === 'owner' && <Button kind="ghost" icon="print" onClick={() => window.print()}>{t('print', lang)}</Button>}
           <Button kind="primary" icon="plus" onClick={() => setView('new-order')}>{t('new_order', lang)}</Button>
@@ -733,7 +737,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
           <span>Active</span><b>{activeCount}</b>
         </button>
         <button className={`safi-status-strip__btn ${filter === 'all' ? 'is-active' : ''}`} onClick={() => setFilter('all')}>
-          <span>All time</span><b>{D.orders.length}</b>
+          <span>{dateFilter ? 'All' : 'All time'}</span><b>{dateOrders.length}</b>
         </button>
         {statusCounts.map(({ s, n }) => (
           <button key={s} className={`safi-status-strip__btn ${filter === s ? 'is-active' : ''}`} onClick={() => setFilter(s)}>
