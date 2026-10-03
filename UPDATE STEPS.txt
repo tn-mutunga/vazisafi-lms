@@ -1,28 +1,7 @@
-VAZI SAFI LMS v2.1.4
-- Fixes the Mac dashboard not matching Windows. Dates were saved in UTC, and
-  times downloaded from the cloud came back 3 hours behind Nairobi. Every
-  laptop now saves and shows shop-local time.
-- After updating, each laptop downloads its cloud orders once more with the
-  corrected times (happens automatically on the first sync).
-- Shift cash totals use the same fixed times.
-- Front Desk: Pending Collection shows "N ready · KES X to collect"; Revenue
-  Today shows the amount collected.
-- Management: "Daily revenue" for the chosen month replaces the 14-day chart.
-- Approvals reach Management on the other laptop:
-  * A request is sent to the cloud the moment staff submit it.
-  * If one part of a sync fails, the rest (including approvals) still goes, and
-    the laptop still downloads the other till's changes.
-  * Approvals screen: "Check for new requests" button, checks every 30 s while
-    open, and warns when Live sync is off.
-  * Management gets a pop-up and a short beep when a new request arrives.
-- IMPORTANT: turn Live sync ON on BOTH laptops (Cloud & Updates).
-
-Publish (Mac Terminal):
-cd ~/Documents/"Vazi Safi"/"Laundry Management System" && \
-rsync -av ~/Downloads/vazisafi-lms-v2.1.4/ ./ && \
-grep -q '"version": "2.1.4"' package.json && \
-git add . && git commit -m "v2.1.4: shop-local dates everywhere, cloud times fixed, month revenue chart" && \
-git push && git tag v2.1.4 && git push origin v2.1.4 && echo "PUSHED v2.1.4"
-
-Both laptops update themselves (update banner, click to restart).
-Then on each laptop: Cloud & Updates > Sync now, and compare the two dashboards.
+VAZI SAFI LMS v2.1.5
+- Missing orders fixed: each laptop re-downloads everything from the cloud once
+  per app start, and later checks overlap 30 minutes, so orders made on the other
+  laptop are no longer skipped.
+- Pending Collection: all orders not yet collected, with KES still to collect.
+  Drops as orders are collected and paid.
+- Includes everything from 2.1.4 (dates, approvals, queue colours, month chart).
