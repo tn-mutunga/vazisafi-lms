@@ -68,7 +68,7 @@ function PeriodSummary({ money }) {
     return D.orders.filter(o => {
       const d = new Date(o.in);
       return d >= from && (!to || d <= to);
-    }).reduce((s, o) => s + (o.paid || 0), 0);
+    }).reduce((s, o) => s + (o.total || 0), 0);
   }
   function sumOrdersGross(from, to) {
     return D.orders.filter(o => { const d = new Date(o.in); return d >= from && (!to || d <= to); })
@@ -730,7 +730,7 @@ function TimeSeries({ money }) {
     for (let i = 4; i >= 0; i--) {
       const y = now.getFullYear() - i;
       const key = String(y);
-      const rev = D.orders.filter(o => String(o.in).startsWith(key)).reduce((s, o) => s + (o.paid || 0), 0);
+      const rev = D.orders.filter(o => String(o.in).startsWith(key)).reduce((s, o) => s + (o.total || 0), 0);
       const exp = D.expenses.filter(e => String(e.date).startsWith(key)).reduce((s, e) => s + e.amount, 0);
       points.push({ label: key, rev, exp, profit: rev - exp });
     }
@@ -739,7 +739,7 @@ function TimeSeries({ money }) {
       const d = new Date(now); d.setDate(d.getDate() - i);
       const key = dayKey(d);
       const label = d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
-      const rev = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.paid || 0), 0);
+      const rev = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.total || 0), 0);
       const exp = D.expenses.filter(e => e.date.startsWith(key)).reduce((s, e) => s + e.amount, 0);
       points.push({ label, rev, exp, profit: rev - exp });
     }
@@ -754,7 +754,7 @@ function TimeSeries({ money }) {
       if (monthYear !== now.getFullYear() && d.getMonth() > endMonth) break;
       const key = monthKey(d);
       const label = d.toLocaleDateString('en-KE', { month: 'short', year: '2-digit' });
-      const rev = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.paid || 0), 0);
+      const rev = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.total || 0), 0);
       const exp = D.expenses.filter(e => e.date.startsWith(key)).reduce((s, e) => s + e.amount, 0);
       points.push({ label, rev, exp, profit: rev - exp });
     }

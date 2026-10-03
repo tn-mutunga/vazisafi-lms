@@ -151,9 +151,13 @@ function init({ app, dialog, getWindow, onStatus }) {
       'exec >>"$LOG" 2>&1; echo "=== $(date) update to ' + staged.version + '"',
       // 1. Prepare the NEW copy fully before touching the installed app:
       //    strip quarantine, ad-hoc sign, verify. If any step fails, keep the old app.
+      // Inside-out ad-hoc signing: --deep fails on Electron Framework ("internal error in Code Signing subsystem").
+      'signapp() { A="$1"; find "$A/Contents" -depth \\( -name "*.framework" -o -name "*.app" -o -name "*.dylib" -o -name "*.so" -o -name "*.node" \\) -print0 | while IFS= read -r -d "" f; do /usr/bin/codesign --remove-signature "$f" 2>/dev/null; /usr/bin/codesign --force --sign - --timestamp=none "$f" || { echo "sign failed: $f"; return 1; }; done || return 1; /usr/bin/codesign --remove-signature "$A" 2>/dev/null; /usr/bin/codesign --force --sign - --timestamp=none "$A"; }',
+      // Refuse to sign on a nearly-full disk (half-written signatures get the app flagged as malware).
+      'FREE=$(df -k "$HOME" | awk \'NR==2{print $4}\'); if [ "$FREE" -lt 2000000 ]; then echo "not enough disk space ($FREE KB free)"; open ' + q(bundle) + '; exit 1; fi',
       `NEW=${q(staged.appPath)}`,
       '/usr/bin/xattr -cr "$NEW"',
-      '/usr/bin/codesign --force --deep --sign - --timestamp=none "$NEW" || { echo "sign failed"; open ' + q(bundle) + '; exit 1; }',
+      'signapp "$NEW" || { echo "sign failed"; open ' + q(bundle) + '; exit 1; }',
       '/usr/bin/codesign --verify --deep --strict "$NEW" || { echo "verify failed"; open ' + q(bundle) + '; exit 1; }',
       // 2. Swap.
       `rm -rf ${q(bundle + '.old')}`,
@@ -161,7 +165,7 @@ function init({ app, dialog, getWindow, onStatus }) {
       `if ! /usr/bin/ditto --norsrc --noextattr --noqtn "$NEW" ${q(bundle)}; then rm -rf ${q(bundle)}; mv ${q(bundle + '.old')} ${q(bundle)}; open ${q(bundle)}; exit 1; fi`,
       // 3. Clean up anything the copy picked up, re-sign in place, verify again.
       `/usr/bin/xattr -cr ${q(bundle)}`,
-      `/usr/bin/codesign --force --deep --sign - --timestamp=none ${q(bundle)}`,
+      `signapp ${q(bundle)}`,
       `if ! /usr/bin/codesign --verify --deep --strict ${q(bundle)}; then echo "final verify failed, rolling back"; rm -rf ${q(bundle)}; mv ${q(bundle + '.old')} ${q(bundle)}; open ${q(bundle)}; exit 1; fi`,
       'echo "ok"',
       `rm -rf ${q(bundle + '.old')} ${q(work)}`,

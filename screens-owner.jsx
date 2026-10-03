@@ -5,14 +5,18 @@ const { useState: useStateOw, useRef: useRefOw } = React;
 function OwnerDashboard({ lang, money, setView }) {
   const D = useStore();
   const todayStr = new Date().toISOString().slice(0, 10);
-  const today = D.orders.filter(o => o.in.startsWith(todayStr)).reduce((s, o) => s + o.paid, 0);
+  // Revenue = value of orders taken (sales). Collected = money actually received.
+  const today = D.orders.filter(o => o.in.startsWith(todayStr)).reduce((s, o) => s + (o.total || 0), 0);
+  const collectedToday = D.payments.filter(p => String(p.date).startsWith(todayStr)).reduce((s, p) => s + (p.amount || 0), 0);
   const avgOrder = D.orders.length ? Math.round(D.orders.reduce((s, o) => s + o.total, 0) / D.orders.length) : 0;
   const totalExpenses = D.expenses.reduce((s, e) => s + e.amount, 0);
   const _n = new Date();
   const localToday = `${_n.getFullYear()}-${String(_n.getMonth() + 1).padStart(2, '0')}-${String(_n.getDate()).padStart(2, '0')}`;
   const expensesTodayList = D.expenses.filter(e => String(e.date).startsWith(localToday));
   const expensesToday = expensesTodayList.reduce((s, e) => s + e.amount, 0);
-  const totalRevenue = D.orders.reduce((s, o) => s + o.paid, 0);
+  const totalRevenue = D.orders.reduce((s, o) => s + (o.total || 0), 0);
+  const totalCollected = D.orders.reduce((s, o) => s + (o.paid || 0), 0);
+  const outstanding = Math.max(0, totalRevenue - totalCollected);
   const netProfit = totalRevenue - totalExpenses;
 
   const topCustomers = [...D.customers].sort((a, b) => b.spend - a.spend).slice(0, 5);
@@ -53,7 +57,7 @@ function OwnerDashboard({ lang, money, setView }) {
     const d = new Date(); d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     const label = d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
-    const v = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.paid || 0), 0);
+    const v = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.total || 0), 0);
     last14.push({ d: label, v });
   }
 
@@ -69,9 +73,9 @@ function OwnerDashboard({ lang, money, setView }) {
       />
 
       <div className="safi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
-        <StatCard label={t('revenue_today', lang)} value={money(today)} delta={`${todayOrders.length} orders today`} icon="wallet"/>
+        <StatCard label={t('revenue_today', lang)} value={money(today)} delta={`${todayOrders.length} orders · ${money(collectedToday)} collected`} icon="wallet"/>
         <StatCard label="Expenses today" value={money(expensesToday)} deltaKind="down" delta={`${expensesTodayList.length} ${expensesTodayList.length === 1 ? 'entry' : 'entries'} today`} icon="box"/>
-        <StatCard label="Total revenue" value={money(totalRevenue)} delta="all-time received" icon="chart"/>
+        <StatCard label="Total revenue" value={money(totalRevenue)} delta={`${money(totalCollected)} collected · ${money(outstanding)} unpaid`} icon="chart"/>
         <StatCard label="Total expenses" value={money(totalExpenses)} deltaKind="down" delta="all-time" icon="box"/>
         <div className={`safi-stat safi-stat--accent`}>
           <div className="safi-stat__top">
@@ -189,7 +193,15 @@ function ReportsScreen({ lang, money }) {
   const [tab, setTab] = useStateOw('daily');
   const todayStr = new Date().toISOString().slice(0, 10);
   const todays = D.orders.filter(o => o.in.startsWith(todayStr));
-  const todayRev = todays.reduce((s, o) => s + o.paid, 0);
+  const periodDays = tab === 'daily' ? 1 : tab === 'weekly' ? 7 : tab === 'monthly' ? 30 : 36500;
+  const cutoff = new Date(Date.now() - (periodDays - 1) * 86400e3).toISOString().slice(0, 10);
+  const periodOrders = tab === 'daily' ? todays : D.orders.filter(o => o.in.slice(0, 10) >= cutoff);
+  const todayRev = periodOrders.reduce((s, o) => s + (o.total || 0), 0);
+  const periodCollected = periodOrders.reduce((s, o) => s + (o.paid || 0), 0);
+  const periodByService = D.services.map(svc => ({
+    label: svc.name,
+    value: periodOrders.reduce((s, o) => s + o.items.filter(it => it.svc === svc.id).reduce((ss, it) => ss + (it.price || 0), 0), 0),
+  })).filter(r => r.value > 0).sort((a, b) => b.value - a.value);
 
   const totalsByMethod = ['mpesa', 'bank'].map(m => {
     const list = D.payments.filter(p => p.method === m && (tab !== 'daily' || p.date.startsWith(todayStr)));
@@ -238,15 +250,16 @@ function ReportsScreen({ lang, money }) {
           <div className="safi-report__grid">
             <div className="safi-report__stat">
               <div className="safi-cell-sub">Gross revenue</div>
-              <div className="safi-report__big safi-mono">{money(tab === 'daily' ? todayRev : totalAll)}</div>
+              <div className="safi-report__big safi-mono">{money(todayRev)}</div>
+              <div className="safi-cell-sub">{money(periodCollected)} collected · {money(Math.max(0, todayRev - periodCollected))} unpaid</div>
             </div>
             <div className="safi-report__stat">
               <div className="safi-cell-sub">Orders</div>
-              <div className="safi-report__big">{tab === 'daily' ? todays.length : D.orders.length}</div>
+              <div className="safi-report__big">{periodOrders.length}</div>
             </div>
             <div className="safi-report__stat">
               <div className="safi-cell-sub">Avg order value</div>
-              <div className="safi-report__big safi-mono">{money(D.orders.length ? Math.round(D.orders.reduce((s, o) => s + o.total, 0) / D.orders.length) : 0)}</div>
+              <div className="safi-report__big safi-mono">{money(periodOrders.length ? Math.round(todayRev / periodOrders.length) : 0)}</div>
             </div>
             <div className="safi-report__stat">
               <div className="safi-cell-sub">Customers</div>
@@ -278,7 +291,7 @@ function ReportsScreen({ lang, money }) {
           </table>
 
           <h4 className="safi-report__h4">By service</h4>
-          <HBar data={D.revenueByService}/>
+          {periodByService.length ? <HBar data={periodByService}/> : <p className="safi-cell-sub">No orders in this period.</p>}
 
           <h4 className="safi-report__h4">M-Pesa transaction codes (for audit)</h4>
           {mpesaPayments.length === 0 ? (

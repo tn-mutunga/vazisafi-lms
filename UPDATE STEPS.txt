@@ -1,14 +1,26 @@
-VAZI SAFI LMS v2.1.2 (includes 2.1.1)
-- First-time customer who also BUYS laundry bags now still gets the free welcome bag
-  (e.g. buys 3 = 3 charged + 1 free). Same for the free dry cleaning bag.
+VAZI SAFI LMS v2.1.3
+- Dashboard revenue now counts the value of orders taken (was only counting money received,
+  so unpaid orders showed KES 0). Collected and unpaid amounts shown underneath.
+- Net profit, Period summary, 14-day chart and Revenue vs Expenses use order totals.
+- Reports > By service now uses real orders for the selected period (was demo figures).
+- Mac updater: signs the app piece by piece (fixes "sign failed" since 2.1.0) and refuses
+  to update when the disk has less than 2 GB free.
 
 Publish (Mac Terminal):
 cd ~/Documents/"Vazi Safi"/"Laundry Management System" && \
-rsync -av ~/Downloads/vazisafi-lms-v2.1.2/ ./ && \
-grep -q '"version": "2.1.2"' package.json && \
-git add . && git commit -m "v2.1.2: free welcome bag even when bags are bought" && \
-git push && git tag v2.1.2 && git push origin v2.1.2 && echo "PUSHED v2.1.2"
+rsync -av ~/Downloads/vazisafi-lms-v2.1.3/ ./ && \
+grep -q '"version": "2.1.3"' package.json && \
+git add . && git commit -m "v2.1.3: revenue counts order value, real by-service report, Mac updater signing fix" && \
+git push && git tag v2.1.3 && git push origin v2.1.3 && echo "PUSHED v2.1.3"
 
-If 2.1.1 was never pushed, this covers it too.
-Mac still on 2.0.9? Do the one-time step from 2.1.1 first:
-rm -rf ~/Library/"Application Support"/"VaziSafi LMS"/pending-update
+Windows shop PC: updates itself (update banner appears, click to restart).
+
+Mac: the installed app cannot update itself this once. After GitHub finishes the build:
+1. Free disk space first (need 5 GB+):  df -h /
+2. rm -rf ~/Library/"Application Support"/"VaziSafi LMS"/pending-update
+3. rm -rf "/Applications/VaziSafi LMS.app"
+4. Download the 2.1.3 Mac zip from GitHub Releases, then:
+   ditto -x -k ~/Downloads/<the-2.1.3-zip>.zip /Applications
+   xattr -cr "/Applications/VaziSafi LMS.app"
+   open "/Applications/VaziSafi LMS.app"
+From 2.1.3 on, Mac updates install on their own.

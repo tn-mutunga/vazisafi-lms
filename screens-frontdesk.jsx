@@ -15,7 +15,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
   const D = useStore();
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayOrders = D.orders.filter(o => o.in.startsWith(todayStr));
-  const revenueToday = todayOrders.reduce((s, o) => s + (o.paid || 0), 0);
+  const revenueToday = todayOrders.reduce((s, o) => s + (o.total || 0), 0);
   const pending = D.orders.filter(o => o.status === 'ready').length;
   const washing = D.orders.filter(o => o.status === 'washing').length;
   const ironing = D.orders.filter(o => o.status === 'ironing').length;
