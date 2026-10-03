@@ -181,7 +181,12 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
 
   const filteredCust = D.customers
     .filter(c => (c.name || '').toLowerCase().includes(search.toLowerCase()) || String(c.phone || '').includes(search))
-    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base' }));
+    .sort((a, b) => {
+      // Most frequent clients first (by number of orders), then most recent, then A–Z.
+      const n = (c) => D.orders.filter(o => o.customer === c.id).length || c.orders || 0;
+      const last = (c) => D.orders.filter(o => o.customer === c.id).reduce((m, o) => (o.in > m ? o.in : m), '');
+      return (n(b) - n(a)) || last(b).localeCompare(last(a)) || (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base' });
+    });
 
   function handleSave(thenPrint) {
     if (!customerId) { toast('Pick a customer or add a new one first', 'error'); return; }

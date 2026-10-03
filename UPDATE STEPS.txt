@@ -1,8 +1,2 @@
-VAZI SAFI LMS v2.1.7
-- Orders page opens on Today. The Active/All/stage counts follow the chosen day
-  (Today, Yesterday, a date). Any date shows all-time counts.
-- Walk-in removed. Every order needs a customer: pick one or tap + New customer.
-- Customer list in New Order is alphabetical.
-- Pending Collection: "N orders ready now".
-- Dashboard card now shows Washing / Drying / Ready / Collected
-  (Collected = today's orders already collected).
+VAZI SAFI LMS v2.1.8
+- New Order customer list: most frequent clients first (then most recent).
