@@ -298,7 +298,9 @@
     const rows = [];
     const page = 1000;
     let q = `/rest/v1/${table}?select=*&order=updated_at.asc`;
-    if (!fullPulled.has(table)) { fullPulled.add(table); cur = null; }
+    // Never re-read the deletion log from the start: old deletions of re-used order
+    // numbers (SF-2418..) would delete today's real orders with the same number.
+    if (table !== 'deleted_rows' && !fullPulled.has(table)) { fullPulled.add(table); cur = null; }
     if (cur) {
       const t = Date.parse(cur);
       if (!isNaN(t)) cur = new Date(t - OVERLAP_MS).toISOString();
@@ -409,6 +411,7 @@
   // that also changed here (and has not been sent yet) is left alone; it goes up next.
   async function pullChanged(b) {
     const myGen = pullGen;
+    const before = JSON.stringify({ h: b.h, cur: b.cur });
     const next = JSON.parse(S().snapshot());
     let got = 0;
     const pulledOrders = [];
@@ -488,6 +491,10 @@
         const i = list.findIndex(r => r.id === d.row_id);
         if (i < 0) { delete hb[d.row_id]; continue; }
         if (hb[d.row_id] !== fp(t, list[i])) continue; // edited here since; the edit wins
+        // A row created after the deletion is a different record that re-used the id.
+        const delAt = Date.parse(d.deleted_at || d.updated_at || '');
+        const rowAt = Date.parse(String(list[i].in || list[i].date || '').replace(' ', 'T'));
+        if (!isNaN(delAt) && !isNaN(rowAt) && rowAt > delAt - 60000) continue;
         list.splice(i, 1);
         delete hb[d.row_id];
         got++;
@@ -501,12 +508,47 @@
       }
     }
     tick(b, '__deleted', dels);
-    saveBase(b);
     // A full "Pull cloud" ran while this sync was in flight: our snapshot is stale and
-    // would undo it. Skip; the next sync picks up anything still missing.
-    if (myGen !== pullGen) return 0;
+    // would undo it. Roll the cursors back so nothing fetched here is skipped later.
+    // (Before v2.2.3 the cursors were saved first, so those rows were never fetched
+    // again — the cause of one laptop sitting N orders behind the cloud.)
+    if (myGen !== pullGen) { const o = JSON.parse(before); b.h = o.h; b.cur = o.cur; return 0; }
+    saveBase(b);
     if (got) S().importJSON(JSON.stringify(next));
     return got;
+  }
+
+  // Safety net: every order in the cloud must be on this laptop. Fetch the list of
+  // cloud order ids and pull in any that are missing, whatever the cursors say.
+  async function reconcileOrders(b) {
+    const ids = [];
+    for (let from = 0; ; from += 1000) {
+      const part = await C().raw(`/rest/v1/orders?select=id&branch_id=eq.${encodeURIComponent(BRANCH)}&order=id`, { method: 'GET', headers: { Range: `${from}-${from + 999}` } });
+      if (!part || !part.length) break;
+      ids.push(...part.map(r => r.id));
+      if (part.length < 1000) break;
+    }
+    const st = S().get();
+    const have = new Set((st.orders || []).map(o => o.id));
+    const missing = ids.filter(id => !have.has(id));
+    C().setConfig({ lastCloudOrders: ids.length, lastLocalOrders: have.size + missing.length, lastReconcile: new Date().toISOString() });
+    if (!missing.length) return 0;
+    const t = TABLES.find(x => x.key === 'orders');
+    const next = JSON.parse(S().snapshot());
+    const hb = b.h.orders = b.h.orders || {};
+    for (const part of chunk(missing, 100)) {
+      const rows = await C().raw(`/rest/v1/orders?select=*&id=in.(${part.map(id => `"${id}"`).join(',')})`, { method: 'GET' }) || [];
+      const items = await itemsFor(rows.map(r => r.id));
+      for (const row of rows) {
+        const d = t.down(row); d.items = items[d.id] || [];
+        if (!next.orders.some(o => o.id === d.id)) next.orders.push(d);
+        hb[d.id] = fp(t, d);
+      }
+    }
+    next.orders.sort((a, z) => String(z.in).localeCompare(String(a.in)));
+    S().importJSON(JSON.stringify(next));
+    saveBase(b);
+    return missing.length;
   }
 
   async function skipOldDeletions(b) {
@@ -533,7 +575,8 @@
       pushErrors = [];
       const sent = await pushChanged(b);
       // Always pull, even when part of the push failed, so requests from other tills arrive.
-      const got = await pullChanged(b);
+      let got = await pullChanged(b);
+      try { got += await reconcileOrders(b); } catch (e) { pushErrors.push('Check against cloud: ' + e.message); }
       C().setConfig({ lastSync: new Date().toISOString(), lastRefusedDeletes: refusedCount || 0, lastPushErrors: pushErrors.slice() });
       if (pushErrors.length) throw new Error('Some changes did not send. ' + pushErrors.join(' | '));
       return { sent, got, refused: refusedCount };

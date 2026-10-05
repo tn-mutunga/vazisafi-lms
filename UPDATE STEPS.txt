@@ -1,7 +1,9 @@
-VAZI SAFI LMS v2.2.2
-- Phone numbers: one format, 9 digits "729 480 592". +254 sits in the code box only. Existing customers fixed automatically.
-- Order numbers show as SF-2446 (the laptop code stays hidden inside).
-- Revenue Today (Front Desk) shows Laundry / Dry Cleaning / Shoes / Other.
-- Settings (receipt details, PIN) and the current teller now sync to every laptop.
-- Sync every 10 minutes, plus on open, on wake, when internet returns, and on close.
-- Edit order: customer can be changed (fixes orders showing their number as the name).
+VAZI SAFI LMS v2.2.3
+- FIX: a laptop could fall permanently behind the cloud. If a sync was cut short by
+  "Pull cloud", it still saved its "already fetched up to here" marker, so those
+  orders were never fetched again. Now the marker is only saved when the sync finishes.
+- NEW safety check on every sync: the laptop compares its order list with the cloud's
+  and downloads any order it is missing. Cloud & Updates shows
+  "Orders: cloud / this laptop" with a tick when they match.
+- Revenue Today card: Laundry (sky blue) and Dry Cleaning (purple) on line 1,
+  Shoes (orange) and Other (grey) on line 2. All four show even at KES 0.

@@ -156,6 +156,7 @@ function CloudCard() {
           <div><span>Internet</span><b>{st.online ? 'Online' : 'Offline — the app still works'}</b></div>
           <div><span>Last cloud backup</span><b>{st.lastBackup ? new Date(st.lastBackup).toLocaleString() : 'Never'}</b></div>
           <div><span>Last live sync</span><b>{st.lastSync ? new Date(st.lastSync).toLocaleString() : 'Never'}</b></div>
+          {st.lastCloudOrders != null && <div><span>Orders: cloud / this laptop</span><b>{st.lastCloudOrders} / {(window.SAFI_STORE.get().orders || []).length}{st.lastCloudOrders === (window.SAFI_STORE.get().orders || []).length ? ' ✓ matching' : ''}</b></div>}
         </div>
       </Card>
 

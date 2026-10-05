@@ -34,6 +34,7 @@
       autoBackup: !!cfg.autoBackup,
       online: navigator.onLine,
       lastBackup: cfg.lastBackup || null,
+      lastCloudOrders: cfg.lastCloudOrders != null ? cfg.lastCloudOrders : null,
       branch: cfg.branch || 'main',
       liveSync: !!cfg.liveSync,
       lastSync: cfg.lastSync || null,

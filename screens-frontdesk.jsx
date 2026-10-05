@@ -17,7 +17,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
   const todayOrders = D.orders.filter(o => o.in.startsWith(todayStr));
   const revenueToday = todayOrders.reduce((s, o) => s + (o.total || 0), 0);
   const streamToday = (cat) => todayOrders.reduce((s, o) => s + o.items.reduce((ss, it) => ss + (((D.services.find(x => x.id === it.svc) || {}).category || 'other') === cat ? (it.price || 0) : 0), 0), 0);
-  const streams = [['laundry', 'Laundry'], ['drycleaning', 'Dry Cleaning'], ['shoes', 'Shoes'], ['other', 'Other']].map(([k, l]) => ({ k, l, v: streamToday(k) })).filter(x => x.v > 0);
+  const streams = [['laundry', 'Laundry'], ['drycleaning', 'Dry Cleaning'], ['shoes', 'Shoes'], ['other', 'Other']].map(([k, l]) => ({ k, l, v: streamToday(k) }));
   // Pending collection = every order not yet handed back. Drops as each is collected.
   const readyOrders = D.orders.filter(o => o.status !== 'collected');
   const pending = readyOrders.length;
@@ -53,9 +53,10 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
       <ShiftModal open={shiftModal} onClose={() => setShiftModal(false)} money={money}/>
 
       <div className="safi-grid safi-grid--4">
-        <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" delta={`${D.orders.filter(o => o.status !== 'collected').length} active in the shop`}/>
+        <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" delta={`${D.orders.filter(o => o.status !== 'collected').length} active in the shop`}
+          sparkline={<div className="safi-streams">{[['normal', 'Normal'], ['student', 'Student'], ['corporate', 'Corporate']].map(([k, l]) => <span key={k} className={`safi-streams__i safi-streams__i--tier-${k}`}><i/>{l} <b className="safi-mono">{todayOrders.filter(o => ((D.customers.find(c => c.id === o.customer) || {}).group || 'normal') === k).length}</b></span>)}</div>}/>
         <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" delta={`${todayOrders.length} orders · ${money(collectedToday)} collected`}
-          sparkline={streams.length ? <div className="safi-streams">{streams.map(x => <span key={x.k} className={`safi-streams__i safi-streams__i--${x.k}`}><i/>{x.l} <b className="safi-mono">{money(x.v)}</b></span>)}</div> : null}/>
+          sparkline={<div className="safi-streams">{streams.map(x => <span key={x.k} className={`safi-streams__i safi-streams__i--${x.k}`}><i/>{x.l} <b className="safi-mono">{money(x.v)}</b></span>)}</div>}/>
         <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} orders ready now`}/>
         <StatCard label="Washing / Drying / Ready / Collected" value={`${washing} / ${D.orders.filter(o => o.status === 'drying').length} / ${D.orders.filter(o => o.status === 'ready').length} / ${todayOrders.filter(o => o.status === 'collected').length}`} icon="wash" delta="Today's Orders Stats"/>
       </div>
