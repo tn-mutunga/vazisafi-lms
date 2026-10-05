@@ -341,7 +341,7 @@ function ReportsScreen({ lang, money }) {
                   <tr key={p.id}>
                     <td>{p.date.slice(11)}</td>
                     <td className="safi-mono">{p.txn || '—'}</td>
-                    <td className="safi-mono">{p.order}</td>
+                    <td className="safi-mono">{orderNo(p.order)}</td>
                     <td>{p.customer}</td>
                     <td className="safi-mono">{money(p.amount)}</td>
                     <td>{p.verified ? <span className="safi-pill safi-pill--green"><Icon name="check" size={10}/> ok</span> : <span className="safi-pill safi-pill--amber">⚠ unverified</span>}</td>
@@ -727,8 +727,8 @@ function RedateCard() {
             return (
               <label key={o.id} className="safi-redate__item">
                 <input type="checkbox" checked={!!picked[o.id]} onChange={e => setPicked({ ...picked, [o.id]: e.target.checked })}/>
-                <span className="safi-mono">{o.id}</span>
-                <span>{c?.name || o.id}</span>
+                <span className="safi-mono">{orderNo(o.id)}</span>
+                <span>{c?.name || orderNo(o.id)}</span>
                 <span className="safi-mono safi-cell-sub">{String(o.in).slice(11, 16)}</span>
                 <span className="safi-mono">KES {(o.total || 0).toLocaleString('en-KE')}</span>
               </label>

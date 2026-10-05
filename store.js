@@ -1,6 +1,18 @@
 
 // Local-time date helpers. Never use toISOString() for shop dates: it is UTC, so
 // anything done 00:00-03:00 in Nairobi lands on the previous day.
+// Kenyan numbers are stored as 9 digits "729 480 592"; the +254 lives in prefix.
+window.SAFI_PHONE = (prefix, phone) => {
+  let d = String(phone || '').replace(/\D/g, '');
+  const pd = String(prefix || '+254').replace(/\D/g, '');
+  if (pd && d.startsWith(pd) && d.length > 9) d = d.slice(pd.length);
+  d = d.replace(/^0+/, '');
+  if (pd === '254') { d = d.slice(-9); return d.length > 6 ? d.slice(0, 3) + ' ' + d.slice(3, 6) + ' ' + d.slice(6) : d.replace(/(\d{3})(?=\d)/g, '$1 '); }
+  return d.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
+};
+// Order numbers carry a 2-letter laptop code internally (SF-2446-EG) so two tills can
+// never clash. People only ever see SF-2446.
+window.orderNo = (id) => String(id || '').replace(/-[A-Z]{2}$/, '');
 window.SAFI_TIME = (() => {
   const p = n => String(n).padStart(2, '0');
   const day = (d = new Date()) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -165,6 +177,12 @@ window.SAFI_STORE = (() => {
     }
     state.fixOct2026Dates = true;
     migrated = true;
+  }
+  // v2.2.2: one phone format for every customer.
+  for (const cu of state.customers || []) {
+    const fixed = SAFI_PHONE(cu.prefix || '+254', cu.phone);
+    if (cu.phone && fixed !== cu.phone) { cu.phone = fixed; migrated = true; }
+    if (!cu.prefix) { cu.prefix = '+254'; migrated = true; }
   }
   // Persist any migration changes immediately
   if (migrated) {
@@ -424,9 +442,10 @@ window.SAFI_STORE = (() => {
     },
 
     // ── Active attendant ───────────────────────────────────
-    setCurrentStaff(id) { state.currentStaffId = id; save(); },
+    // Saved in settings so it syncs: set Lydia at the shop and every laptop shows Lydia.
+    setCurrentStaff(id) { state.currentStaffId = id; state.settings = { ...(state.settings || {}), currentStaffId: id }; save(); },
     getCurrentStaff() {
-      const id = state.currentStaffId || state.staff[0]?.id;
+      const id = (state.settings && state.settings.currentStaffId) || state.currentStaffId || state.staff[0]?.id;
       return state.staff.find(s => s.id === id) || state.staff[0] || { name: 'Attendant', role: '—' };
     },
 
@@ -666,13 +685,18 @@ window.SAFI_STORE = (() => {
     addCustomer({ name, phone, prefix, group, location }) {
       const id = nextId('c');
       const today = SAFI_TIME.day();
-      const c = { id, name, phone, prefix: prefix || '+254', group: group || 'normal', location: location || '', joined: today, orders: 0, spend: 0, loyalty: 0 };
+      const c = { id, name, phone: SAFI_PHONE(prefix || '+254', phone), prefix: prefix || '+254', group: group || 'normal', location: location || '', joined: today, orders: 0, spend: 0, loyalty: 0 };
       state.customers = [c, ...state.customers];
       save();
       return c;
     },
     updateCustomer(id, patch) {
-      state.customers = state.customers.map(c => c.id === id ? { ...c, ...patch } : c);
+      state.customers = state.customers.map(c => {
+        if (c.id !== id) return c;
+        const n = { ...c, ...patch };
+        if ('phone' in patch || 'prefix' in patch) n.phone = SAFI_PHONE(n.prefix || '+254', n.phone);
+        return n;
+      });
       save();
     },
     importCustomers(rows) {
@@ -699,6 +723,7 @@ window.SAFI_STORE = (() => {
           joined: today, orders: 0, spend: 0, loyalty: 0,
         };
       });
+      added.forEach(a => { a.phone = SAFI_PHONE(a.prefix, a.phone); });
       state.customers = [...added, ...state.customers];
       save();
       return added.length;

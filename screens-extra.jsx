@@ -160,13 +160,14 @@ function PeriodSummary({ money }) {
 
 // ─── Settings (Management) ────────────────────────────────────────────────
 function SettingsScreen({ lang, shop, setShop }) {
-  const setT = (k, v) => window.__safiSetTweak && window.__safiSetTweak(k, v);
+  // Saves to this laptop AND to the synced settings, so every laptop gets it.
+  const setT = (k, v) => { window.__safiSetTweak && window.__safiSetTweak(k, v); window.SAFI_STORE.setSetting(k, v); };
   const D = useStore();
   const [tpl, setTpl] = useStateX({ ...(D.smsTemplates || {}) });
 
   return (
     <>
-      <Topbar title="Settings" subtitle="Receipt details, PIN, and SMS templates — all stored on this laptop."/>
+      <Topbar title="Settings" subtitle="Receipt details, PIN, and SMS templates — saved to the cloud and shared by every laptop."/>
 
       <Card title="Receipt details" action={<span className="safi-cell-sub">Appears at the top and bottom of every printed receipt</span>}>
         <div className="safi-form" style={{ maxWidth: 760 }}>
@@ -339,7 +340,7 @@ function DispatchScreen({ lang, money, setView }) {
     if (status === 'completed' && d && d.orderId && d.type === 'delivery') {
       const o = D.orders.find(x => x.id === d.orderId);
       const bal = o ? (o.total || 0) - (o.paid || 0) : 0;
-      if (bal > 0) { toast(`Order ${o.id} still owes KES ${bal.toLocaleString('en-KE')}. Record the payment before marking delivered.`, 'error'); return; }
+      if (bal > 0) { toast(`Order ${orderNo(o.id)} still owes KES ${bal.toLocaleString('en-KE')}. Record the payment before marking delivered.`, 'error'); return; }
     }
     window.SAFI_STORE.updateDispatch(id, { status });
     toast(`Marked ${status}`);
@@ -373,7 +374,7 @@ function DispatchScreen({ lang, money, setView }) {
         const order = D.orders.find(o => o.id === d.orderId);
         if (order && order.status === 'ready') {
           window.SAFI_STORE.updateOrder(d.orderId, { status: 'collected' });
-          toast(`Order ${d.orderId} marked Collected`);
+          toast(`Order ${orderNo(d.orderId)} marked Collected`);
         }
       }
     }
@@ -426,7 +427,7 @@ function DispatchScreen({ lang, money, setView }) {
         <Table
           cols={[
             { label: 'Type', render: r => <span className={`safi-pill safi-pill--${r.type === 'pickup' ? 'amber' : 'blue'}`}><Icon name={r.type === 'pickup' ? 'pickup' : 'truck'} size={11}/> {r.type}</span> },
-            { label: 'Order', render: r => r.orderId ? <span className="safi-mono">{r.orderId}</span> : <span className="safi-cell-sub">—</span> },
+            { label: 'Order', render: r => r.orderId ? <span className="safi-mono">{orderNo(r.orderId)}</span> : <span className="safi-cell-sub">—</span> },
             { label: 'Customer', render: r => {
               const c = D.customers.find(x => x.id === r.customerId);
               return c ? <div><div className="safi-cell-strong">{c.name}</div><div className="safi-cell-sub">{c.prefix} {c.phone}</div></div> : <span className="safi-cell-sub">Walk-in</span>;
@@ -535,7 +536,7 @@ function MessagesScreen({ lang, role }) {
             { label: 'Sent', render: r => <span className="safi-cell-sub">{r.date.slice(5, 16)}</span> },
             { label: 'To', render: r => <div><div className="safi-cell-strong">{r.name}</div><div className="safi-cell-sub safi-mono">{r.to}</div></div> },
             { label: 'Stage', render: r => <span className={`safi-tag safi-tag--blue`}>{r.stage}</span> },
-            { label: 'Order', render: r => r.orderId ? <span className="safi-mono">{r.orderId}</span> : <span className="safi-cell-sub">—</span> },
+            { label: 'Order', render: r => r.orderId ? <span className="safi-mono">{orderNo(r.orderId)}</span> : <span className="safi-cell-sub">—</span> },
             { label: 'Body', render: r => <div className="safi-msg-body">{r.body}</div> },
             { label: 'Status', render: r => window.SmsStatus ? <window.SmsStatus m={r}/> : r.status },
           ]}
@@ -645,7 +646,7 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
             { label: 'Requested', render: r => <span className="safi-cell-sub">{r.requestedAt.slice(5, 16)}</span> },
             { label: 'Action', render: r => <b>{actionLabel[r.action] || r.action}</b> },
             { label: 'Order', render: r => (
-              <button className="safi-mono safi-rowlink" onClick={() => { setActiveOrderId(r.target); setView('order-detail'); }}>{r.target}</button>
+              <button className="safi-mono safi-rowlink" onClick={() => { setActiveOrderId(r.target); setView('order-detail'); }}>{orderNo(r.target)}</button>
             )},
             { label: 'Requested by', render: r => {
               const s = D.staff.find(x => x.id === r.requestedBy);
@@ -681,9 +682,9 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
             const cust = D.customers.find(c => c.id === orig.customer);
             return (
               <div className="safi-approval-detail">
-                <h4 className="safi-section-h">Current order — {orig.id}</h4>
+                <h4 className="safi-section-h">Current order — {orderNo(orig.id)}</h4>
                 <div className="safi-approval-meta">
-                  <div><span>Customer</span><b>{cust?.name || orig.id}</b></div>
+                  <div><span>Customer</span><b>{cust?.name || orderNo(orig.id)}</b></div>
                   <div><span>Placed</span><b>{orig.in.slice(5, 16)}</b></div>
                   <div><span>Status</span><b>{orig.status}</b></div>
                   <div><span>Current total</span><b className="safi-mono">{money(orig.total)}</b></div>

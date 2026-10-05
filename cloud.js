@@ -260,12 +260,14 @@
 
   // Subscribe once the store exists.
   setTimeout(() => {
-    if (window.SAFI_STORE) window.SAFI_STORE.subscribe(() => schedule(8000));
+    if (window.SAFI_STORE) window.SAFI_STORE.subscribe(() => schedule(60000));
     if (window.SAFI_SYNC) window.SAFI_SYNC.setBranch(cfg.branch);
   }, 0);
 
   // Fetch other laptops' changes even when nobody is typing here.
-  setInterval(() => schedule(0), 120000);
+  // Every 10 minutes (plus on open, on wake, when the internet returns and on close).
+  setInterval(() => schedule(0), 600000);
+  window.addEventListener('beforeunload', () => { try { if (cfg.liveSync && session && navigator.onLine) API.syncNow().catch(() => {}); } catch (e) {} });
   // Renew the sign-in in the background every 30 minutes, so a till left open (or
   // reopened the next morning) never finds an expired token at the counter.
   setInterval(() => { if (session && navigator.onLine) ensureFresh().catch(() => {}); }, 1800000);

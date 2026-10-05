@@ -48,17 +48,8 @@ const PHONE_PREFIXES = [
 // Auto-format a phone number string into groups: "0712345678" → "0712 345 678"
 // or "712345678" → "712 345 678"
 function formatPhone(raw, prefix = '+254') {
-  const digits = (raw || '').replace(/\D/g, '');
-  if (!digits) return '';
-  if (prefix === '+254') {
-    // Kenya: 7XX XXX XXX or 1XX XXX XXX (9 digits), or 0712 345 678 (10)
-    if (digits.length <= 3)  return digits;
-    if (digits.length <= 6)  return digits.slice(0, 3) + ' ' + digits.slice(3);
-    if (digits.length <= 9)  return digits.slice(0, 3) + ' ' + digits.slice(3, 6) + ' ' + digits.slice(6);
-    return digits.slice(0, 4) + ' ' + digits.slice(4, 7) + ' ' + digits.slice(7, 11);
-  }
-  // Generic: group by 3
-  return digits.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
+  if (prefix === 'other') return String(raw || '').replace(/\D/g, '').replace(/(\d{3})(?=\d)/g, '$1 ').trim();
+  return window.SAFI_PHONE ? window.SAFI_PHONE(prefix, raw) : String(raw || '');
 }
 
 const PhoneInput = ({ prefix = '+254', phone = '', onChange }) => {

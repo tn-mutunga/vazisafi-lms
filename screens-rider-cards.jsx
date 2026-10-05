@@ -30,7 +30,7 @@ function JobCard({ order, card, D, shop }) {
           <div className="safi-jc__kind">Job card — stays with the garments</div>
         </div>
         <div className="safi-jc__ids">
-          <div><span>Order no. · client no.</span><b className="safi-mono">{card?.serial || order.id}</b></div>
+          <div><span>Order no. · client no.</span><b className="safi-mono">{card?.serial || orderNo(order.id)}</b></div>
           <div><span>Tag no.</span><b className="safi-mono">{order.tag || '—'}</b></div>
         </div>
       </header>
@@ -99,12 +99,12 @@ function DeliveryNote({ order, card, D, shop }) {
         </div>
         <div className="safi-dn__serial">
           <span>Note no.</span>
-          <b>{card?.serial || order.id}</b>
+          <b>{card?.serial || orderNo(order.id)}</b>
         </div>
       </header>
 
       <div className="safi-dn__grid">
-        <div><span>Order / receipt</span><b className="safi-mono">{order.id}</b></div>
+        <div><span>Order / receipt</span><b className="safi-mono">{orderNo(order.id)}</b></div>
         <div><span>Client no. today</span><b className="safi-mono">{clientNo(order)}</b></div>
         <div><span>Tag no.</span><b className="safi-mono">{order.tag || '—'}</b></div>
         <div><span>Rider</span><b>{rider?.name || '—'}</b></div>

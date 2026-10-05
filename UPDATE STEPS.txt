@@ -1,3 +1,7 @@
-VAZI SAFI LMS v2.2.1
-- FIX: "Pull cloud -> this laptop" was undone by the automatic sync running at the same time. Now the pull wins.
-- Management sidebar has Orders (edit/delete with PIN).
+VAZI SAFI LMS v2.2.2
+- Phone numbers: one format, 9 digits "729 480 592". +254 sits in the code box only. Existing customers fixed automatically.
+- Order numbers show as SF-2446 (the laptop code stays hidden inside).
+- Revenue Today (Front Desk) shows Laundry / Dry Cleaning / Shoes / Other.
+- Settings (receipt details, PIN) and the current teller now sync to every laptop.
+- Sync every 10 minutes, plus on open, on wake, when internet returns, and on close.
+- Edit order: customer can be changed (fixes orders showing their number as the name).

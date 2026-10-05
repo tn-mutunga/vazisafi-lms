@@ -30,7 +30,6 @@ function App() {
 
   // expose setTweak globally so Management Settings screen can call it
   useAppEffect(() => { window.__safiSetTweak = setTweak; }, [setTweak]);
-  useAppEffect(() => { window.__safiOwnerPin = String(t.ownerPin || ''); }, [t.ownerPin]);
 
   // Apply direction + density to root
   useAppEffect(() => {
@@ -39,11 +38,11 @@ function App() {
   }, [t.direction, t.density]);
 
   function tryEnterOwner() {
-    if (!t.ownerPin) { setRole('owner'); setView('dashboard'); return; }
+    if (!shop.ownerPin) { setRole('owner'); setView('dashboard'); return; }
     setPinInput(''); setPinError(''); setPinPrompt(true);
   }
   function submitPin() {
-    if (pinInput === String(t.ownerPin)) {
+    if (pinInput === String(shop.ownerPin)) {
       setPinPrompt(false);
       setRole('owner');
       setView('dashboard');
@@ -60,14 +59,19 @@ function App() {
 
   const money = (n) => fmtMoney(n, t.currency);
   const lang = t.lang;
+  // Shop details live in the synced settings, so a change on one laptop shows on all.
+  // Tweak values are only the fallback until the first save.
+  const SS = (useStore().settings) || {};
+  const pick = (k) => (SS[k] != null && SS[k] !== '' ? SS[k] : t[k]);
   const shop = {
-    name: t.shopName, tagline: t.shopTagline,
-    address: t.shopAddress, kra: t.shopKRA, web: t.shopWeb,
-    mpesaTill: t.shopMpesaTill, bank: t.shopBank, footerMsg: t.shopFooterMsg,
-    terms: t.shopTerms,
-    ownerPin: t.ownerPin,
+    name: pick('shopName'), tagline: pick('shopTagline'),
+    address: pick('shopAddress'), kra: pick('shopKRA'), web: pick('shopWeb'),
+    mpesaTill: pick('shopMpesaTill'), bank: pick('shopBank'), footerMsg: pick('shopFooterMsg'),
+    terms: pick('shopTerms'),
+    ownerPin: pick('ownerPin'),
   };
-  window.SAFI_OWNER_PIN = t.ownerPin;
+  window.SAFI_OWNER_PIN = shop.ownerPin;
+  window.__safiOwnerPin = String(shop.ownerPin || '');
 
   const screen = (() => {
     const props = { setView, setActiveOrderId, lang, money, density: t.density, orderId: activeOrderId, shop, setShop: setTweak };
@@ -154,7 +158,7 @@ function App() {
           onChange={(v) => setTweak('shopWeb', v)}/>
 
         <TweakSection label="Security"/>
-        <TweakText label="Owner PIN" value={t.ownerPin}
+        <TweakText label="Owner PIN" value={shop.ownerPin}
           onChange={(v) => setTweak('ownerPin', v)}/>
 
         <TweakSection label="Direction"/>
