@@ -12,6 +12,7 @@ window.SAFI_DATA = (() => {
     { id: 'hanger',    name: 'Hanger',        unit: 'piece', icon: 'hanger',  category: 'supplies',    tiers: { student: 30,  normal: 30,  corporate: 30 } },
     { id: 'laundry-bag', name: 'Laundry Bag', unit: 'piece', icon: 'bag',     category: 'supplies',    tiers: { student: 150, normal: 150, corporate: 150 } },
     { id: 'other', name: 'Other', unit: 'piece', icon: 'plus', category: 'other', tiers: { student: 0, normal: 0, corporate: 0 } },
+    { id: 'coats', name: 'Trench coats, jackets & shukas', unit: 'piece', icon: 'jacket', category: 'laundry', tiers: { student: 400, normal: 400, corporate: 400 }, subtypes: [{name:'Cloth jacket', price:400},{name:'Hoodie', price:400},{name:'Trench coat (s/m)', price:450},{name:'Trench coat (large)', price:500},{name:'Maasai shuka', price:150},{name:'Shawl', price:200}] },
     { id: 'dryclean-bag', name: 'Dry Cleaning Bag', unit: 'piece', icon: 'bag', category: 'supplies', tiers: { student: 0, normal: 0, corporate: 0 } },
   ];
 

@@ -545,7 +545,8 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                 toAdd.push({
                   svc: subtypePicker.svc.id, subtype: name, qty: q,
                   // store override price if subtype has explicit price, else fall back to tier
-                  customPrice: subObj.price,
+                  customPrice: window.SAFI_PRICING.subPrice(subtypePicker.svc, subObj, effGroup).price,
+                  note: window.SAFI_PRICING.subPrice(subtypePicker.svc, subObj, effGroup).promo || undefined,
                 });
               }
             }
@@ -561,7 +562,8 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
             {subtypePicker.svc.subtypes.map((st, i) => {
               const sub = typeof st === 'string' ? { name: st } : st;
               const tier = subtypePicker.svc.tiers[effGroup] || 0;
-              const price = sub.price ?? tier;
+              const sp = window.SAFI_PRICING.subPrice(subtypePicker.svc, sub, effGroup);
+              const price = sp.price;
               const q = (subtypePicker.qty && subtypePicker.qty[sub.name]) || 0;
               const setQ = (newQ) => setSubtypePicker({ ...subtypePicker, qty: { ...(subtypePicker.qty || {}), [sub.name]: Math.max(0, newQ) }});
               return (
@@ -569,6 +571,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                   <Icon name={subtypePicker.svc.icon} size={16}/>
                   <span className="safi-subtype-multi__name">{sub.name}</span>
                   <span className="safi-subtype-multi__price safi-mono">{money(price)}{sub.price != null && sub.price !== tier ? ' *' : ''}</span>
+                  {sp.promo && <span className="safi-tag safi-tag--green" style={{ fontSize: 10 }}>{sp.promo}</span>}
                   <div className="safi-qty">
                     <button onClick={() => setQ(q - 1)}>−</button>
                     <input type="number" value={q} min="0" onChange={e => setQ(parseInt(e.target.value) || 0)}/>

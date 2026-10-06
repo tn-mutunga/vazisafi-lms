@@ -53,10 +53,12 @@ function PriceModels({ money }) {
                 <div><b className="safi-pm__name">Student Thursday</b><div className="safi-pm__label">Automatic every Thursday</div></div>
                 <div className="safi-pm__tags">{live ? <span className="safi-tag safi-tag--green">On today</span> : sd.on ? <span className="safi-tag safi-tag--gray">Next Thursday</span> : <span className="safi-tag safi-tag--gray">Off</span>}</div>
               </div>
-              <p className="safi-pm__desc">On Thursdays students pay a flat rate per kg for Wash & Fold, with no minimum. Normal clients, and every other day, use the active model.</p>
+              <p className="safi-pm__desc">On Thursdays students pay a flat rate per kg for Wash & Fold, with no minimum, and every duvet (any size) costs the Thursday duvet price. Normal clients, and every other day, use the active model.</p>
               <div className="safi-form__row">
                 <label>Student rate (KES/kg)<input type="number" className="safi-input safi-mono" defaultValue={sd.rate}
                   onBlur={e => { const v = Number(e.target.value) || 0; if (v !== sd.rate) { window.SAFI_STORE.setSetting('studentDay', { ...sd, rate: v }); window.SAFI_STORE.audit('pricing.studentday', 'rate', `Student Thursday rate → ${v}`); } }}/></label>
+                <label>Student duvet, Thursday (KES)<input type="number" className="safi-input safi-mono" defaultValue={P.thursdayDuvet()}
+                  onBlur={e => { const v = Number(e.target.value) || 0; if (v !== P.thursdayDuvet()) { window.SAFI_STORE.setSetting('studentDay', { ...P.studentDay(), duvet: v }); window.SAFI_STORE.audit('pricing.studentday', 'duvet', `Student Thursday duvet → ${v}`); } }}/></label>
               </div>
               <table className="safi-pm__table">
                 <thead><tr><th></th>{SAMPLE_KG.map(k => <th key={k}>{k} kg</th>)}</tr></thead>
@@ -65,6 +67,42 @@ function PriceModels({ money }) {
               <label className="safi-toggle safi-toggle--lg">
                 <input type="checkbox" checked={sd.on} onChange={e => { window.SAFI_STORE.setSetting('studentDay', { ...sd, on: e.target.checked }); window.SAFI_STORE.audit('pricing.studentday', 'toggle', `Student Thursday ${e.target.checked ? 'on' : 'off'}`); }}/>
                 <span/><div><b>{sd.on ? 'On' : 'Off'}</b></div>
+              </label>
+            </div>
+          );
+        })()}
+        {(() => {
+          const b = P.bathDay();
+          const live = P.bathDayLive();
+          const save = (patch, what) => { window.SAFI_STORE.setSetting('bathDay', { ...P.bathDay(), ...patch }); window.SAFI_STORE.audit('pricing.bathday', 'edit', what); };
+          const nd = b.normalDuvet || {};
+          return (
+            <div className={`safi-pm safi-pm--day ${live ? 'is-active' : ''}`}>
+              <div className="safi-pm__top">
+                <div><b className="safi-pm__name">Bath & Beddings Tuesday</b><div className="safi-pm__label">Automatic every Tuesday</div></div>
+                <div className="safi-pm__tags">{live ? <span className="safi-tag safi-tag--green">On today</span> : b.on ? <span className="safi-tag safi-tag--gray">Next Tuesday</span> : <span className="safi-tag safi-tag--gray">Off</span>}</div>
+              </div>
+              <p className="safi-pm__desc">Duvet / Bedding items only. Normal duvets step down by size, student duvets drop to one price, and every other bed & bath item added to the order is {b.pct}% off. Corporate is unchanged.</p>
+              <table className="safi-pm__table">
+                <thead><tr><th>Normal duvet</th><th>Usual</th><th>Tuesday</th></tr></thead>
+                <tbody>
+                  {Object.keys(nd).sort((x, y) => y - x).map(k => (
+                    <tr key={k}><td></td><td className="safi-mono">{k}</td><td><input type="number" className="safi-input safi-mono" style={{ width: 90 }} defaultValue={nd[k]}
+                      onBlur={e => { const v = Number(e.target.value) || 0; if (v !== nd[k]) save({ normalDuvet: { ...nd, [k]: v } }, `Tuesday duvet ${k} → ${v}`); }}/></td></tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="safi-form__row">
+                <label>Student duvet, Tuesday (KES)<input type="number" className="safi-input safi-mono" defaultValue={b.studentDuvet}
+                  onBlur={e => { const v = Number(e.target.value) || 0; if (v !== b.studentDuvet) save({ studentDuvet: v }, `Tuesday student duvet → ${v}`); }}/></label>
+                <label>Other bed & bath items (% off)<input type="number" className="safi-input safi-mono" defaultValue={b.pct}
+                  onBlur={e => { const v = Math.max(0, Math.min(100, Number(e.target.value) || 0)); if (v !== b.pct) save({ pct: v }, `Tuesday bed & bath → ${v}% off`); }}/></label>
+              </div>
+              <label>Student duvet, every other day (KES)<input type="number" className="safi-input safi-mono" defaultValue={P.studentDuvet()}
+                onBlur={e => { const v = Number(e.target.value) || 0; if (v !== P.studentDuvet()) { window.SAFI_STORE.setSetting('studentDuvetPrice', v); window.SAFI_STORE.audit('pricing.studentduvet', 'edit', `Student duvet → ${v}`); } }}/></label>
+              <label className="safi-toggle safi-toggle--lg">
+                <input type="checkbox" checked={b.on} onChange={e => save({ on: e.target.checked }, `Bath & Beddings Tuesday ${e.target.checked ? 'on' : 'off'}`)}/>
+                <span/><div><b>{b.on ? 'On' : 'Off'}</b></div>
               </label>
             </div>
           );

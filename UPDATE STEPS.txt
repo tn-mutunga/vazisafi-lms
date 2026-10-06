@@ -1,9 +1,10 @@
-VAZI SAFI LMS v2.2.3
-- FIX: a laptop could fall permanently behind the cloud. If a sync was cut short by
-  "Pull cloud", it still saved its "already fetched up to here" marker, so those
-  orders were never fetched again. Now the marker is only saved when the sync finishes.
-- NEW safety check on every sync: the laptop compares its order list with the cloud's
-  and downloads any order it is missing. Cloud & Updates shows
-  "Orders: cloud / this laptop" with a tick when they match.
-- Revenue Today card: Laundry (sky blue) and Dry Cleaning (purple) on line 1,
-  Shoes (orange) and Other (grey) on line 2. All four show even at KES 0.
+VAZI SAFI LMS v2.2.4
+- Student duvets (any size): KES 650 every day, KES 500 on Tuesday and Thursday.
+- NEW Bath & Beddings Tuesday (automatic every Tuesday, Duvet / Bedding items):
+  Normal duvets 900→750, 750→650, 650→600. Student duvets 500.
+  Every other bed & bath item (pillow, towels, covers, mats, robe…) 30% off.
+  Corporate unchanged.
+- NEW service: Trench coats, jackets & shukas (Laundry): Cloth jacket 400, Hoodie 400,
+  Trench coat (s/m) 450, Trench coat (large) 500, Maasai shuka 150, Shawl 200.
+- All values editable in Management → Pricing; they sync to every laptop.
+- Includes everything in 2.2.3 (cloud match fix, revenue streams, customer-type counts).

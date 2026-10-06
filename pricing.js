@@ -49,5 +49,34 @@ window.SAFI_PRICING = (() => {
     if (group === 'student' && studentDayLive()) return { rate: studentDay().rate, min: 0, studentDay: true };
     const m = active(); return m ? m.rules[group] || null : null;
   }
-  return { DEFAULTS, models, activeId, active, applies, charge, describe, line, ruleFor, studentDay, studentDayLive };
+  // ── Bed & bath (Duvet / Bedding service) ─────────────────────────────────
+  // Students pay a flat duvet price every day (650), and the Thursday duvet price
+  // (500) on Student Thursday. "Bath & Beddings Tuesday" runs automatically every
+  // Tuesday: normal duvets step down (900→750, 750→650, 650→600), student duvets
+  // drop to 500, and every other bed & bath item is 30% off. Corporate is unchanged.
+  // All values live in synced settings, so a change on one laptop reaches all.
+  const isBedBath = (svc) => !!svc && (svc.id === 'duvet' || /duvet|bed/i.test(svc.name || ''));
+  const isDuvet = (name) => /^\s*duvet/i.test(name || '') && !/cover/i.test(name || '');
+  const bathDay = () => ({ on: true, day: 2, pct: 30, studentDuvet: 500, normalDuvet: { 900: 750, 750: 650, 650: 600 }, ...(S().bathDay || {}) });
+  const bathDayLive = (d = new Date()) => { const b = bathDay(); return b.on && d.getDay() === b.day; };
+  const studentDuvet = () => Number(S().studentDuvetPrice ?? 650);
+  const thursdayDuvet = () => Number(studentDay().duvet ?? 500);
+  // Price for one bed & bath subtype. Returns { price, promo } (promo = label or '').
+  function subPrice(svc, sub, group, d = new Date()) {
+    const base = sub.price != null && sub.price !== '' ? Number(sub.price) : ((svc.tiers && svc.tiers[group]) || 0);
+    if (!isBedBath(svc) || group === 'corporate') return { price: base, promo: '' };
+    const duvet = isDuvet(sub.name);
+    const tue = bathDayLive(d), thu = studentDayLive(d);
+    const b = bathDay();
+    if (group === 'student') {
+      if (duvet && (tue || thu)) return { price: tue ? Number(b.studentDuvet) : thursdayDuvet(), promo: tue ? 'Bath & Beddings Tuesday' : 'Student Thursday' };
+      if (duvet) return { price: studentDuvet(), promo: '' };
+    }
+    if (tue) {
+      if (duvet) { const m = b.normalDuvet || {}; const v = m[base] ?? m[String(base)]; return v != null ? { price: Number(v), promo: 'Bath & Beddings Tuesday' } : { price: base, promo: '' }; }
+      return { price: Math.round(base * (100 - Number(b.pct || 0)) / 100), promo: `Tuesday ${b.pct}% off` };
+    }
+    return { price: base, promo: '' };
+  }
+  return { DEFAULTS, models, activeId, active, applies, charge, describe, line, ruleFor, studentDay, studentDayLive, isBedBath, isDuvet, bathDay, bathDayLive, studentDuvet, thursdayDuvet, subPrice };
 })();
