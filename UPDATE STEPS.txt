@@ -1,10 +1,13 @@
-VAZI SAFI LMS v2.2.4
-- Student duvets (any size): KES 650 every day, KES 500 on Tuesday and Thursday.
-- NEW Bath & Beddings Tuesday (automatic every Tuesday, Duvet / Bedding items):
-  Normal duvets 900→750, 750→650, 650→600. Student duvets 500.
-  Every other bed & bath item (pillow, towels, covers, mats, robe…) 30% off.
-  Corporate unchanged.
-- NEW service: Trench coats, jackets & shukas (Laundry): Cloth jacket 400, Hoodie 400,
-  Trench coat (s/m) 450, Trench coat (large) 500, Maasai shuka 150, Shawl 200.
-- All values editable in Management → Pricing; they sync to every laptop.
-- Includes everything in 2.2.3 (cloud match fix, revenue streams, customer-type counts).
+VAZI SAFI LMS v2.2.5
+- Expense categories tidied (expenses move to the kept category, nothing lost):
+  Detergent & chemicals -> Detergent & supplies; Electricity & water -> Water & electricity;
+  Wages -> Salaries & wages; Equipment & repairs -> Repairs & maintenance; duplicate Rent and
+  Transport & delivery merged. NEW: Bike charging, refuelling & wash; Airtime & internet.
+- Existing expenses re-filed once: bike top-up/fuel/wash -> Bike; Airtime -> Airtime;
+  Overtime -> Salaries & wages; Extension and Tape -> Repairs & maintenance.
+- Expense category filters: three rows, each with its own colour and icon. Packaging & bags, Licenses & permits and Labour fees added.
+  Management can drag chips to reorder them (order syncs to every laptop).
+- "Other" expenses: choose Operational or Special on each one when logging/editing.
+- Management: "Profit by cost group" card. Drag category chips into Operational or Special;
+  shows Revenue, Operating profit (after operational) and Net profit (after special). Syncs to all laptops.
+- Publish from the MANAGEMENT laptop first: the shop login cannot delete categories.

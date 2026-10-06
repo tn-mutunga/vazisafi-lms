@@ -2907,3 +2907,25 @@ button { font-family: inherit; }
 .safi-streams{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px;margin-top:10px}.safi-streams__i{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3)}.safi-streams__i i{width:8px;height:8px;border-radius:2px;background:#3DAEE9}.safi-streams__i--drycleaning i{background:#8b5cf6}.safi-streams__i--shoes i{background:#E87722}.safi-streams__i--other i{background:#9197AB}.safi-streams__i b{color:var(--ink);font-weight:600}
 
 .safi-streams__i--tier-normal i{background:#3DAEE9}.safi-streams__i--tier-student i{background:#8b5cf6}.safi-streams__i--tier-corporate i{background:#E87722}
+
+.safi-catchips{display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,auto);gap:8px;justify-content:start;overflow-x:auto;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg)}
+.safi-catchip{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:6px 12px;border-radius:999px;border:1px solid color-mix(in srgb,var(--c) 40%,transparent);background:color-mix(in srgb,var(--c) 10%,#fff);color:var(--ink);font-size:13px;font-weight:500;cursor:pointer}
+.safi-catchip svg{color:var(--c);flex-shrink:0}
+.safi-catchip.is-active{background:var(--c);border-color:var(--c);color:#fff}.safi-catchip.is-active svg{color:#fff}
+
+.safi-catchip[draggable="true"]{cursor:grab}
+.safi-costgrps{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.safi-costgrp{border:1.5px dashed var(--line);border-radius:var(--r-md);padding:12px;min-height:90px;transition:background .15s,border-color .15s}
+.safi-costgrp.is-over{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 6%,#fff)}
+.safi-costgrp__hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:13px}
+.safi-costgrp__chips{display:flex;flex-wrap:wrap;gap:6px}
+.safi-profitline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:14px}
+.safi-profitline>div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:var(--r-md);background:var(--paper)}
+.safi-profitline span{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em}
+.safi-profitline b{font-size:15px}
+.safi-profitline .is-sub{background:color-mix(in srgb,#10b981 12%,#fff)}
+.safi-profitline .is-total{background:var(--brand-ink);color:#fff}.safi-profitline .is-total span{color:rgba(255,255,255,.7)}
+.safi-profitline .is-neg{color:#ef4444}
+@media (max-width:900px){.safi-costgrps{grid-template-columns:1fr}.safi-profitline{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.safi-catchip.is-dropping{box-shadow:-4px 0 0 0 var(--brand)}

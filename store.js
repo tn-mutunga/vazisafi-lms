@@ -184,6 +184,52 @@ window.SAFI_STORE = (() => {
     if (cu.phone && fixed !== cu.phone) { cu.phone = fixed; migrated = true; }
     if (!cu.prefix) { cu.prefix = '+254'; migrated = true; }
   }
+  // v2.2.5: tidy duplicate expense categories (merge expenses into the one kept).
+  (() => {
+    const BIKE = 'Bike charging, refuelling & wash';
+    state.expenseCategories = state.expenseCategories || [];
+    const cats = () => state.expenseCategories;
+    const norm = (x) => String(x || '').toLowerCase().replace(/\band\b/g, '&').replace(/\s+/g, ' ').trim();
+    const find = (n) => cats().filter(c => norm(c.name) === norm(n));
+    const merge = (from, into) => {
+      if (!from || !into || from.id === into.id) return;
+      for (const ex of state.expenses || []) if (ex.category === from.id) ex.category = into.id;
+      state.expenseCategories = cats().filter(c => c.id !== from.id);
+      migrated = true;
+    };
+    const dedupe = (n, seedId) => { const l = find(n); if (l.length > 1) { const keep = l.find(c => c.id === seedId) || l[0]; l.filter(c => c !== keep).forEach(c => merge(c, keep)); } };
+    merge(find('Detergent & chemicals')[0], find('Detergent & supplies')[0]);
+    merge(find('Electricity & water')[0], find('Water & electricity')[0]);
+    merge(find('Wages')[0], find('Salaries & wages')[0]);
+    merge(find('Equipment & repairs')[0], find('Repairs & maintenance')[0]);
+    dedupe('Transport & delivery', 'ec7');
+    dedupe('Rent', 'ec5');
+    // Bike category: the extra "Other" becomes it (or an earlier "Bike wash" is renamed).
+    if (!find(BIKE).length) {
+      const old = find('Bike wash')[0];
+      const oth = find('Other');
+      const pick = old || (oth.length > 1 ? (oth.find(c => c.id !== 'ec9') || oth[0]) : null);
+      if (pick) pick.name = BIKE; else state.expenseCategories.push({ id: 'ec-bike', name: BIKE, icon: 'rider', color: 'violet' });
+      migrated = true;
+    }
+    if (!find('Packaging & bags').length) { state.expenseCategories.push({ id: 'ec-pack', name: 'Packaging & bags', icon: 'bag', color: 'amber' }); migrated = true; }
+    if (!find('Labour fees').length) { state.expenseCategories.push({ id: 'ec-labour', name: 'Labour fees', icon: 'staff', color: 'green' }); migrated = true; }
+    if (!find('Licenses & permits').length) { state.expenseCategories.push({ id: 'ec-licence', name: 'Licenses & permits', icon: 'tag', color: 'gray' }); migrated = true; }
+    if (!find('Airtime & internet').length) { state.expenseCategories.push({ id: 'ec-airtime', name: 'Airtime & internet', icon: 'phone', color: 'blue' }); migrated = true; }
+    // One-time re-filing of expenses logged under Other / Transport before these existed.
+    if (!localStorage.getItem('safi_exp_refile_v1')) {
+      const id = (n) => (find(n)[0] || {}).id;
+      const from = new Set([id('Other'), id('Transport & delivery')].filter(Boolean));
+      const rules = [[/bike wash|ev bike|bike wallet|charg|fuel|petrol|refuel/i, BIKE], [/airtime|bundles|internet|wifi/i, 'Airtime & internet'],
+        [/overtime|salary|wage/i, 'Salaries & wages'], [/extension|tape|repair/i, 'Repairs & maintenance']];
+      for (const ex of state.expenses || []) {
+        if (!from.has(ex.category)) continue;
+        const r = rules.find(([re]) => re.test(ex.label || ''));
+        if (r && id(r[1]) && !(r[1] === BIKE && /repair/i.test(ex.label || ''))) { ex.category = id(r[1]); migrated = true; }
+      }
+      localStorage.setItem('safi_exp_refile_v1', '1');
+    }
+  })();
   // Persist any migration changes immediately
   if (migrated) {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
