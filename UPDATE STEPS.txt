@@ -1,11 +1,10 @@
-VAZI SAFI LMS v2.2.9
-- New Order tile reads "Wash & Fold (per piece)"; receipts print "Wash & Fold (per pc)".
-- Receipt and preview show the customer's first name only.
-- Front Desk dashboard: Overdue / Uncollected card under Live machines (oldest first, red -> yellow),
-  month-end reminder and a printable uncollected list.
-- Reports -> Custom range: pick any From / To dates (2016 onwards) plus quick ranges.
-- Printing: blank PDFs fixed (receipt, job card, delivery note, reports).
-- Job card & delivery note: 80mm roll or A4 (per laptop). Roll is compact; delivery note starts a new page so the printer auto-cuts.
-- Print limits: receipt and delivery note once per order; job card 5 times. Management -> order -> Print permissions -> "Allow 1 more".
-- Expenses: "Logged by" (Management on any laptop not signed in with the shop login); deleting needs the PIN.
-- Data & Backup: monthly export of orders (with client details, day and month totals) and customers, CSV or JSON.
+VAZI SAFI LMS v2.3.0
+- Everything from 2.2.9 (print fixes, 80mm job card, print limits, overdue card, custom report range, monthly export, expense rules).
+- Receipt: client name bold, terms justified.
+- Job card: sign-off boxes spread evenly in 3 columns; no blank page before the delivery note.
+- Delivery note: Paid by Cash / M-Pesa / Bank tick boxes.
+- Front Desk: Overdue / Uncollected card is full-width tiles.
+  Overdue: red 7d+, orange 3-6d, light green under 3d. Uncollected: yellow up to 7d ("new" under 1 day), red older.
+- Overdue / Uncollected card moved below Recent orders. Show more opens a scrolling list of up to 50 with each order's amount due and the total outstanding. Download PDF lists every order with amounts and the total.
+- Backlog alert: red banner + chime (repeats every 15 min) when Overdue or Uncollected passes its limit. Limits (default 20 each) in Management > Settings > Backlog alerts.
+- 80mm job card: the cut line now prints on the job card's page, so there is no blank page before the delivery note.

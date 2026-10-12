@@ -215,8 +215,35 @@ function ActivityCounts() {
   );
 }
 
+// A thermal roll has no fixed page length. Size each printed page to its content so
+// the paper (and the PDF) ends right after the last line; the printer cuts at each page end.
+function fitRollPages() {
+  const old = document.getElementById('safi-roll-pages'); if (old) old.remove();
+  const mm = (el) => Math.ceil(el.getBoundingClientRect().height * 25.4 / 96) + 6;
+  const css = [];
+  const roll = document.querySelector('.safi-jcsheet--roll');
+  if (roll) {
+    const jc = roll.querySelector('.safi-jc'), dn = roll.querySelector('.safi-dn');
+    // The cut line rides on the job card's page; otherwise it lands on its own default-size page (a blank sheet).
+    const tear = roll.querySelector('.safi-tear');
+    const tearMm = tear ? Math.ceil(tear.getBoundingClientRect().height * 25.4 / 96) + 4 : 0;
+    if (jc) css.push(`@page jcp { size: 80mm ${mm(jc) + tearMm}mm; margin: 0 } .safi-jcsheet--roll .safi-jc, .safi-jcsheet--roll .safi-tear { page: jcp }`);
+    if (dn) css.push(`@page dnp { size: 80mm ${mm(dn)}mm; margin: 0 } .safi-jcsheet--roll .safi-dn { page: dnp }`);
+  } else {
+    const rc = document.querySelector('.safi-receipt-wrap #safi-print-area');
+    if (rc) css.push(`@page { size: 80mm ${mm(rc)}mm; margin: 0 }`);
+  }
+  if (!css.length) return;
+  const s = document.createElement('style'); s.id = 'safi-roll-pages'; s.media = 'print'; s.textContent = css.join('\n');
+  document.head.appendChild(s);
+  // Remove once printed so later A4 prints (reports, lists) are not forced onto the roll size.
+  window.addEventListener('afterprint', () => { const x = document.getElementById('safi-roll-pages'); if (x) x.remove(); }, { once: true });
+}
+window.fitRollPages = fitRollPages;
+
 function printDoc(kind, orderId) {
   window.SAFI_STORE.logPrint(kind, orderId);
+  fitRollPages();
   window.print();
 }
 

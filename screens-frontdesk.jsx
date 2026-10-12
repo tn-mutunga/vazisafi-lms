@@ -52,6 +52,8 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
 
       <ShiftModal open={shiftModal} onClose={() => setShiftModal(false)} money={money}/>
 
+      <BacklogAlert D={D} setView={setView}/>
+
       <div className="safi-grid safi-grid--4">
         <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" delta={`${D.orders.filter(o => o.status !== 'collected').length} active in the shop`}
           sparkline={<div className="safi-streams">{[['normal', 'Normal'], ['student', 'Student'], ['corporate', 'Corporate']].map(([k, l]) => <span key={k} className={`safi-streams__i safi-streams__i--tier-${k}`}><i/>{l} <b className="safi-mono">{todayOrders.filter(o => ((D.customers.find(c => c.id === o.customer) || {}).group || 'normal') === k).length}</b></span>)}</div>}/>
@@ -121,9 +123,9 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
             </ul>
           </Card>
 
-          <OverdueCard D={D} setView={setView} setActiveOrderId={setActiveOrderId}/>
         </div>
       </div>
+
 
       <Card title={t('recent_orders', lang)} action={<Button kind="ghost" size="sm" onClick={() => setView('orders')}>All orders →</Button>}>
         <div className="safi-orders-strip">
@@ -145,6 +147,8 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
           {D.orders.length === 0 && <p className="safi-cell-sub">No orders yet — create your first one.</p>}
         </div>
       </Card>
+
+      <OverdueCard D={D} setView={setView} setActiveOrderId={setActiveOrderId} money={money}/>
     </>
   );
 }
@@ -635,7 +639,7 @@ function NewOrderPreview({ items, subtotal, discount, discountPct, total, deposi
       <div className="safi-receipt" style={{ width: '100%', boxShadow: 'none', padding: 12 }}>
         <div className="safi-receipt__rule" style={{ marginTop: 0 }}/>
         <div className="safi-receipt__cust">
-          <b>{String(customer?.name || 'Walk-in customer').trim().split(/\s+/)[0]}</b><br/>
+          <span className="safi-receipt__cname">{String(customer?.name || 'Walk-in customer').trim().split(/\s+/)[0]}</span><br/>
           {customer?.phone || ''}
           {customer && <div><span className="safi-receipt__tag">{customer.group} tier</span></div>}
         </div>
@@ -1091,8 +1095,9 @@ function OrderPicker({ D, value, onPick }) {
 
 // Overdue (past due, not collected), oldest first, red → amber. Second tab lists every
 // uncollected order with name, number and days waiting — the month-end list (printable).
-function OverdueCard({ D, setView, setActiveOrderId }) {
+function OverdueCard({ D, setView, setActiveOrderId, money }) {
   const [tab, setTab] = useStateFD('overdue');
+  const [more, setMore] = useStateFD(false);
   const now = Date.now();
   const ts = (s) => { const t = new Date(String(s || '').replace(' ', 'T')).getTime(); return isNaN(t) ? now : t; };
   const open = D.orders.filter(o => o.status !== 'collected');
@@ -1100,37 +1105,82 @@ function OverdueCard({ D, setView, setActiveOrderId }) {
   const uncollected = [...open].sort((a, b) => ts(a.in) - ts(b.in));
   const list = tab === 'overdue' ? overdue : uncollected;
   const cname = (o) => (D.customers.find(c => c.id === o.customer) || {}).name || '—';
+  const due = (o) => Math.max(0, (o.total || 0) - (o.paid || 0));
+  const outstanding = list.reduce((s, o) => s + due(o), 0);
+  const fmt = (n) => (money ? money(n) : 'KES ' + Math.round(n).toLocaleString('en-KE'));
   const days = (o) => Math.max(0, Math.floor((now - ts(tab === 'overdue' ? o.due : o.in)) / 86400e3));
-  const shade = (d) => d >= 7 ? 'is-old' : d >= 3 ? 'is-mid' : 'is-new';
+  // Uncollected: up to 7 days old is yellow, older is red. Overdue: red 7d+, orange 3-6d, green under 3d.
+  const shade = (d) => tab === 'all' ? (d <= 7 ? 'is-new' : 'is-old') : (d >= 7 ? 'is-old' : d >= 3 ? 'is-mid' : 'is-fresh');
   const monthEnd = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() - d.getDate() <= 2; })();
-  function printList() {
-    const rows = uncollected.map(o => `<tr><td>${orderNo(o.id)}</td><td>${cname(o)}</td><td>${String(o.in).slice(0, 10)}</td><td>${Math.floor((now - ts(o.in)) / 86400e3)} days</td><td>${o.status}</td></tr>`).join('');
-    const w = window.open('', '_blank', 'width=720,height=900');
+  const shown = more ? list.slice(0, 50) : list.slice(0, 12);
+  function downloadPdf() {
+    const title = tab === 'overdue' ? 'Overdue orders' : 'Uncollected orders';
+    const rows = list.map(o => `<tr><td>${orderNo(o.id)}</td><td>${cname(o)}</td><td>${String(o.in).slice(0, 10)}</td><td>${days(o)} days</td><td>${o.status}</td><td style="text-align:right">${fmt(due(o))}</td></tr>`).join('');
+    const w = window.open('', '_blank', 'width=760,height=900');
     if (!w) return;
-    w.document.write(`<title>Uncollected orders</title><style>body{font-family:sans-serif;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:13px}</style><h2>Uncollected orders · ${new Date().toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })}</h2><p>${uncollected.length} orders</p><table><tr><th>Order</th><th>Customer</th><th>In</th><th>Waiting</th><th>Stage</th></tr>${rows}</table>`);
+    w.document.write(`<title>${title}</title><style>body{font-family:sans-serif;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:12.5px}tfoot td{font-weight:700;border-top:2px solid #111}</style><h2>${title} · ${new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}</h2><p>${list.length} orders · ${fmt(outstanding)} outstanding</p><table><thead><tr><th>Order</th><th>Customer</th><th>In</th><th>${tab === 'overdue' ? 'Late' : 'Waiting'}</th><th>Stage</th><th style="text-align:right">Amount due</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="5">Total outstanding</td><td style="text-align:right">${fmt(outstanding)}</td></tr></tfoot></table>`);
     w.document.close(); w.focus(); w.print();
   }
   return (
     <Card title={tab === 'overdue' ? `Overdue · ${overdue.length}` : `Uncollected · ${uncollected.length}`} action={
       <div className="safi-tabs">
-        <button className={`safi-tabs__btn ${tab === 'overdue' ? 'is-active' : ''}`} onClick={() => setTab('overdue')}>Overdue</button>
-        <button className={`safi-tabs__btn ${tab === 'all' ? 'is-active' : ''}`} onClick={() => setTab('all')}>Uncollected{monthEnd ? ' · month end' : ''}</button>
+        <button className={`safi-tabs__btn ${tab === 'overdue' ? 'is-active' : ''}`} onClick={() => { setTab('overdue'); setMore(false); }}>Overdue</button>
+        <button className={`safi-tabs__btn ${tab === 'all' ? 'is-active' : ''}`} onClick={() => { setTab('all'); setMore(false); }}>Uncollected{monthEnd ? ' · month end' : ''}</button>
       </div>
     }>
       {!list.length ? <p className="safi-cell-sub">{tab === 'overdue' ? 'Nothing overdue. 🎉' : 'No uncollected orders.'}</p> : (
-        <ul className="safi-overdue">
-          {list.slice(0, 12).map(o => { const d = days(o); return (
-            <li key={o.id} className={shade(d)} onClick={() => { setActiveOrderId(o.id); setView('order-detail'); }}>
-              <b className="safi-mono">{orderNo(o.id)}</b>
-              <span>{tab === 'all' ? cname(o) : String(cname(o)).split(' ')[0]}</span>
-              <em>{d === 0 ? (tab === 'overdue' ? 'today' : 'new') : `${d}d`}</em>
-            </li>
-          ); })}
-        </ul>
+        <div className={more ? 'safi-overdue-scroll' : ''}>
+          <ul className="safi-overdue">
+            {shown.map(o => { const d = days(o); return (
+              <li key={o.id} className={shade(d)} onClick={() => { setActiveOrderId(o.id); setView('order-detail'); }}>
+                <b className="safi-mono">{orderNo(o.id)}</b>
+                <span>{tab === 'all' ? cname(o) : String(cname(o)).split(' ')[0]}{more && <small className="safi-mono">{fmt(due(o))}</small>}</span>
+                <em>{d === 0 ? (tab === 'overdue' ? 'today' : 'new') : `${d}d`}</em>
+              </li>
+            ); })}
+          </ul>
+        </div>
       )}
-      {list.length > 12 && <p className="safi-cell-sub" style={{ marginTop: 6 }}>+ {list.length - 12} more</p>}
-      {tab === 'all' && uncollected.length > 0 && <Button kind="ghost" size="sm" icon="print" onClick={printList}>Print list</Button>}
+      {list.length > 0 && (
+        <div className="safi-overdue-foot">
+          {more && <span>Total outstanding <b className="safi-mono">{fmt(outstanding)}</b>{list.length > 50 ? ` · showing 50 of ${list.length}, download for all` : ''}</span>}
+          <span style={{ flex: 1 }}/>
+          {list.length > 12 && <Button kind="ghost" size="sm" onClick={() => setMore(!more)}>{more ? 'Show less' : `Show more (${Math.min(50, list.length)})`}</Button>}
+          {more && <Button kind="ghost" size="sm" icon="print" onClick={downloadPdf}>Download PDF</Button>}
+        </div>
+      )}
     </Card>
+  );
+}
+
+// Banner + chime when the backlog passes the limits set in Settings (default 20 each).
+function BacklogAlert({ D, setView }) {
+  const now = Date.now();
+  const ts = (s) => { const t = new Date(String(s || '').replace(' ', 'T')).getTime(); return isNaN(t) ? now : t; };
+  const open = D.orders.filter(o => o.status !== 'collected');
+  const nOver = open.filter(o => o.due && ts(o.due) < now).length;
+  const nUnc = open.length;
+  const lim = D.settings || {};
+  const limOver = Number(lim.overdueAlert) || 20, limUnc = Number(lim.uncollectedAlert) || 20;
+  const over = nOver > limOver, unc = nUnc > limUnc;
+  const hit = over || unc;
+  useEffectFD(() => {
+    if (!hit) return;
+    const ring = () => { try { window.safiChime && window.safiChime(true); } catch (e) {} };
+    ring();
+    const t = setInterval(ring, 15 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [hit]);
+  if (!hit) return null;
+  return (
+    <div className="safi-backlog">
+      <Icon name="alert" size={20}/>
+      <div>
+        <b>Action required</b>
+        <span>{[over && `${nOver} overdue orders (limit ${limOver})`, unc && `${nUnc} uncollected orders (limit ${limUnc})`].filter(Boolean).join(' · ')}. Call the customers and arrange collection or delivery.</span>
+      </div>
+      <Button kind="ghost" size="sm" onClick={() => { const m = document.querySelector('.safi-main'); if (m) m.scrollTo({ top: m.scrollHeight, behavior: 'smooth' }); }}>View list</Button>
+    </div>
   );
 }
 
@@ -1519,7 +1569,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
           <div className="safi-receipt__rule"/>
 
           <div className="safi-receipt__cust">
-            <b>{String(c?.name || 'Walk-in customer').trim().split(/\s+/)[0]}</b><br/>
+            <span className="safi-receipt__cname">{String(c?.name || 'Walk-in customer').trim().split(/\s+/)[0]}</span><br/>
             {c?.phone || ''}<br/>
             {c && <span className="safi-receipt__tag">{c.group} tier</span>}
           </div>

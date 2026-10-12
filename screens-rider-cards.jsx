@@ -141,8 +141,8 @@ function DeliveryNote({ order, card, D, shop }) {
         <div className="safi-dn__fill-t">Rider completes on delivery</div>
         <div className="safi-dn__fill-grid">
           <label>Amount received<i/></label>
-          <label>Cash / M-Pesa<i/></label>
-          <label>M-Pesa code<i/></label>
+          <label className="safi-dn__method">Paid by <span>☐ Cash</span><span>☐ M-Pesa</span><span>☐ Bank</span></label>
+          <label>M-Pesa / bank code<i/></label>
           <label>Date &amp; time delivered<i/></label>
           <label className="safi-dn__fill-wide">Received by — name &amp; signature<i/></label>
         </div>
@@ -183,7 +183,7 @@ function JobCardSheet({ orderId, setView, shop, lang }) {
           <Button kind="ghost" onClick={() => setView('order-detail')}>Order</Button>
           {jcUsed >= 5
             ? <Button kind="ghost" icon="lock" onClick={() => toast('The job card has been printed 5 times, the maximum.', 'error')}>Printed 5 of 5</Button>
-            : <Button kind="primary" icon="print" onClick={() => { window.SAFI_STORE.logPrint('jobcard', order.id); if (!dnDone) window.SAFI_STORE.logPrint('delivery', order.id); window.print(); }}>Print {jcUsed ? `(${jcUsed + 1} of 5)` : ''}</Button>}
+            : <Button kind="primary" icon="print" onClick={() => { window.SAFI_STORE.logPrint('jobcard', order.id); if (!dnDone) window.SAFI_STORE.logPrint('delivery', order.id); if (paper === '80') window.fitRollPages(); else { const o = document.getElementById('safi-roll-pages'); if (o) o.remove(); } window.print(); }}>Print {jcUsed ? `(${jcUsed + 1} of 5)` : ''}</Button>}
         </>}
       />
       <div className={`safi-jcsheet ${paper === '80' ? 'safi-jcsheet--roll' : ''}`} id="safi-print-area">
