@@ -141,7 +141,7 @@ function DeliveryNote({ order, card, D, shop }) {
         <div className="safi-dn__fill-t">Rider completes on delivery</div>
         <div className="safi-dn__fill-grid">
           <label>Amount received<i/></label>
-          <label className="safi-dn__method">Paid by <span>☐ Cash</span><span>☐ M-Pesa</span><span>☐ Bank</span></label>
+          <label className="safi-dn__method">Paid by <span><i/>Cash</span><span><i/>M-Pesa</span><span><i/>Bank</span></label>
           <label>M-Pesa / bank code<i/></label>
           <label>Date &amp; time delivered<i/></label>
           <label className="safi-dn__fill-wide">Received by — name &amp; signature<i/></label>

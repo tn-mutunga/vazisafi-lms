@@ -1,10 +1,6 @@
-VAZI SAFI LMS v2.3.0
-- Everything from 2.2.9 (print fixes, 80mm job card, print limits, overdue card, custom report range, monthly export, expense rules).
-- Receipt: client name bold, terms justified.
-- Job card: sign-off boxes spread evenly in 3 columns; no blank page before the delivery note.
-- Delivery note: Paid by Cash / M-Pesa / Bank tick boxes.
-- Front Desk: Overdue / Uncollected card is full-width tiles.
-  Overdue: red 7d+, orange 3-6d, light green under 3d. Uncollected: yellow up to 7d ("new" under 1 day), red older.
-- Overdue / Uncollected card moved below Recent orders. Show more opens a scrolling list of up to 50 with each order's amount due and the total outstanding. Download PDF lists every order with amounts and the total.
-- Backlog alert: red banner + chime (repeats every 15 min) when Overdue or Uncollected passes its limit. Limits (default 20 each) in Management > Settings > Backlog alerts.
-- 80mm job card: the cut line now prints on the job card's page, so there is no blank page before the delivery note.
+VAZI SAFI LMS v2.3.1
+- Overdue / Uncollected: Newest first (default) or Oldest first, so yesterday's late orders show straight away. Overdue under 3 days is light green.
+- Action required banner: no limit numbers in the text, adds "Team, let's make every effort to clear the backlog". Flashes and chimes on open, then every 2 hours. On/off switch in Management > Settings > Backlog alerts.
+- Receipt: "Attendant" instead of "Cashier"; header details pulled in from the right edge so nothing is cut when printing.
+- Download PDF works in the desktop app; the PDF has a Days column and colour-coded rows with a legend.
+- Extra space at the bottom of pages so the version badge no longer covers buttons.

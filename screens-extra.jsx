@@ -227,11 +227,12 @@ function SettingsScreen({ lang, shop, setShop }) {
 
       <Card title="Backlog alerts" action={<span className="safi-cell-sub">Front Desk shows a banner and chimes when a list passes its limit</span>}>
         <div className="safi-form" style={{ maxWidth: 420 }}>
+          <label className="safi-toggle"><input type="checkbox" defaultChecked={!(D.settings && D.settings.backlogAlertOn === false)} onChange={e => window.SAFI_STORE.setSetting('backlogAlertOn', e.target.checked)}/><span/><b>Show the "Action required" banner on Front Desk</b></label>
           <div className="safi-form__row">
             <label>Overdue orders above<input type="number" min="1" className="safi-input safi-mono" defaultValue={(D.settings && D.settings.overdueAlert) || 20} onBlur={e => window.SAFI_STORE.setSetting('overdueAlert', Math.max(1, parseInt(e.target.value, 10) || 20))}/></label>
             <label>Uncollected orders above<input type="number" min="1" className="safi-input safi-mono" defaultValue={(D.settings && D.settings.uncollectedAlert) || 20} onBlur={e => window.SAFI_STORE.setSetting('uncollectedAlert', Math.max(1, parseInt(e.target.value, 10) || 20))}/></label>
           </div>
-          <p className="safi-hint">Saved to the cloud and shared by every laptop. The chime repeats every 15 minutes while a list is over its limit.</p>
+          <p className="safi-hint">Saved to the cloud and shared by every laptop. The banner flashes and chimes when the app opens, then every 2 hours while a list is over its limit.</p>
         </div>
       </Card>
 

@@ -1098,11 +1098,14 @@ function OrderPicker({ D, value, onPick }) {
 function OverdueCard({ D, setView, setActiveOrderId, money }) {
   const [tab, setTab] = useStateFD('overdue');
   const [more, setMore] = useStateFD(false);
+  const [newest, setNewest] = useStateFD(true);
   const now = Date.now();
   const ts = (s) => { const t = new Date(String(s || '').replace(' ', 'T')).getTime(); return isNaN(t) ? now : t; };
   const open = D.orders.filter(o => o.status !== 'collected');
-  const overdue = open.filter(o => o.due && ts(o.due) < now).sort((a, b) => ts(a.due) - ts(b.due));
-  const uncollected = [...open].sort((a, b) => ts(a.in) - ts(b.in));
+  // Newest first by default so yesterday's late orders are visible straight away; Oldest puts the worst at the top.
+  const dir = newest ? -1 : 1;
+  const overdue = open.filter(o => o.due && ts(o.due) < now).sort((a, b) => dir * (ts(a.due) - ts(b.due)));
+  const uncollected = [...open].sort((a, b) => dir * (ts(a.in) - ts(b.in)));
   const list = tab === 'overdue' ? overdue : uncollected;
   const cname = (o) => (D.customers.find(c => c.id === o.customer) || {}).name || '—';
   const due = (o) => Math.max(0, (o.total || 0) - (o.paid || 0));
@@ -1115,13 +1118,23 @@ function OverdueCard({ D, setView, setActiveOrderId, money }) {
   const shown = more ? list.slice(0, 50) : list.slice(0, 12);
   function downloadPdf() {
     const title = tab === 'overdue' ? 'Overdue orders' : 'Uncollected orders';
-    const rows = list.map(o => `<tr><td>${orderNo(o.id)}</td><td>${cname(o)}</td><td>${String(o.in).slice(0, 10)}</td><td>${days(o)} days</td><td>${o.status}</td><td style="text-align:right">${fmt(due(o))}</td></tr>`).join('');
-    const w = window.open('', '_blank', 'width=760,height=900');
-    if (!w) return;
-    w.document.write(`<title>${title}</title><style>body{font-family:sans-serif;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:12.5px}tfoot td{font-weight:700;border-top:2px solid #111}</style><h2>${title} · ${new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}</h2><p>${list.length} orders · ${fmt(outstanding)} outstanding</p><table><thead><tr><th>Order</th><th>Customer</th><th>In</th><th>${tab === 'overdue' ? 'Late' : 'Waiting'}</th><th>Stage</th><th style="text-align:right">Amount due</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="5">Total outstanding</td><td style="text-align:right">${fmt(outstanding)}</td></tr></tfoot></table>`);
-    w.document.close(); w.focus(); w.print();
+    const tone = (d) => { const s = shade(d); return s === 'is-old' ? '#fee2e2' : s === 'is-mid' ? '#ffedd5' : s === 'is-fresh' ? '#dcfce7' : '#fef9c3'; };
+    const rows = list.map(o => { const d = days(o); return `<tr style="background:${tone(d)}"><td>${orderNo(o.id)}</td><td>${cname(o)}</td><td>${String(o.in).slice(0, 10)}</td><td><b>${d === 0 ? (tab === 'overdue' ? 'today' : 'new') : d + ' days'}</b></td><td>${o.status}</td><td style="text-align:right">${fmt(due(o))}</td></tr>`; }).join('');
+    const legend = tab === 'overdue' ? '<span style="background:#fee2e2">7+ days</span><span style="background:#ffedd5">3–6 days</span><span style="background:#dcfce7">under 3 days</span>' : '<span style="background:#fef9c3">up to 7 days</span><span style="background:#fee2e2">over 7 days</span>';
+    const html = `<!doctype html><html><head><title>${title}</title><style>@page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;color:#111}h2{margin:0 0 4px}p{margin:0 0 10px;font-size:13px}.lg span{display:inline-block;padding:2px 8px;margin-right:6px;border-radius:4px;font-size:11px}table{width:100%;border-collapse:collapse;margin-top:8px}td,th{border-bottom:1px solid #ddd;padding:5px 6px;text-align:left;font-size:11.5px}th{background:#f3f4f6}tfoot td{font-weight:700;border-top:2px solid #111;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body><h2>${title} · ${new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}</h2><p>${list.length} orders · ${fmt(outstanding)} outstanding</p><div class="lg">${legend}</div><table><thead><tr><th>Order</th><th>Customer</th><th>In</th><th>${tab === 'overdue' ? 'Days late' : 'Days waiting'}</th><th>Stage</th><th style="text-align:right">Amount due</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="5">Total outstanding</td><td style="text-align:right">${fmt(outstanding)}</td></tr></tfoot></table></body></html>`;
+    // A hidden frame prints reliably in the desktop app (pop-up windows are blocked there).
+    const old = document.getElementById('safi-list-frame'); if (old) old.remove();
+    const fr = document.createElement('iframe');
+    fr.id = 'safi-list-frame';
+    fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+    document.body.appendChild(fr);
+    const doc = fr.contentWindow.document;
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { toast('Could not open the print dialog', 'error'); } }, 300);
   }
+
   return (
+    <div id="safi-backlog-list">
     <Card title={tab === 'overdue' ? `Overdue · ${overdue.length}` : `Uncollected · ${uncollected.length}`} action={
       <div className="safi-tabs">
         <button className={`safi-tabs__btn ${tab === 'overdue' ? 'is-active' : ''}`} onClick={() => { setTab('overdue'); setMore(false); }}>Overdue</button>
@@ -1145,11 +1158,13 @@ function OverdueCard({ D, setView, setActiveOrderId, money }) {
         <div className="safi-overdue-foot">
           {more && <span>Total outstanding <b className="safi-mono">{fmt(outstanding)}</b>{list.length > 50 ? ` · showing 50 of ${list.length}, download for all` : ''}</span>}
           <span style={{ flex: 1 }}/>
+          <div className="safi-seg"><button className={`safi-seg__btn ${newest ? 'is-active' : ''}`} onClick={() => setNewest(true)}>Newest first</button><button className={`safi-seg__btn ${!newest ? 'is-active' : ''}`} onClick={() => setNewest(false)}>Oldest first</button></div>
           {list.length > 12 && <Button kind="ghost" size="sm" onClick={() => setMore(!more)}>{more ? 'Show less' : `Show more (${Math.min(50, list.length)})`}</Button>}
           {more && <Button kind="ghost" size="sm" icon="print" onClick={downloadPdf}>Download PDF</Button>}
         </div>
       )}
     </Card>
+    </div>
   );
 }
 
@@ -1161,25 +1176,29 @@ function BacklogAlert({ D, setView }) {
   const nOver = open.filter(o => o.due && ts(o.due) < now).length;
   const nUnc = open.length;
   const lim = D.settings || {};
+  const on = lim.backlogAlertOn !== false;
   const limOver = Number(lim.overdueAlert) || 20, limUnc = Number(lim.uncollectedAlert) || 20;
   const over = nOver > limOver, unc = nUnc > limUnc;
-  const hit = over || unc;
+  const hit = on && (over || unc);
+  const [flash, setFlash] = useStateFD(false);
+  // Chime + flash on open, then every 2 hours while a list is over its limit.
   useEffectFD(() => {
     if (!hit) return;
-    const ring = () => { try { window.safiChime && window.safiChime(true); } catch (e) {} };
+    const ring = () => { try { window.safiChime && window.safiChime(true); } catch (e) {} setFlash(true); setTimeout(() => setFlash(false), 30000); };
     ring();
-    const t = setInterval(ring, 15 * 60 * 1000);
+    const t = setInterval(ring, 2 * 60 * 60 * 1000);
     return () => clearInterval(t);
   }, [hit]);
   if (!hit) return null;
+  const parts = [over && `${nOver} overdue orders`, unc && `${nUnc} uncollected orders`].filter(Boolean).join(' · ');
   return (
-    <div className="safi-backlog">
+    <div className={`safi-backlog${flash ? ' is-flash' : ''}`}>
       <Icon name="alert" size={20}/>
       <div>
         <b>Action required</b>
-        <span>{[over && `${nOver} overdue orders (limit ${limOver})`, unc && `${nUnc} uncollected orders (limit ${limUnc})`].filter(Boolean).join(' · ')}. Call the customers and arrange collection or delivery.</span>
+        <span>{parts}. Team, let's make every effort to clear the backlog — call the customers and arrange collection or delivery.</span>
       </div>
-      <Button kind="ghost" size="sm" onClick={() => { const m = document.querySelector('.safi-main'); if (m) m.scrollTo({ top: m.scrollHeight, behavior: 'smooth' }); }}>View list</Button>
+      <Button kind="ghost" size="sm" onClick={() => { const el = document.getElementById('safi-backlog-list'); if (!el) return; const se = document.scrollingElement || document.documentElement; se.scrollTo({ top: se.scrollTop + el.getBoundingClientRect().top - 16, behavior: 'smooth' }); }}>View list</Button>
     </div>
   );
 }
@@ -1563,7 +1582,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
             {o.queueNo && <div><span>Client #</span><b className="safi-mono">{String(o.queueNo).padStart(2, '0')}</b></div>}
             {o.tag && <div><span>Tag #</span><b className="safi-mono">{o.tag}</b></div>}
             <div><span>Date</span><b>{o.in}</b></div>
-            <div><span>Cashier</span><b>{(D.staff.find(s => s.id === (o.cashier || D.currentStaffId)) || D.staff[0])?.name || '—'}</b></div>
+            <div><span>Attendant</span><b>{(D.staff.find(s => s.id === (o.cashier || D.currentStaffId)) || D.staff[0])?.name || '—'}</b></div>
           </div>
 
           <div className="safi-receipt__rule"/>
