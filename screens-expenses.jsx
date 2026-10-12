@@ -24,6 +24,16 @@ function setExpenseGroup(D, id, g) {
   window.SAFI_STORE.setSetting('expenseGroupOverrides', ov);
 }
 
+// The shop till (HP Engage One) signs in to the cloud with the shop login. Any other
+// laptop (the MacBook, home) is Management, whoever is set as teller.
+function isShopComputer() {
+  try {
+    const st = window.SAFI_CLOUD && window.SAFI_CLOUD.status && window.SAFI_CLOUD.status();
+    const email = String((st && st.email) || '').toLowerCase();
+    const shop = String((window.SAFI_STORE.get().settings || {}).shopLoginEmail || 'vazisafi.thikard@gmail.com').toLowerCase();
+    return !email || email === shop;
+  } catch (e) { return true; }
+}
 const splitIds = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
 const joinIds = (a) => [...new Set(a)].join(', ');
 
@@ -177,7 +187,7 @@ function ExpensesScreen({ lang, money, role }) {
       if (isOtherCat(D.expenseCategories.find(c => c.id === form.category))) setExpenseGroup(D, editId, form.costGroup);
       toast('Expense updated', 'success');
     } else {
-      const made = window.SAFI_STORE.addExpense({ ...form, amount: parseFloat(form.amount), paidBy: isManagement ? 'management' : undefined });
+      const made = window.SAFI_STORE.addExpense({ ...form, amount: parseFloat(form.amount), paidBy: (isManagement || !isShopComputer()) ? 'management' : undefined });
       if (made && form.costGroup === 'special' && isOtherCat(D.expenseCategories.find(c => c.id === form.category))) setExpenseGroup(D, made.id, 'special');
       toast('Expense logged', 'success');
     }
@@ -259,7 +269,7 @@ function ExpensesScreen({ lang, money, role }) {
             { label: 'Amount', render: r => <span className="safi-mono safi-cell-strong">— {money(r.amount)}</span> },
             { label: 'Method', render: r => <MethodBadge method={r.method}/> },
             { label: 'Txn', render: r => r.txn ? <span className="safi-mono safi-cell-sub">{r.txn}</span> : <span className="safi-cell-sub">—</span> },
-            { label: 'Recorded by', render: r => {
+            { label: 'Logged by', render: r => {
               if (r.paidBy === 'management') return <span className="safi-tag safi-tag--violet">Management</span>;
               const s = D.staff.find(x => x.id === r.paidBy);
               return <span className="safi-cell-sub">{s?.name || '—'}</span>;
@@ -268,7 +278,7 @@ function ExpensesScreen({ lang, money, role }) {
             { label: '', render: r => (
               <div style={{ display: 'flex', gap: 4 }}>
                 <button className="safi-rowlink" onClick={() => openEdit(r)}>Edit</button>
-                {isManagement && <button className="safi-rowlink safi-rowlink--danger" onClick={() => { if (confirm(`Delete "${r.label}"?`)) { window.SAFI_STORE.removeExpense(r.id); toast('Expense deleted'); } }}>Delete</button>}
+                {isManagement && <button className="safi-rowlink safi-rowlink--danger" onClick={() => window.safiPinConfirm({ title: `Delete "${r.label}"?`, body: 'The expense is removed from this laptop and, when sync is on, from the cloud and the other laptops. This cannot be undone.', confirmLabel: 'Delete', onConfirm: () => { window.SAFI_STORE.removeExpense(r.id); window.SAFI_STORE.audit && window.SAFI_STORE.audit('expense.delete', r.id, `${r.label} · ${r.amount}`); toast('Expense deleted'); } })}>Delete</button>}
               </div>
             )},
           ]}

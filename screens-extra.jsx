@@ -609,6 +609,7 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
     rewash_order: 'Rewash (free)',
     edit_order:   'Edit order items',
     refund_order: 'Refund order',
+    reprint_receipt: 'Second receipt print',
   };
 
   function approve(a) {

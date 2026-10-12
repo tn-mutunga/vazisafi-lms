@@ -120,6 +120,8 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
               <li><span className="safi-mach__dot is-warn"/><span>Dryer 2</span><span className="safi-mach__time">service due</span></li>
             </ul>
           </Card>
+
+          <OverdueCard D={D} setView={setView} setActiveOrderId={setActiveOrderId}/>
         </div>
       </div>
 
@@ -336,7 +338,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                   }
                 }}>
                   <span className="safi-svc-tile__ico"><Icon name={s.id === 'wash-piece' ? 'washpiece' : s.icon} size={20}/></span>
-                  <span className="safi-svc-tile__lbl">{s.tileName || (s.id === 'wash-piece' ? 'Per piece' : s.name)}</span>
+                  <span className="safi-svc-tile__lbl">{s.id === 'wash-piece' ? 'Wash & Fold (per piece)' : (s.tileName || s.name)}</span>
                   <span className="safi-svc-tile__price">{s.id === 'other' ? 'Any item · kg or pieces' : s.id === 'express' ? `${expressPct}% of order value` : s.tellerPrice ? 'Price set by teller' : P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
                   {s.subtypes && s.subtypes.length > 0 && <span className="safi-svc-tile__sub">Pick from {s.subtypes.length} types →</span>}
                 </button>
@@ -633,7 +635,7 @@ function NewOrderPreview({ items, subtotal, discount, discountPct, total, deposi
       <div className="safi-receipt" style={{ width: '100%', boxShadow: 'none', padding: 12 }}>
         <div className="safi-receipt__rule" style={{ marginTop: 0 }}/>
         <div className="safi-receipt__cust">
-          <b>{customer?.name || 'Walk-in customer'}</b><br/>
+          <b>{String(customer?.name || 'Walk-in customer').trim().split(/\s+/)[0]}</b><br/>
           {customer?.phone || ''}
           {customer && <div><span className="safi-receipt__tag">{customer.group} tier</span></div>}
         </div>
@@ -951,6 +953,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
             </div>
           </Card>
 
+          {isManagement && <PrintPermissions o={o}/>}
           <Card title="Payment">
             <div className="safi-paybox">
               <div className="safi-paybox__row"><span>{t('total', lang)}</span><b className="safi-mono">{money(o.total)}</b></div>
@@ -1083,6 +1086,51 @@ function OrderPicker({ D, value, onPick }) {
         </div>
       )}
     </div>
+  );
+}
+
+// Overdue (past due, not collected), oldest first, red → amber. Second tab lists every
+// uncollected order with name, number and days waiting — the month-end list (printable).
+function OverdueCard({ D, setView, setActiveOrderId }) {
+  const [tab, setTab] = useStateFD('overdue');
+  const now = Date.now();
+  const ts = (s) => { const t = new Date(String(s || '').replace(' ', 'T')).getTime(); return isNaN(t) ? now : t; };
+  const open = D.orders.filter(o => o.status !== 'collected');
+  const overdue = open.filter(o => o.due && ts(o.due) < now).sort((a, b) => ts(a.due) - ts(b.due));
+  const uncollected = [...open].sort((a, b) => ts(a.in) - ts(b.in));
+  const list = tab === 'overdue' ? overdue : uncollected;
+  const cname = (o) => (D.customers.find(c => c.id === o.customer) || {}).name || '—';
+  const days = (o) => Math.max(0, Math.floor((now - ts(tab === 'overdue' ? o.due : o.in)) / 86400e3));
+  const shade = (d) => d >= 7 ? 'is-old' : d >= 3 ? 'is-mid' : 'is-new';
+  const monthEnd = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() - d.getDate() <= 2; })();
+  function printList() {
+    const rows = uncollected.map(o => `<tr><td>${orderNo(o.id)}</td><td>${cname(o)}</td><td>${String(o.in).slice(0, 10)}</td><td>${Math.floor((now - ts(o.in)) / 86400e3)} days</td><td>${o.status}</td></tr>`).join('');
+    const w = window.open('', '_blank', 'width=720,height=900');
+    if (!w) return;
+    w.document.write(`<title>Uncollected orders</title><style>body{font-family:sans-serif;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:13px}</style><h2>Uncollected orders · ${new Date().toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })}</h2><p>${uncollected.length} orders</p><table><tr><th>Order</th><th>Customer</th><th>In</th><th>Waiting</th><th>Stage</th></tr>${rows}</table>`);
+    w.document.close(); w.focus(); w.print();
+  }
+  return (
+    <Card title={tab === 'overdue' ? `Overdue · ${overdue.length}` : `Uncollected · ${uncollected.length}`} action={
+      <div className="safi-tabs">
+        <button className={`safi-tabs__btn ${tab === 'overdue' ? 'is-active' : ''}`} onClick={() => setTab('overdue')}>Overdue</button>
+        <button className={`safi-tabs__btn ${tab === 'all' ? 'is-active' : ''}`} onClick={() => setTab('all')}>Uncollected{monthEnd ? ' · month end' : ''}</button>
+      </div>
+    }>
+      {!list.length ? <p className="safi-cell-sub">{tab === 'overdue' ? 'Nothing overdue. 🎉' : 'No uncollected orders.'}</p> : (
+        <ul className="safi-overdue">
+          {list.slice(0, 12).map(o => { const d = days(o); return (
+            <li key={o.id} className={shade(d)} onClick={() => { setActiveOrderId(o.id); setView('order-detail'); }}>
+              <b className="safi-mono">{orderNo(o.id)}</b>
+              <span>{tab === 'all' ? cname(o) : String(cname(o)).split(' ')[0]}</span>
+              <em>{d === 0 ? (tab === 'overdue' ? 'today' : 'new') : `${d}d`}</em>
+            </li>
+          ); })}
+        </ul>
+      )}
+      {list.length > 12 && <p className="safi-cell-sub" style={{ marginTop: 6 }}>+ {list.length - 12} more</p>}
+      {tab === 'all' && uncollected.length > 0 && <Button kind="ghost" size="sm" icon="print" onClick={printList}>Print list</Button>}
+    </Card>
   );
 }
 
@@ -1396,6 +1444,34 @@ function EditOrderModal({ open, onClose, order, isManagement }) {
   );
 }
 
+// One print per receipt. A second needs Management approval (Approvals queue); never more than two.
+function ReceiptPrintButton({ D, o, lang }) {
+  const used = window.SAFI_STORE.printCount('receipt', o.id);
+  const allowed = window.SAFI_STORE.printsAllowed('receipt', o.id);
+  const can = used < allowed;
+  return <Button kind={can ? 'secondary' : 'ghost'} icon="print" disabled={!can}
+    onClick={() => { if (can) window.printDoc('receipt', o.id); }}>{t('print', lang)}</Button>;
+}
+
+// Management only: allow one more print of this order's receipt or delivery note.
+function PrintPermissions({ o }) {
+  useStore();
+  const row = (kind, label) => {
+    const used = window.SAFI_STORE.printCount(kind, o.id);
+    const allowed = window.SAFI_STORE.printsAllowed(kind, o.id);
+    return (
+      <div className="safi-printperm__row">
+        <span>{label}</span>
+        <span className="safi-cell-sub">printed {used} · allowed {allowed}</span>
+        {kind !== 'jobcard' && used >= allowed
+          ? <Button kind="ghost" size="sm" onClick={() => { window.SAFI_STORE.grantPrint(kind, o.id); toast(`One more ${label.toLowerCase()} print allowed`); }}>Allow 1 more</Button>
+          : <span className="safi-cell-sub">{used < allowed ? 'can print' : 'max reached'}</span>}
+      </div>
+    );
+  };
+  return <Card title="Print permissions"><div className="safi-printperm">{row('receipt', 'Receipt')}{row('delivery', 'Delivery note')}{row('jobcard', 'Job card')}</div></Card>;
+}
+
 // ─── Receipt (printable) ──────────────────────────────────────────────────
 function Receipt({ orderId, setView, lang, money, shop }) {
   const D = useStore();
@@ -1410,7 +1486,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
         subtitle="80mm thermal-printer optimized. Print this, then print the job card & delivery note."
         right={<>
           <Button kind="ghost" onClick={() => setView('order-detail')}><Icon name="arrow-l" size={14}/> Back</Button>
-          <Button kind="secondary" icon="print" onClick={() => window.printDoc('receipt', o.id)}>{t('print', lang)}</Button>
+          <ReceiptPrintButton D={D} o={o} lang={lang}/>
           <Button kind="primary" icon="card" onClick={() => setView('job-card')}>Job card &amp; delivery note →</Button>
         </>}
       />
@@ -1443,7 +1519,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
           <div className="safi-receipt__rule"/>
 
           <div className="safi-receipt__cust">
-            <b>{c?.name || 'Walk-in customer'}</b><br/>
+            <b>{String(c?.name || 'Walk-in customer').trim().split(/\s+/)[0]}</b><br/>
             {c?.phone || ''}<br/>
             {c && <span className="safi-receipt__tag">{c.group} tier</span>}
           </div>

@@ -327,6 +327,24 @@ window.SAFI_STORE = (() => {
 
   return {
     audit(action, target, detail, meta) { audit(action, target, detail, meta); save(); },
+    // Print counts come from the (synced) audit log, so every laptop sees the same number.
+    printCount(kind, orderId) { return (state.auditLog || []).filter(a => a.action === 'print.' + kind && a.target === orderId).length; },
+    // Receipt and delivery note print once. Management can silently allow one more for a
+    // given order (each grant = one extra print). Job card: five prints.
+    printsAllowed(kind, orderId) {
+      if (kind === 'jobcard') return 5;
+      const g = (((state.settings || {}).printGrants || {})[kind] || {})[orderId] || 0;
+      const legacy = kind === 'receipt' ? (((state.settings || {}).reprintGrants || {})[orderId] || 0) : 0;
+      return 1 + g + legacy;
+    },
+    grantPrint(kind, orderId) {
+      const all = { ...((state.settings || {}).printGrants || {}) };
+      const k = { ...(all[kind] || {}) }; k[orderId] = (k[orderId] || 0) + 1; all[kind] = k;
+      state.settings = { ...(state.settings || {}), printGrants: all };
+      audit('print.grant', orderId, kind + ' reprint allowed');
+      save();
+    },
+    receiptPrintsAllowed(orderId) { return this.printsAllowed('receipt', orderId); },
     getAudit(filter) {
       let rows = state.auditLog || [];
       if (filter?.staff)  rows = rows.filter(r => r.staff === filter.staff);
@@ -750,6 +768,7 @@ window.SAFI_STORE = (() => {
         else if (ap.action === 'rewash_order') this.createRewash(ap.target, ap.payload?.itemIndices);
         else if (ap.action === 'edit_order')   this.updateOrder(ap.target, ap.payload || {});
         else if (ap.action === 'refund_order') this.updateOrder(ap.target, { status: 'collected', paid: 0, refunded: true });
+        else if (ap.action === 'reprint_receipt') { const g = { ...((state.settings || {}).reprintGrants || {}) }; g[ap.target] = 1; state.settings = { ...(state.settings || {}), reprintGrants: g }; }
       }
       save();
     },

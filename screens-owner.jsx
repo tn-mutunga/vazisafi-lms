@@ -229,10 +229,13 @@ function ReportsScreen({ lang, money }) {
   const D = useStore();
   const [tab, setTab] = useStateOw('daily');
   const todayStr = SAFI_TIME.day();
+  const [from, setFrom] = useStateOw(SAFI_TIME.daysAgo(29));
+  const [to, setTo] = useStateOw(SAFI_TIME.day());
+  const inRange = (d) => { const k = String(d || '').slice(0, 10); return tab === 'custom' ? (k >= from && k <= to) : tab === 'daily' ? k === todayStr : k >= cutoff; };
   const todays = D.orders.filter(o => o.in.startsWith(todayStr));
   const periodDays = tab === 'daily' ? 1 : tab === 'weekly' ? 7 : tab === 'monthly' ? 30 : 36500;
   const cutoff = SAFI_TIME.daysAgo(periodDays - 1);
-  const periodOrders = tab === 'daily' ? todays : D.orders.filter(o => o.in.slice(0, 10) >= cutoff);
+  const periodOrders = D.orders.filter(o => inRange(o.in));
   const todayRev = periodOrders.reduce((s, o) => s + (o.total || 0), 0);
   const periodCollected = periodOrders.reduce((s, o) => s + (o.paid || 0), 0);
   const periodByService = D.services.map(svc => ({
@@ -241,15 +244,15 @@ function ReportsScreen({ lang, money }) {
   })).filter(r => r.value > 0).sort((a, b) => b.value - a.value);
 
   const totalsByMethod = ['mpesa', 'bank'].map(m => {
-    const list = D.payments.filter(p => p.method === m && (tab !== 'daily' || p.date.startsWith(todayStr)));
+    const list = D.payments.filter(p => p.method === m && inRange(p.date));
     return { m, count: list.length, total: list.reduce((s, p) => s + p.amount, 0), verified: list.filter(p => p.verified).reduce((s, p) => s + p.amount, 0) };
   });
   const totalAll = totalsByMethod.reduce((s, m) => s + m.total, 0);
   const verifiedAll = totalsByMethod.reduce((s, m) => s + m.verified, 0);
-  const mpesaPayments = D.payments.filter(p => p.method === 'mpesa' && (tab !== 'daily' || p.date.startsWith(todayStr)));
+  const mpesaPayments = D.payments.filter(p => p.method === 'mpesa' && inRange(p.date));
 
   const headerTitle = tab === 'daily' ? `Daily Close · ${new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}` :
-                      tab === 'weekly' ? 'This week' : tab === 'monthly' ? 'This month' : 'Custom range';
+                      tab === 'weekly' ? 'This week' : tab === 'monthly' ? 'This month' : `${from} to ${to}`;
 
   return (
     <>
@@ -267,6 +270,17 @@ function ReportsScreen({ lang, money }) {
           <button key={id} className={`safi-tabs__btn ${tab === id ? 'is-active' : ''}`} onClick={() => setTab(id)}>{lbl}</button>
         ))}
       </div>
+      {tab === 'custom' && (
+        <div className="safi-range">
+          <label>From<input type="date" className="safi-input" value={from} min="2016-01-01" max={to} onChange={e => setFrom(e.target.value || from)}/></label>
+          <label>To<input type="date" className="safi-input" value={to} min={from} max={todayStr} onChange={e => setTo(e.target.value || to)}/></label>
+          <div className="safi-range__quick">
+            {[['This month', SAFI_TIME.day().slice(0, 8) + '01', todayStr], ['Last 90 days', SAFI_TIME.daysAgo(89), todayStr], ['This year', SAFI_TIME.day().slice(0, 4) + '-01-01', todayStr], ['Last year', (Number(todayStr.slice(0, 4)) - 1) + '-01-01', (Number(todayStr.slice(0, 4)) - 1) + '-12-31'], ['All time', '2016-01-01', todayStr]].map(([l, a, b]) => (
+              <button key={l} className={`safi-chip ${from === a && to === b ? 'is-active' : ''}`} onClick={() => { setFrom(a); setTo(b); }}>{l}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Card pad={false}>
         <div className="safi-report" id="safi-print-area">
@@ -742,6 +756,51 @@ function RedateCard() {
 }
 
 // ─── Data Management ──────────────────────────────────────────────────────
+// Monthly export: orders (with client details and each day's total) and customers, CSV or JSON.
+function MonthExport({ D }) {
+  const [month, setMonth] = useStateOw(SAFI_TIME.day().slice(0, 7));
+  const cust = (id) => D.customers.find(c => c.id === id) || {};
+  const orders = D.orders.filter(o => String(o.in).startsWith(month)).sort((a, b) => String(a.in).localeCompare(String(b.in)));
+  const dayTotal = {};
+  for (const o of orders) { const k = String(o.in).slice(0, 10); dayTotal[k] = (dayTotal[k] || 0) + (o.total || 0); }
+  const svcName = (id) => (D.services.find(s => s.id === id) || {}).name || id;
+  const custIds = new Set([...orders.map(o => o.customer).filter(Boolean), ...D.customers.filter(c => String(c.joined || '').startsWith(month)).map(c => c.id)]);
+  const customers = D.customers.filter(c => custIds.has(c.id));
+  const csvCell = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const toCSV = (head, rows) => [head.join(','), ...rows.map(r => r.map(csvCell).join(','))].join('\n');
+  const save = (name, text, type) => { const b = new Blob([text], { type }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 1000); };
+  const orderRows = () => orders.map(o => { const c = cust(o.customer); const day = String(o.in).slice(0, 10); return {
+    order: orderNo(o.id), date: day, time: String(o.in).slice(11, 16), customer: c.name || '', phone: c.phone ? `${c.prefix || '+254'} ${c.phone}` : '', tier: c.group || '', residence: c.location || '',
+    items: (o.items || []).map(it => `${svcName(it.svc)}${it.subtype ? ' · ' + it.subtype : ''} x${it.qty}`).join('; '),
+    total: o.total || 0, paid: o.paid || 0, balance: Math.max(0, (o.total || 0) - (o.paid || 0)), status: o.status, day_total: dayTotal[day] }; });
+  const custRows = () => customers.map(c => { const mine = orders.filter(o => o.customer === c.id); return {
+    name: c.name, phone: c.phone ? `${c.prefix || '+254'} ${c.phone}` : '', tier: c.group, residence: c.location || '', joined: c.joined || '',
+    orders_this_month: mine.length, spend_this_month: mine.reduce((s, o) => s + (o.total || 0), 0), lifetime_orders: c.orders || 0, lifetime_spend: c.spend || 0 }; });
+  function ordersCSV() {
+    const rows = orderRows(); const head = Object.keys(rows[0] || { order: 0 });
+    const lines = []; let last = '';
+    for (const r of rows) { if (last && r.date !== last) lines.push(['', last, '', 'DAY TOTAL', '', '', '', '', dayTotal[last]]); lines.push(head.map(h => r[h])); last = r.date; }
+    if (last) lines.push(['', last, '', 'DAY TOTAL', '', '', '', '', dayTotal[last]]);
+    lines.push(['', month, '', 'MONTH TOTAL', '', '', '', '', orders.reduce((s, o) => s + (o.total || 0), 0)]);
+    save(`vazi-safi-orders-${month}.csv`, toCSV(head, lines), 'text/csv');
+  }
+  const ordersJSON = () => save(`vazi-safi-orders-${month}.json`, JSON.stringify({ month, dayTotals: dayTotal, monthTotal: orders.reduce((s, o) => s + (o.total || 0), 0), orders: orderRows() }, null, 2), 'application/json');
+  const custCSV = () => { const rows = custRows(); const head = Object.keys(rows[0] || { name: 0 }); save(`vazi-safi-customers-${month}.csv`, toCSV(head, rows.map(r => head.map(h => r[h]))), 'text/csv'); };
+  const custJSON = () => save(`vazi-safi-customers-${month}.json`, JSON.stringify({ month, customers: custRows() }, null, 2), 'application/json');
+  return (
+    <Card title="Monthly export" action={<span className="safi-cell-sub">{orders.length} orders · {customers.length} customers in {month}</span>}>
+      <div className="safi-range">
+        <label>Month<input type="month" className="safi-input" value={month} max={SAFI_TIME.day().slice(0, 7)} onChange={e => setMonth(e.target.value || month)}/></label>
+        <Button kind="secondary" icon="list" onClick={ordersCSV}>Orders · CSV</Button>
+        <Button kind="ghost" icon="box" onClick={ordersJSON}>Orders · JSON</Button>
+        <Button kind="secondary" icon="users" onClick={custCSV}>Customers · CSV</Button>
+        <Button kind="ghost" icon="box" onClick={custJSON}>Customers · JSON</Button>
+      </div>
+      <p className="safi-hint">Orders include the client's name, phone, tier and residence, plus a total for each day and the month. CSV opens in Excel.</p>
+    </Card>
+  );
+}
+
 function DataScreen({ lang }) {
   const D = useStore();
   const fileRef = useRefOw(null);
@@ -759,6 +818,8 @@ function DataScreen({ lang }) {
   return (
     <>
       <Topbar title="Data & Backup" subtitle="Your data lives on this laptop — back it up regularly."/>
+
+      <MonthExport D={D}/>
 
       <div className="safi-grid safi-grid--3">
         <StatCard label="Orders" value={D.orders.length} icon="list"/>

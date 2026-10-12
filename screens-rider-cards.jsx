@@ -1,3 +1,5 @@
+// Note numbers are built from the order id (SF-2431-YG-02); hide the laptop code on screen and paper.
+const serialNo = (s) => String(s || '').replace(/-[A-Z]{2}(-\d+)$/, '$1').replace(/-[A-Z]{2}$/, '');
 // Vazi Safi — job card + delivery note
 //
 // One A4 sheet, tear line across the middle:
@@ -30,7 +32,7 @@ function JobCard({ order, card, D, shop }) {
           <div className="safi-jc__kind">Job card — stays with the garments</div>
         </div>
         <div className="safi-jc__ids">
-          <div><span>Order no. · client no.</span><b className="safi-mono">{card?.serial || orderNo(order.id)}</b></div>
+          <div><span>Order no. · client no.</span><b className="safi-mono">{card?.serial ? serialNo(card.serial) : orderNo(order.id)}</b></div>
           <div><span>Tag no.</span><b className="safi-mono">{order.tag || '—'}</b></div>
         </div>
       </header>
@@ -99,7 +101,7 @@ function DeliveryNote({ order, card, D, shop }) {
         </div>
         <div className="safi-dn__serial">
           <span>Note no.</span>
-          <b>{card?.serial || orderNo(order.id)}</b>
+          <b>{card?.serial ? serialNo(card.serial) : orderNo(order.id)}</b>
         </div>
       </header>
 
@@ -163,22 +165,31 @@ function JobCardSheet({ orderId, setView, shop, lang }) {
 
   const card = window.SAFI_STORE.getCardForOrder(order.id)
     || window.SAFI_STORE.issueDeliveryCard(order.id);
+  // Paper size is per laptop: the shop's thermal printer uses the 80mm roll.
+  const [paper, setPaper] = useStateDC(() => localStorage.getItem('safi_jc_paper') || '80');
+  const pick = (p) => { setPaper(p); localStorage.setItem('safi_jc_paper', p); };
+  // Job card: up to 5 prints. Delivery note: once only (it is the rider's cash record).
+  const jcUsed = window.SAFI_STORE.printCount('jobcard', order.id);
+  const dnDone = window.SAFI_STORE.printCount('delivery', order.id) >= window.SAFI_STORE.printsAllowed('delivery', order.id);
 
   return (
     <>
       <Topbar
         title="Job card & delivery note"
-        subtitle="One A4 sheet, tear along the dashed line. Job card stays with the garments, delivery note goes with the rider."
+        subtitle={paper === '80' ? '80mm roll: job card first, cut at the line, then the delivery note. Job card stays with the garments, delivery note goes with the rider.' : 'One A4 sheet, tear along the dashed line. Job card stays with the garments, delivery note goes with the rider.'}
         right={<>
+          <div className="safi-seg">{[['80', '80mm roll'], ['a4', 'A4 sheet']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${paper === k ? 'is-active' : ''}`} onClick={() => pick(k)}>{l}</button>)}</div>
           <Button kind="ghost" onClick={() => setView('receipt')}>← Receipt</Button>
           <Button kind="ghost" onClick={() => setView('order-detail')}>Order</Button>
-          <Button kind="primary" icon="print" onClick={() => window.printDoc('jobcard', order.id)}>Print</Button>
+          {jcUsed >= 5
+            ? <Button kind="ghost" icon="lock" onClick={() => toast('The job card has been printed 5 times, the maximum.', 'error')}>Printed 5 of 5</Button>
+            : <Button kind="primary" icon="print" onClick={() => { window.SAFI_STORE.logPrint('jobcard', order.id); if (!dnDone) window.SAFI_STORE.logPrint('delivery', order.id); window.print(); }}>Print {jcUsed ? `(${jcUsed + 1} of 5)` : ''}</Button>}
         </>}
       />
-      <div className="safi-jcsheet" id="safi-print-area">
+      <div className={`safi-jcsheet ${paper === '80' ? 'safi-jcsheet--roll' : ''}`} id="safi-print-area">
         <JobCard order={order} card={card} D={D} shop={shop}/>
-        <div className="safi-tear"><span>tear here</span></div>
-        <DeliveryNote order={order} card={card} D={D} shop={shop}/>
+        {!dnDone && <div className="safi-tear"><span>{paper === '80' ? '✂ cut here' : 'tear here'}</span></div>}
+        {!dnDone ? <DeliveryNote order={order} card={card} D={D} shop={shop}/> : <p className="safi-cell-sub safi-noprint" style={{ textAlign: 'center', marginTop: 12 }}>Delivery note already printed once. This copy is the job card only.</p>}
       </div>
     </>
   );
@@ -272,7 +283,7 @@ function RiderCardsScreen({ setView, setActiveOrderId, money }) {
         <Card title="Notes out" pad={false}>
           <Table
             cols={[
-              { label: 'Note no.', render: r => <b className="safi-mono">{r.serial}</b> },
+              { label: 'Note no.', render: r => <b className="safi-mono">{serialNo(r.serial)}</b> },
               { label: 'Order', render: r => <span className="safi-mono">{r.order || '—'}</span> },
               { label: 'Customer', render: r => custName(r.customer) },
               { label: 'Rider', render: r => staffName(r.rider) },
@@ -297,7 +308,7 @@ function RiderCardsScreen({ setView, setActiveOrderId, money }) {
           pad={false}>
           <Table
             cols={[
-              { label: 'Note no.', render: r => <b className="safi-mono">{r.serial}</b> },
+              { label: 'Note no.', render: r => <b className="safi-mono">{serialNo(r.serial)}</b> },
               { label: 'Order', render: r => <span className="safi-mono">{r.order || '—'}</span> },
               { label: 'Customer', render: r => custName(r.customer) },
               { label: 'Issued', render: r => r.issuedAtLabel },
@@ -316,7 +327,7 @@ function RiderCardsScreen({ setView, setActiveOrderId, money }) {
         <Card title="Returned notes" pad={false}>
           <Table
             cols={[
-              { label: 'Note no.', render: r => <b className="safi-mono">{r.serial}</b> },
+              { label: 'Note no.', render: r => <b className="safi-mono">{serialNo(r.serial)}</b> },
               { label: 'Order', render: r => <span className="safi-mono">{r.order || '—'}</span> },
               { label: 'Rider', render: r => staffName(r.rider) },
               { label: 'Returned', render: r => r.returnedAtLabel },
@@ -337,14 +348,14 @@ function RiderCardsScreen({ setView, setActiveOrderId, money }) {
       )}
 
       <Modal open={!!settle} onClose={() => setSettle(null)} width={420}
-        title={settle ? `Note ${settle.serial} returned` : ''}
+        title={settle ? `Note ${serialNo(settle.serial)} returned` : ''}
         footer={<>
           <Button kind="ghost" onClick={() => setSettle(null)}>Cancel</Button>
           <Button kind="primary" icon="check" onClick={() => {
             window.SAFI_STORE.returnDeliveryCard(settle.id, {
               receivedAmount: Number(amt) || 0, receivedMethod: pm, receivedTxn: txn, note,
             });
-            toast(`Note ${settle.serial} logged as returned`, 'success');
+            toast(`Note ${serialNo(settle.serial)} logged as returned`, 'success');
             setSettle(null);
           }}>Log return</Button>
         </>}>

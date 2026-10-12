@@ -1806,10 +1806,10 @@ button { font-family: inherit; }
 /* ─── Print ────────────────────────────────────────────── */
 @media print {
   body { background: #fff; }
-  .safi-side, .safi-top, .twk-panel, .safi-receipt-wrap { display: none !important; }
+  .safi-side, .safi-top, .twk-panel { display: none !important; }
   .safi-app { display: block; }
   .safi-main { padding: 0; }
-  #safi-print-area {
+  .safi-receipt-wrap #safi-print-area {
     width: 80mm !important;
     margin: 0 !important;
     padding: 8mm !important;
@@ -2950,3 +2950,74 @@ button { font-family: inherit; }
 .safi-receipt__meta{grid-template-columns:1.15fr 1fr}.safi-receipt__meta b{white-space:nowrap}
 
 .safi-card:has(.safi-multi__menu){overflow:visible}.safi-multi__menu{min-width:320px}
+
+.safi-overdue{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px}
+.safi-overdue li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;cursor:pointer;border-left:4px solid;font-size:13px}
+.safi-overdue li.is-old{background:#fee2e2;border-color:#dc2626}.safi-overdue li.is-old em{color:#b91c1c}
+.safi-overdue li.is-mid{background:#ffedd5;border-color:#f97316}.safi-overdue li.is-mid em{color:#c2410c}
+.safi-overdue li.is-new{background:#fef9c3;border-color:#eab308}.safi-overdue li.is-new em{color:#a16207}
+.safi-overdue em{font-style:normal;font-weight:700;font-size:12px}
+.safi-range{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg)}
+.safi-range label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-3)}
+.safi-range__quick{display:flex;flex-wrap:wrap;gap:6px}
+
+/* v2.2.9 print fix: the receipt wrapper used to be hidden, and the app's scroll
+   container clipped everything else, so PDFs came out blank. Print only the
+   receipt / job card / report sheet, on a plain white page. */
+@media print{
+  html,body,#root,.safi-app,.safi-main{height:auto!important;min-height:0!important;overflow:visible!important;background:#fff!important}
+  .safi-app{display:block!important}
+  .safi-side,.safi-top,.safi-toasts,.twk-panel,.safi-modal,.lms-badge,#lms-badge,.safi-updatebar{display:none!important}
+  body:has(#safi-print-area) .safi-main > *:not(.safi-receipt-wrap):not(#safi-print-area):not(:has(#safi-print-area)){display:none!important}
+  body:has(.safi-jcsheet) .safi-main > *:not(:has(.safi-jcsheet)):not(.safi-jcsheet){display:none!important}
+  .safi-receipt-wrap{display:block!important;padding:0!important;margin:0!important;background:#fff!important}
+  #safi-print-area{display:block!important;visibility:visible!important;box-shadow:none!important;border:0!important;margin:0 auto!important}
+  .safi-receipt{width:80mm!important;padding:4mm!important}
+  .safi-jcsheet#safi-print-area,.safi-report#safi-print-area,.safi-jcsheet,.safi-report{display:block!important;width:auto!important;max-width:none!important;padding:0!important;margin:0!important}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
+/* Job card + delivery note on an 80mm roll: one narrow column, read top to bottom. */
+.safi-jcsheet--roll{width:80mm!important;max-width:80mm!important;margin:0 auto;font-size:11px;padding:3mm!important;background:#fff}
+.safi-jcsheet--roll .safi-jc,.safi-jcsheet--roll .safi-dn{height:auto!important;padding:2mm 0!important;display:block!important}
+.safi-jcsheet--roll *{grid-template-columns:1fr!important;max-width:100%;box-sizing:border-box}
+.safi-jcsheet--roll [class*="__grid"],.safi-jcsheet--roll [class*="__meta"],.safi-jcsheet--roll [class*="__row"],.safi-jcsheet--roll [class*="__hd"],.safi-jcsheet--roll [class*="__stages"]{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:3px!important}
+.safi-jcsheet--roll table{width:100%;font-size:10.5px}
+.safi-jcsheet--roll h1,.safi-jcsheet--roll h2,.safi-jcsheet--roll [class*="__title"]{font-size:14px!important}
+.safi-jcsheet--roll [class*="__due"] b{font-size:16px!important}
+.safi-jcsheet--roll .safi-tear{margin:4mm 0;border-top:1px dashed #000;text-align:center}
+@media print{
+  .safi-jcsheet--roll,.safi-jcsheet--roll#safi-print-area{width:80mm!important;max-width:80mm!important;padding:2mm!important;margin:0!important}
+  .safi-jcsheet--roll .safi-jc,.safi-jcsheet--roll .safi-dn{height:auto!important;padding:1mm 0!important}
+  @page{margin:0}
+}
+
+.safi-jcsheet--roll .safi-dn__fill-grid{display:flex!important;flex-direction:column!important;gap:6px!important}.safi-jcsheet--roll .safi-dn__fill-grid label{width:100%!important}.safi-jcsheet--roll .safi-dn__fill-wide{width:100%!important}
+.safi-jcsheet--roll b,.safi-jcsheet--roll .safi-mono{white-space:nowrap}
+
+@media print{.safi-noprint{display:none!important}}
+
+/* 80mm job card: compact header/info in two columns, small tick boxes for stages.
+   Items table stays full width. The cut line ends the page so the printer's
+   auto-cutter cuts there (set the driver to "cut at end of page"). */
+.safi-jcsheet--roll .safi-jc__hd,.safi-jcsheet--roll .safi-jc__row,.safi-jcsheet--roll .safi-jc__ids,.safi-jcsheet--roll .safi-dn__grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:2px 8px!important;flex-direction:initial!important;align-items:start!important}
+.safi-jcsheet--roll .safi-jc__hd>div:first-child{grid-column:1/-1}
+.safi-jcsheet--roll .safi-jc__f--wide{grid-column:1/-1}
+.safi-jcsheet--roll .safi-jc__f span,.safi-jcsheet--roll .safi-jc__ids span,.safi-jcsheet--roll .safi-dn__grid span{font-size:8.5px!important;display:block;letter-spacing:.03em}
+.safi-jcsheet--roll .safi-jc__f b,.safi-jcsheet--roll .safi-jc__ids b,.safi-jcsheet--roll .safi-dn__grid b{font-size:11px!important}
+.safi-jcsheet--roll .safi-jc__f--fill i{display:block;height:14px!important;border-bottom:1px solid #000}
+.safi-jcsheet--roll .safi-jc__stages-grid{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:4px 6px!important;flex-direction:initial!important}
+.safi-jcsheet--roll .safi-jc__stages-grid>div{display:flex!important;flex-direction:row!important;align-items:center!important;gap:4px}
+.safi-jcsheet--roll .safi-jc__stages-grid span{font-size:9px!important;flex:1}
+.safi-jcsheet--roll .safi-jc__stages-grid i{width:12px!important;height:12px!important;min-height:0!important;flex:0 0 12px;border:1.2px solid #000!important;display:block}
+.safi-jcsheet--roll .safi-jc__stages-t{font-size:9px!important;margin:4px 0 3px!important}
+.safi-jcsheet--roll .safi-jc__ft{display:flex!important;flex-direction:row!important;justify-content:space-between;font-size:8.5px!important}
+.safi-jcsheet--roll .safi-tear{margin:2mm 0!important}
+@media print{
+  .safi-jcsheet--roll .safi-tear{break-after:page;page-break-after:always;border:0!important;margin:0!important;height:0}
+  .safi-jcsheet--roll .safi-tear span{display:none}
+  .safi-jcsheet .safi-noprint,.safi-noprint{display:none!important}
+}
+
+.safi-printperm{display:flex;flex-direction:column;gap:8px}.safi-printperm__row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;font-size:13px}
+.safi-btn:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(1)}
