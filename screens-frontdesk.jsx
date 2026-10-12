@@ -212,6 +212,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
 
   function handleSave(thenPrint) {
     if (!customerId) { toast('Pick a customer or add a new one first', 'error'); return; }
+    { const cu = D.customers.find(c => c.id === customerId); if (!cu || String(cu.phone || '').replace(/\D/g, '').length < 9) { toast('This customer has no phone number. Add it (Customers → Edit) before saving the order.', 'error'); return; } }
     if (items.length === 0 || subtotal <= 0) {
       toast('Add at least one priced service', 'error');
       return;
@@ -697,6 +698,7 @@ function AddCustomerModal({ open, onClose, onCreated }) {
 
   function submit() {
     if (!name.trim()) { toast('Name required', 'error'); return; }
+    if (String(phone || '').replace(/\D/g, '').replace(/^0+/, '').length < 9) { toast('Phone number is required (9 digits, e.g. 712 345 678)', 'error'); return; }
     const fullPhone = phone ? phone.trim() : '';
     const c = window.SAFI_STORE.addCustomer({
       name: name.trim(), phone: fullPhone, prefix, group,
@@ -714,7 +716,7 @@ function AddCustomerModal({ open, onClose, onCreated }) {
       </>}>
       <div className="safi-form">
         <label>Name<input className="safi-input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Jane Wanjiku"/></label>
-        <label>Phone
+        <label>Phone <span className="safi-req-inline">required</span>
           <PhoneInput prefix={prefix} phone={phone} onChange={(v) => { setPrefix(v.prefix); setPhone(v.phone); }}/>
         </label>
         <label>Pricing tier
@@ -758,6 +760,9 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
   const dateOrders = dateFilter ? D.orders.filter(o => String(o.in).startsWith(dateFilter)) : D.orders;
   const statusCounts = ['intake', 'washing', 'drying', 'ironing', 'drycleaning', 'ready', 'collected'].map(s => ({ s, n: dateOrders.filter(o => o.status === s).length }));
   const activeCount = dateOrders.filter(o => o.status !== 'collected').length;
+  const tierOf = (o) => (D.customers.find(c => c.id === o.customer) || {}).group || 'normal';
+  const tierN = (g) => dateOrders.filter(o => tierOf(o) === g).length;
+  const tierLine = `${tierN('student')} student${tierN('student') === 1 ? '' : 's'} · ${tierN('normal')} normal · ${tierN('corporate')} corporate`;
   const dayTellers = [...new Set(dateOrders.map(o => (D.staff.find(s => s.id === o.cashier) || {}).name).filter(Boolean))];
 
   const todayStr = SAFI_TIME.day();
@@ -767,7 +772,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
     <>
       <Topbar
         title={t('nav_orders', lang)}
-        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter} · ` : ''}${activeCount} active · ${D.orders.length} all-time${dateFilter && dayTellers.length ? ` · Teller${dayTellers.length > 1 ? 's' : ''}: ${dayTellers.join(', ')}` : ''}`}
+        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter} · ` : ''}${activeCount} active · ${tierLine}${dateFilter && dayTellers.length ? ` · Teller${dayTellers.length > 1 ? 's' : ''}: ${dayTellers.join(', ')}` : ''}`}
         right={<>
           {role === 'owner' && <Button kind="ghost" icon="print" onClick={() => window.print()}>{t('print', lang)}</Button>}
           <Button kind="primary" icon="plus" onClick={() => setView('new-order')}>{t('new_order', lang)}</Button>
@@ -810,7 +815,6 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
                 return <div><div className="safi-cell-strong">{c?.name || orderNo(r.id)}</div><div className="safi-cell-sub">{c?.phone || ''}</div></div>;
               }},
             { label: 'In', render: r => <span className="safi-cell-sub">{r.in.slice(5, 16)}</span> },
-            { label: 'Teller', render: r => { const s = D.staff.find(x => x.id === r.cashier); return <span className="safi-cell-sub">{s ? s.name.split(' ')[0] : '—'}</span>; } },
             { label: 'Due', render: r => <span className="safi-cell-sub">{(r.due || '').slice(5, 16)}</span> },
             { label: 'Items', render: r => <span>{r.items.map(i => D.services.find(s => s.id === i.svc)?.name.split(' ')[0]).join(', ')}</span> },
             { label: t('total', lang), render: r => <span className="safi-mono">{money(r.total)}</span> },
@@ -1020,6 +1024,7 @@ function PaymentModal({ open, onClose, orderId, suggested = 0, customerName = ''
 
   function submit() {
     if (amount <= 0) { toast('Enter amount', 'error'); return; }
+    if (String(txn || '').trim().length < 5) { toast('Transaction code needs at least 5 characters (ideally the last 5)', 'error'); return; }
     window.SAFI_STORE.recordPayment({ orderId, method, amount, txn, customer: customerName });
     toast(`Payment recorded`, 'success');
     onClose();
@@ -1033,7 +1038,7 @@ function PaymentModal({ open, onClose, orderId, suggested = 0, customerName = ''
                        : 'BNK-554210';
 
   return (
-    <Modal open={open} onClose={onClose} title={`Record payment · ${orderId}`}
+    <Modal open={open} onClose={onClose} title={`Record payment · ${orderNo(orderId)}`}
       footer={<>
         <Button kind="ghost" onClick={onClose}>Cancel</Button>
         <Button kind="primary" icon="check" onClick={submit}>Record payment</Button>
@@ -1050,10 +1055,34 @@ function PaymentModal({ open, onClose, orderId, suggested = 0, customerName = ''
           </div>
         </label>
         <label>Amount (KES)<input type="number" className="safi-input safi-mono" value={amount} onChange={e => setAmount(parseFloat(e.target.value) || 0)}/></label>
-        <label>{txnLabel}<input className="safi-input safi-mono" value={txn} onChange={e => setTxn(e.target.value.toUpperCase())} placeholder={txnPlaceholder}/></label>
+        <label>{txnLabel} <span className="safi-cell-sub">(min. 5, ideally last 5)</span><input className={`safi-input safi-mono ${txn && txn.length < 5 ? 'is-error' : ''}`} maxLength={20} value={txn} onChange={e => setTxn(e.target.value.toUpperCase().replace(/\s/g, ''))} placeholder="Last 5, e.g. KL2M9"/>
+          {txn && txn.length < 5 && <span className="safi-hint safi-hint--err">Expecting at least 5 characters ({txn.length} entered)</span>}</label>
         <p className="safi-hint">Saved to ledger for monthly audit. <b>Verified by Management</b> against M-Pesa/bank statements.</p>
       </div>
     </Modal>
+  );
+}
+
+// Order search with autocomplete (order no. or customer name). Hides the laptop suffix.
+function OrderPicker({ D, value, onPick }) {
+  const [q, setQ] = useStateFD('');
+  const [open, setOpen] = useStateFD(false);
+  const cur = value ? D.orders.find(o => o.id === value) : null;
+  const cname = (o) => (D.customers.find(c => c.id === o.customer) || {}).name || '';
+  const qq = q.trim().toUpperCase().replace(/^SF-?/, '');
+  const hits = !q.trim() ? [] : D.orders.filter(o => orderNo(o.id).toUpperCase().replace(/^SF-?/, '').startsWith(qq) || cname(o).toUpperCase().includes(q.trim().toUpperCase())).slice(0, 8);
+  if (cur) return <div className="safi-multi"><span className="safi-multi__chip safi-mono">{orderNo(cur.id)} · {cname(cur) || '—'}<button type="button" onClick={() => { onPick(null); setQ(''); }}>×</button></span></div>;
+  return (
+    <div className="safi-multi">
+      <input className="safi-multi__input safi-mono" placeholder="Order no. or name" value={q}
+        onChange={e => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { e.preventDefault(); onPick(hits[0]); setQ(''); } }}/>
+      {open && hits.length > 0 && (
+        <div className="safi-multi__menu">
+          {hits.map(o => <button type="button" key={o.id} onMouseDown={() => { onPick(o); setQ(''); setOpen(false); }}><b className="safi-mono">{orderNo(o.id)}</b><span>{cname(o)}</span><span className="safi-cell-sub">bal {Math.max(0, (o.total || 0) - (o.paid || 0)).toLocaleString()}</span></button>)}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1106,6 +1135,7 @@ function AdvanceModal({ open, onClose, order, customer, stages, curIdx }) {
   }, [includeIroning, targetStage]);
 
   function doAdvance(includeSms) {
+    if (smsStageOn && includeSms && customer && customer.phone && !body.trim()) { toast('Write the SMS first; this stage always sends one', 'error'); return; }
     if (canSkipIroning && !includeIroning) {
       // Skip ironing: advance from drying directly to ready (advance twice)
       window.SAFI_STORE.advanceStatus(order.id); // drying → ironing
@@ -1830,11 +1860,12 @@ function PaymentsScreen({ lang, money, role }) {
 
   function submit() {
     if (!form.order || !form.amount) { toast('Order # and amount required', 'error'); return; }
-    const order = D.orders.find(o => o.id === form.order);
+    if (String(form.txn || '').trim().length < 5) { toast('Transaction code needs at least 5 characters (ideally the last 5)', 'error'); return; }
+    const order = D.orders.find(o => o.id === form.order) || D.orders.find(o => orderNo(o.id) === form.order);
     if (!order) { toast(`Order ${form.order} not found`, 'error'); return; }
     const cust = D.customers.find(c => c.id === order.customer);
     window.SAFI_STORE.recordPayment({
-      orderId: form.order, method: form.method,
+      orderId: order.id, method: form.method,
       amount: parseFloat(form.amount), txn: form.txn,
       customer: cust?.name || form.order,
     });
@@ -1877,7 +1908,7 @@ function PaymentsScreen({ lang, money, role }) {
         <div className="safi-txn-form">
           <div className="safi-txn-form__group">
             <label>Order #</label>
-            <input className="safi-input safi-mono" placeholder="SF-2425" value={form.order} onChange={e => setForm({ ...form, order: e.target.value.toUpperCase() })}/>
+            <OrderPicker D={D} value={form.order} onPick={(o) => setForm({ ...form, order: o ? o.id : '', amount: o && !form.amount ? String(Math.max(0, (o.total || 0) - (o.paid || 0))) : form.amount })}/>
           </div>
           <div className="safi-txn-form__group">
             <label>Method</label>
@@ -1886,8 +1917,8 @@ function PaymentsScreen({ lang, money, role }) {
             </div>
           </div>
           <div className="safi-txn-form__group">
-            <label>Transaction code</label>
-            <input className="safi-input safi-mono" placeholder="e.g. TGW8KL2M91" value={form.txn} onChange={e => setForm({ ...form, txn: e.target.value.toUpperCase() })}/>
+            <label>Transaction code (min. 5)</label>
+            <input className={`safi-input safi-mono ${form.txn && form.txn.length < 5 ? 'is-error' : ''}`} maxLength={20} placeholder="Last 5, e.g. KL2M9" value={form.txn} onChange={e => setForm({ ...form, txn: e.target.value.toUpperCase().replace(/\s/g, '') })}/>
           </div>
           <div className="safi-txn-form__group">
             <label>Amount</label>
@@ -2062,7 +2093,7 @@ function IssuesScreen({ lang }) {
           </div>
           <div className="safi-issue-form__group">
             <label>Related order (optional)</label>
-            <input className="safi-input safi-mono" placeholder="SF-2425" value={form.order} onChange={e => setForm({ ...form, order: e.target.value.toUpperCase() })}/>
+            <OrderPicker D={D} value={form.order} onPick={(o) => setForm({ ...form, order: o ? o.id : '', amount: o && !form.amount ? String(Math.max(0, (o.total || 0) - (o.paid || 0))) : form.amount })}/>
           </div>
           <div className="safi-issue-form__group">
             <label>{t('priority', lang)}</label>

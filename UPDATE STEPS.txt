@@ -1,4 +1,4 @@
-VAZI SAFI LMS v2.2.6
+VAZI SAFI LMS v2.2.7 (includes everything in 2.2.6)
 EXPENSES
 - Newest first. "Paid by" is now "Recorded by"; anything logged from Management shows Management.
 - Log expense: Cash removed (M-Pesa / Bank). Transaction code min. 5 characters (ideally last 5).
@@ -16,3 +16,12 @@ RECEIPT
 - Space after Date and Cashier; Client # and Cashier aligned right.
 CUSTOMERS
 - Sort box: Most/Fewest orders, Highest/Lowest spend, Most/Least loyal (plus name and joined).
+MORE
+- Ironing-only orders: Intake -> Ironing -> Ready -> Collected. Every stage has a default SMS (incl. dry cleaning).
+- Orders subtitle shows students / normal / corporate counts; Teller column removed (tellers listed in subtitle).
+- Record payment: order search with autocomplete; transaction code min. 5 everywhere; -EG hidden.
+v2.2.7
+- Wash & Fold (per piece): prices set by Management (default KES 200), no teller entry.
+- Trench coats, jackets & shukas merged into Wash & Fold (per piece) with their prices; old orders moved over.
+- Phone number required for new customers, and for any customer before an order is saved.
+- Publish/update the MANAGEMENT laptop first (the shop login cannot delete the old coats service in the cloud).

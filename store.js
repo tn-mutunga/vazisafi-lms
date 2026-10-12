@@ -82,6 +82,17 @@ window.SAFI_STORE = (() => {
     collected: 'Hi {name}, your order {id} has been collected. Asante, karibu tena!',
     delivery:  'Hi {name}, our rider {rider} is on the way with your order {id}. Please be available.',
   };
+  // Every stage has a default message (added later: drying, dry cleaning).
+  state.smsTemplates = {
+    washing:   'Hi {name}, your order {id} is being washed. We will text you when ready.',
+    ready:     'Hi {name}, your order {id} is READY for collection at Vazi Safi. Balance: {balance}. Asante!',
+    collected: 'Hi {name}, your order {id} has been collected. Asante, karibu tena!',
+    delivery:  'Hi {name}, our rider {rider} is on the way with your order {id}. Please be available.',
+    drying: 'Hi {name}, your order {id} is drying and will be ready soon.',
+    ironing: 'Hi {name}, your order {id} is being ironed and will be ready soon.',
+    drycleaning: 'Hi {name}, your order {id} is now being dry cleaned. We will text you when it is ready.',
+    ...Object.fromEntries(Object.entries(state.smsTemplates || {}).filter(([, v]) => String(v || '').trim())),
+  };
   // Backfill category on services from older saves
   for (const s of state.services) {
     if (!s.category) {
@@ -230,6 +241,27 @@ window.SAFI_STORE = (() => {
       localStorage.setItem('safi_exp_refile_v1', '1');
     }
   })();
+  // v2.2.7: per-piece washing is priced by Management (default 200) and absorbs the
+  // "Trench coats, jackets & shukas" items; that service is retired and old orders follow.
+  (() => {
+    const wp = (state.services || []).find(x => x.id === 'wash-piece');
+    if (!wp) return;
+    if (wp.tellerPrice) { delete wp.tellerPrice; migrated = true; }
+    if (!wp.tiers || !wp.tiers.normal) { wp.tiers = { student: 200, normal: 200, corporate: 200 }; migrated = true; }
+    wp.subtypes = (wp.subtypes || []).map(st => (typeof st === 'string' ? { name: st } : st));
+    for (const st of wp.subtypes) if (st.price == null || st.price === '') { st.price = 200; migrated = true; }
+    const coats = (state.services || []).find(x => x.id === 'coats');
+    if (coats) {
+      for (const st of (coats.subtypes || []).map(x => (typeof x === 'string' ? { name: x } : x))) {
+        if (!wp.subtypes.some(w => w.name.toLowerCase() === String(st.name).toLowerCase())) wp.subtypes.push({ name: st.name, price: st.price != null && st.price !== '' ? Number(st.price) : ((coats.tiers || {}).normal || 200) });
+      }
+      // Keep "Other" last.
+      wp.subtypes.sort((a, b) => (a.name === 'Other') - (b.name === 'Other'));
+      state.services = state.services.filter(x => x.id !== 'coats');
+      migrated = true;
+    }
+    for (const o of state.orders || []) for (const it of o.items || []) if (it.svc === 'coats') { it.svc = 'wash-piece'; migrated = true; }
+  })();
   // Persist any migration changes immediately
   if (migrated) {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
@@ -267,11 +299,14 @@ window.SAFI_STORE = (() => {
 
   const STAGES = ['intake', 'washing', 'drying', 'ironing', 'ready', 'collected'];
   const DC_STAGES = ['intake', 'drycleaning', 'ready', 'collected'];
+  const IRON_STAGES = ['intake', 'ironing', 'ready', 'collected'];
   // Orders holding only dry cleaning (bags/hangers ignored) skip washing/drying/ironing.
   const stagesFor = (o) => {
     const real = (o && o.items || []).filter(it => { const sv = (state.services || []).find(x => x.id === it.svc); return !sv || sv.category !== 'supplies'; });
     const dcOnly = real.length > 0 && real.every(it => ((state.services || []).find(x => x.id === it.svc) || {}).category === 'drycleaning');
-    return dcOnly || (o && o.status === 'drycleaning') ? DC_STAGES : STAGES;
+    if (dcOnly || (o && o.status === 'drycleaning')) return DC_STAGES;
+    const ironOnly = real.length > 0 && real.every(it => it.svc === 'ironing');
+    return ironOnly ? IRON_STAGES : STAGES;
   };
 
   const stamp = (d) => SAFI_TIME.stamp(d || new Date());
