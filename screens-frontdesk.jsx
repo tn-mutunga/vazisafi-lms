@@ -335,8 +335,8 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                     setItems([...items, { svc: s.id, qty: 1 }]);
                   }
                 }}>
-                  <span className="safi-svc-tile__ico"><Icon name={s.icon} size={20}/></span>
-                  <span className="safi-svc-tile__lbl">{s.name}</span>
+                  <span className="safi-svc-tile__ico"><Icon name={s.id === 'wash-piece' ? 'washpiece' : s.icon} size={20}/></span>
+                  <span className="safi-svc-tile__lbl">{s.tileName || (s.id === 'wash-piece' ? 'Per piece' : s.name)}</span>
                   <span className="safi-svc-tile__price">{s.id === 'other' ? 'Any item · kg or pieces' : s.id === 'express' ? `${expressPct}% of order value` : s.tellerPrice ? 'Price set by teller' : P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
                   {s.subtypes && s.subtypes.length > 0 && <span className="safi-svc-tile__sub">Pick from {s.subtypes.length} types →</span>}
                 </button>
@@ -649,7 +649,7 @@ function NewOrderPreview({ items, subtotal, discount, discountPct, total, deposi
                 const l = g.lines[0];
                 const unit = l.customPrice ?? s?.tiers[effGroup] ?? 0;
                 const rule = l.customPrice == null ? PR.ruleFor(s, effGroup) : null;
-                return [<tr key={gi}><td>{s?.name}</td><td>{l.qty} {l.unit || s?.unit}</td><td className="safi-mono">{rule ? PR.describe(rule) : money(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td></tr>];
+                return [<tr key={gi}><td><b>{s?.name}</b></td><td>{l.qty} {l.unit || s?.unit}</td><td className="safi-mono">{rule ? PR.describe(rule) : money(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td></tr>];
               }
               return [
                 <tr key={`gh${gi}`} className="safi-receipt__items-group"><td colSpan="4"><b>{s?.name}</b></td></tr>,
@@ -1091,7 +1091,8 @@ function AdvanceModal({ open, onClose, order, customer, stages, curIdx }) {
   const D = useStore();
   const nextStage = stages[curIdx + 1];
   // Allow skipping ironing if next stage is ironing
-  const canSkipIroning = nextStage === 'ironing' && stages[curIdx + 2] === 'ready';
+  // Only washed orders (coming from Drying) may skip ironing; ironing-only orders always iron.
+  const canSkipIroning = stages[curIdx] === 'drying' && nextStage === 'ironing' && stages[curIdx + 2] === 'ready';
   // Default: SKIP ironing. Toggle ON = include ironing
   const [includeIroning, setIncludeIroning] = useStateFD(false);
   const targetStage = (canSkipIroning && !includeIroning) ? 'ready' : nextStage;
@@ -1468,7 +1469,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
                     const l = g.lines[0];
                     return [
                       <tr key={`g${gi}`}>
-                        <td>{s?.name}{l.free && ' (free)'}</td>
+                        <td><b>{s?.name}</b>{l.free && ' (free)'}</td>
                         <td>{l.qty} {l.unit || s?.unit}</td>
                         <td className="safi-mono">{money(l.qty ? l.price / l.qty : 0)}</td>
                         <td className="safi-mono">{money(l.price)}</td>

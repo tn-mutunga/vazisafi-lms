@@ -219,6 +219,7 @@ const Icon = ({ name, size = 18, stroke = 'currentColor' }) => {
     case 'arrow':      return (<svg {...props}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>);
     case 'arrow-l':    return (<svg {...props}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>);
     case 'chevron-down': return (<svg {...props}><polyline points="6 9 12 15 18 9"/></svg>);
+    case 'washpiece':  return (<svg {...props} viewBox="0 0 32 24"><rect x="1" y="3" width="11" height="18" rx="1.5"/><circle cx="6.5" cy="13" r="3.2"/><path d="M3.5 6h2"/><path d="M16 6l2.5-2h2l1 1.4 1-1.4h2L27 6l-1.6 2.2-1.2-.6V12h-5.6V7.6l-1.2.6z"/><path d="M19 14h7l.6 8h-2.6l-1.5-5.5-1.5 5.5h-2.6z"/></svg>);
     case 'shirt':      return (<svg {...props}><path d="M20 4h-4l-2 2-2 2-2-2-2-2H4L2 8l3 3v10h14V11l3-3z"/></svg>);
     case 'iron':       return (<svg {...props}><path d="M3 17h18l-2-7a4 4 0 0 0-4-3H9.5L7 9v3"/><path d="M3 17v2h18v-2"/></svg>);
     case 'wash':       return (<svg {...props}><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="14" r="4"/><circle cx="8" cy="7" r="0.5" fill={stroke}/></svg>);

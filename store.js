@@ -247,6 +247,9 @@ window.SAFI_STORE = (() => {
     const wp = (state.services || []).find(x => x.id === 'wash-piece');
     if (!wp) return;
     if (wp.tellerPrice) { delete wp.tellerPrice; migrated = true; }
+    if (wp.name !== 'Wash & Fold (per pc)') { wp.name = 'Wash & Fold (per pc)'; migrated = true; }
+    if (wp.tileName !== 'Per piece') { wp.tileName = 'Per piece'; migrated = true; }
+    if (wp.icon !== 'washpiece') { wp.icon = 'washpiece'; migrated = true; }
     if (!wp.tiers || !wp.tiers.normal) { wp.tiers = { student: 200, normal: 200, corporate: 200 }; migrated = true; }
     wp.subtypes = (wp.subtypes || []).map(st => (typeof st === 'string' ? { name: st } : st));
     for (const st of wp.subtypes) if (st.price == null || st.price === '') { st.price = 200; migrated = true; }

@@ -1,27 +1,6 @@
-VAZI SAFI LMS v2.2.7 (includes everything in 2.2.6)
-EXPENSES
-- Newest first. "Paid by" is now "Recorded by"; anything logged from Management shows Management.
-- Log expense: Cash removed (M-Pesa / Bank). Transaction code min. 5 characters (ideally last 5).
-- Outsourced dry cleaning must link at least one order. Linked orders / customers take several;
-  typing an order number autocompletes and fills its customer.
-ORDERS
-- Teller column on Orders; picking a date shows who was on the till that day.
-- Dry-cleaning-only orders: Intake -> Dry cleaning -> Ready -> Collected.
-- New tiles: Wash & Fold (per piece, teller enters price) and Laundry Express (50% of laundry value,
-  dry cleaning and shoes excluded). The % is set in Settings -> Laundry Express Service;
-  Express always prints as the last line.
-SMS
-- Settings -> Stage SMS: switch each stage on/off (synced). On = always sent, Off = never sent.
-RECEIPT
-- Space after Date and Cashier; Client # and Cashier aligned right.
-CUSTOMERS
-- Sort box: Most/Fewest orders, Highest/Lowest spend, Most/Least loyal (plus name and joined).
-MORE
-- Ironing-only orders: Intake -> Ironing -> Ready -> Collected. Every stage has a default SMS (incl. dry cleaning).
-- Orders subtitle shows students / normal / corporate counts; Teller column removed (tellers listed in subtitle).
-- Record payment: order search with autocomplete; transaction code min. 5 everywhere; -EG hidden.
-v2.2.7
-- Wash & Fold (per piece): prices set by Management (default KES 200), no teller entry.
-- Trench coats, jackets & shukas merged into Wash & Fold (per piece) with their prices; old orders moved over.
-- Phone number required for new customers, and for any customer before an order is saved.
-- Publish/update the MANAGEMENT laptop first (the shop login cannot delete the old coats service in the cloud).
+VAZI SAFI LMS v2.2.8
+- Ironing-only orders always go through Ironing (no skip). Skip ironing only shows when coming from Drying.
+  Switch the Ironing SMS on in Settings -> Stage SMS to text at that stage.
+- Receipt & preview: service names bold on single lines (e.g. Wash & Fold 6.9 kg); per-piece prints as "Wash & Fold (per pc)".
+- New Order tile reads "Per piece" with a washer + shirt + trouser icon.
+- Payments: order search list no longer cut off.

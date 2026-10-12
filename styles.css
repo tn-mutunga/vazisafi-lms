@@ -2948,3 +2948,5 @@ button { font-family: inherit; }
 .safi-receipt__meta>div:nth-child(even){justify-content:flex-end;text-align:right}
 
 .safi-receipt__meta{grid-template-columns:1.15fr 1fr}.safi-receipt__meta b{white-space:nowrap}
+
+.safi-card:has(.safi-multi__menu){overflow:visible}.safi-multi__menu{min-width:320px}
