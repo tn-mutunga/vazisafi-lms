@@ -247,6 +247,31 @@ function SettingsScreen({ lang, shop, setShop }) {
         </ul>
       </Card>
 
+      <Card title="Laundry Express Service" action={<span className="safi-cell-sub">Charged on wash, dry & fold items (incl. duvets). Dry cleaning and shoes excluded.</span>}>
+        <div className="safi-form" style={{ maxWidth: 320 }}>
+          <label>Express charge (% of laundry value)
+            <input type="number" min="0" max="200" className="safi-input safi-mono" defaultValue={Number((D.settings && D.settings.expressPct) ?? 50)}
+              onBlur={e => { const v = Math.max(0, Math.min(200, Number(e.target.value) || 0)); window.SAFI_STORE.setSetting('expressPct', v); toast(`Express set to ${v}%`); }}/>
+          </label>
+          <p className="safi-hint">Saved to the cloud; every laptop uses it on the next sync.</p>
+        </div>
+      </Card>
+
+      <Card title="Stage SMS · on / off" action={<span className="safi-cell-sub">An ON stage always sends; OFF never sends</span>}>
+        <div className="safi-smsstages">
+          {[['washing', 'Washing'], ['drying', 'Drying'], ['ironing', 'Ironing'], ['drycleaning', 'Dry cleaning'], ['ready', 'Ready'], ['collected', 'Collected']].map(([k, l]) => {
+            const DEF = { washing: true, drying: false, ironing: false, drycleaning: true, ready: true, collected: true };
+            const cur = { ...DEF, ...((D.settings && D.settings.smsStages) || {}) };
+            return (
+              <label key={k} className="safi-toggle safi-toggle--lg">
+                <input type="checkbox" checked={cur[k] !== false} onChange={e => window.SAFI_STORE.setSetting('smsStages', { ...cur, [k]: e.target.checked })}/>
+                <span/><div><b>{l}</b><div className="safi-cell-sub">{cur[k] !== false ? 'SMS sent' : 'No SMS'}</div></div>
+              </label>
+            );
+          })}
+        </div>
+      </Card>
+
       <Card title="SMS templates" action={<span className="safi-cell-sub">{'Tokens: {name} {id} {balance} {rider} {due}'}</span>}>
         <div className="safi-form" style={{ maxWidth: 760 }}>
           <h4 className="safi-section-h">Built-in stages (sent automatically when offered)</h4>

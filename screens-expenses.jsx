@@ -24,6 +24,61 @@ function setExpenseGroup(D, id, g) {
   window.SAFI_STORE.setSetting('expenseGroupOverrides', ov);
 }
 
+const splitIds = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+const joinIds = (a) => [...new Set(a)].join(', ');
+
+// Linked orders (many) with autocomplete. Picking an order also adds its customer.
+function LinkedOrdersField({ D, form, setForm, required }) {
+  const [q, setQ] = useStateEx('');
+  const [open, setOpen] = useStateEx(false);
+  const orders = splitIds(form.linkedOrder);
+  const custs = splitIds(form.linkedCustomer);
+  const cname = (id) => (D.customers.find(c => c.id === id) || {}).name || id;
+  const qq = q.trim().toUpperCase().replace(/^SF-?/, '');
+  const hits = !qq ? [] : D.orders.filter(o => !orders.includes(o.id) && (
+      orderNo(o.id).toUpperCase().replace(/^SF-?/, '').startsWith(qq) ||
+      (cname(o.customer) || '').toUpperCase().includes(q.trim().toUpperCase())
+    )).slice(0, 8);
+  const addOrder = (o) => {
+    const nextC = o.customer && !custs.includes(o.customer) ? [...custs, o.customer] : custs;
+    setForm({ ...form, linkedOrder: joinIds([...orders, o.id]), linkedCustomer: joinIds(nextC) });
+    setQ(''); setOpen(false);
+  };
+  const removeOrder = (id) => {
+    const o = D.orders.find(x => x.id === id);
+    const left = orders.filter(x => x !== id);
+    const stillUsed = (cid) => left.some(lid => (D.orders.find(x => x.id === lid) || {}).customer === cid);
+    const nextC = o && o.customer && !stillUsed(o.customer) ? custs.filter(c => c !== o.customer) : custs;
+    setForm({ ...form, linkedOrder: joinIds(left), linkedCustomer: joinIds(nextC) });
+  };
+  return (
+    <div className="safi-form__row">
+      <label>Linked orders {required ? <span className="safi-req-inline">required</span> : '(optional)'}
+        <div className="safi-multi">
+          {orders.map(id => <span key={id} className="safi-multi__chip safi-mono">{orderNo(id)}<button type="button" onClick={() => removeOrder(id)}>×</button></span>)}
+          <input className="safi-multi__input safi-mono" value={q} placeholder={orders.length ? 'Add another…' : 'Type order no. e.g. 2419'}
+            onChange={e => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+            onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { e.preventDefault(); addOrder(hits[0]); } if (e.key === 'Backspace' && !q && orders.length) removeOrder(orders[orders.length - 1]); }}/>
+          {open && hits.length > 0 && (
+            <div className="safi-multi__menu">
+              {hits.map(o => <button type="button" key={o.id} onMouseDown={() => addOrder(o)}><b className="safi-mono">{orderNo(o.id)}</b><span>{cname(o.customer)}</span><span className="safi-cell-sub">{String(o.in || '').slice(5, 10)}</span></button>)}
+            </div>
+          )}
+        </div>
+      </label>
+      <label>Linked customers (optional)
+        <div className="safi-multi">
+          {custs.map(id => <span key={id} className="safi-multi__chip">{cname(id)}<button type="button" onClick={() => setForm({ ...form, linkedCustomer: joinIds(custs.filter(c => c !== id)) })}>×</button></span>)}
+          <select className="safi-multi__input" value="" onChange={e => { if (e.target.value) setForm({ ...form, linkedCustomer: joinIds([...custs, e.target.value]) }); }}>
+            <option value="">{custs.length ? 'Add another…' : 'Filled from orders, or pick'}</option>
+            {[...D.customers].filter(c => !custs.includes(c.id)).sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      </label>
+    </div>
+  );
+}
+
 function catLook(name) {
   const n = String(name || '').toLowerCase();
   const L = [[/bike/, '#6366f1', 'rider'], [/licen|permit/, '#0f766e', 'tag'], [/labou?r/, '#a16207', 'wrench'], [/airtime|internet|phone/, '#06b6d4', 'phone'], [/detergent|chemical|suppl/, '#3DAEE9', 'wash'], [/outsourc|dry/, '#8b5cf6', 'dry'], [/electric|water|power|kplc/, '#f59e0b', 'electric'],
@@ -86,9 +141,10 @@ function ExpensesScreen({ lang, money, role }) {
   const [showCats, setShowCats] = useStateEx(false);
   const [period, setPeriod]     = useStateEx('all');
   const [catFilter, setCatFilter] = useStateEx('all');
-  const [form, setForm]         = useStateEx({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'cash', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
+  const [form, setForm]         = useStateEx({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'mpesa', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
   const isManagement = role === 'owner';
   const [dragOver, setDragOver] = useStateEx('');
+  const [txnErr, setTxnErr] = useStateEx(false);
 
   // Filter
   const todayStr = SAFI_TIME.day();
@@ -103,7 +159,7 @@ function ExpensesScreen({ lang, money, role }) {
     if (periodCutoff && e.date.slice(0, 10) < periodCutoff) return false;
     if (catFilter !== 'all' && e.category !== catFilter) return false;
     return true;
-  });
+  }).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 
   const totalAll = filtered.reduce((s, e) => s + e.amount, 0);
   const byCat = D.expenseCategories.map(c => ({
@@ -114,17 +170,19 @@ function ExpensesScreen({ lang, money, role }) {
 
   function submit() {
     if (!form.label.trim() || !form.amount) { toast('Description and amount required', 'error'); return; }
+    if (form.method !== 'cash' && String(form.txn || '').trim().length < 5) { setTxnErr(true); toast('Transaction code needs at least 5 characters (ideally the last 5)', 'error'); return; }
+    if (isOutsourced(form.category) && !splitIds(form.linkedOrder).length) { toast('Outsourced dry cleaning needs at least one linked order', 'error'); return; }
     if (editId) {
       window.SAFI_STORE.updateExpense(editId, { ...form, amount: parseFloat(form.amount) });
       if (isOtherCat(D.expenseCategories.find(c => c.id === form.category))) setExpenseGroup(D, editId, form.costGroup);
       toast('Expense updated', 'success');
     } else {
-      const made = window.SAFI_STORE.addExpense({ ...form, amount: parseFloat(form.amount) });
+      const made = window.SAFI_STORE.addExpense({ ...form, amount: parseFloat(form.amount), paidBy: isManagement ? 'management' : undefined });
       if (made && form.costGroup === 'special' && isOtherCat(D.expenseCategories.find(c => c.id === form.category))) setExpenseGroup(D, made.id, 'special');
       toast('Expense logged', 'success');
     }
     setShowAdd(false); setEditId(null);
-    setForm({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'cash', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
+    setForm({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'mpesa', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
   }
   function openEdit(e) {
     setEditId(e.id);
@@ -133,7 +191,7 @@ function ExpensesScreen({ lang, money, role }) {
   }
   function openAdd() {
     setEditId(null);
-    setForm({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'cash', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
+    setForm({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'mpesa', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
     setShowAdd(true);
   }
 
@@ -201,11 +259,12 @@ function ExpensesScreen({ lang, money, role }) {
             { label: 'Amount', render: r => <span className="safi-mono safi-cell-strong">— {money(r.amount)}</span> },
             { label: 'Method', render: r => <MethodBadge method={r.method}/> },
             { label: 'Txn', render: r => r.txn ? <span className="safi-mono safi-cell-sub">{r.txn}</span> : <span className="safi-cell-sub">—</span> },
-            { label: 'Paid by', render: r => {
+            { label: 'Recorded by', render: r => {
+              if (r.paidBy === 'management') return <span className="safi-tag safi-tag--violet">Management</span>;
               const s = D.staff.find(x => x.id === r.paidBy);
               return <span className="safi-cell-sub">{s?.name || '—'}</span>;
             }},
-            { label: 'Linked', render: r => r.linkedOrder ? <span className="safi-mono safi-tag safi-tag--blue">{r.linkedOrder}</span> : <span className="safi-cell-sub">—</span> },
+            { label: 'Linked', render: r => splitIds(r.linkedOrder).length ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{splitIds(r.linkedOrder).map(id => <span key={id} className="safi-mono safi-tag safi-tag--blue">{orderNo(id)}</span>)}</div> : <span className="safi-cell-sub">—</span> },
             { label: '', render: r => (
               <div style={{ display: 'flex', gap: 4 }}>
                 <button className="safi-rowlink" onClick={() => openEdit(r)}>Edit</button>
@@ -249,16 +308,23 @@ function ExpensesScreen({ lang, money, role }) {
             <label>Amount (KES)<input type="number" className="safi-input safi-mono" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })}/></label>
             <label>Payment method
               <div className="safi-seg">
-                {['cash', 'mpesa', 'bank'].map(m => (
-                  <button key={m} className={`safi-seg__btn ${form.method === m ? 'is-active' : ''}`} onClick={() => setForm({ ...form, method: m })}>{m === 'mpesa' ? 'M-Pesa' : m[0].toUpperCase() + m.slice(1)}</button>
+                {['mpesa', 'bank'].map(m => (
+                  <button key={m} className={`safi-seg__btn ${form.method === m ? 'is-active' : ''}`} onClick={() => setForm({ ...form, method: m })}>{m === 'mpesa' ? 'M-Pesa' : 'Bank'}</button>
                 ))}
               </div>
             </label>
           </div>
-          {form.method !== 'cash' ? (
-            <label>Transaction code (for audit)<input className="safi-input safi-mono" value={form.txn} onChange={e => setForm({ ...form, txn: e.target.value.toUpperCase() })} placeholder={form.method === 'mpesa' ? 'TGW8KL2M91' : 'BNK-554210'}/></label>
+          {form.method === 'cash' ? (
+            <p className="safi-hint">This older expense was paid in cash. Pick M-Pesa or Bank to change it.</p>
           ) : (
-            <label>Cash Deposit Reference<input className="safi-input safi-mono" value={form.txn} onChange={e => setForm({ ...form, txn: e.target.value.toUpperCase() })} placeholder="internal slip / voucher #"/></label>
+            <label>Transaction code (min. 5 characters)
+              <input className={`safi-input safi-mono ${txnErr ? 'is-error' : ''}`} maxLength={20} value={form.txn}
+                onChange={e => { setTxnErr(false); setForm({ ...form, txn: e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 20) }); }}
+                placeholder="Last 5, e.g. KL2M9 (or full code)"/>
+              <span className={`safi-hint ${txnErr || (form.txn && form.txn.length < 5) ? 'safi-hint--err' : ''}`}>
+                {form.txn && form.txn.length < 5 ? `Expecting at least 5 characters (${form.txn.length} entered)` : 'At least 5 characters. Ideally the last 5; the full code is fine too.'}
+              </span>
+            </label>
           )}
 
           {isOutsourced(form.category) && (
@@ -268,15 +334,7 @@ function ExpensesScreen({ lang, money, role }) {
             </div>
           )}
 
-          <div className="safi-form__row">
-            <label>Linked order # (optional)<input className="safi-input safi-mono" value={form.linkedOrder} onChange={e => setForm({ ...form, linkedOrder: e.target.value.toUpperCase() })} placeholder="SF-2419"/></label>
-            <label>Linked customer (optional)
-              <select className="safi-input" value={form.linkedCustomer} onChange={e => setForm({ ...form, linkedCustomer: e.target.value })}>
-                <option value="">— None —</option>
-                {D.customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
-          </div>
+          <LinkedOrdersField D={D} form={form} setForm={setForm} required={isOutsourced(form.category)}/>
           <label>Notes (optional)<textarea className="safi-textarea" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any additional context for the books"/></label>
         </div>
       </Modal>

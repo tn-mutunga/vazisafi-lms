@@ -273,7 +273,9 @@ const StatusBadge = ({ status }) => {
   const map = {
     intake:    { c: 'amber',  label: 'Intake' },
     washing:   { c: 'blue',   label: 'Washing' },
+    drying:    { c: 'gray',   label: 'Drying' },
     ironing:   { c: 'violet', label: 'Ironing' },
+    drycleaning: { c: 'violet', label: 'Dry cleaning' },
     ready:     { c: 'green',  label: 'Ready' },
     collected: { c: 'gray',   label: 'Collected' },
   };

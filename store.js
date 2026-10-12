@@ -266,6 +266,13 @@ window.SAFI_STORE = (() => {
   };
 
   const STAGES = ['intake', 'washing', 'drying', 'ironing', 'ready', 'collected'];
+  const DC_STAGES = ['intake', 'drycleaning', 'ready', 'collected'];
+  // Orders holding only dry cleaning (bags/hangers ignored) skip washing/drying/ironing.
+  const stagesFor = (o) => {
+    const real = (o && o.items || []).filter(it => { const sv = (state.services || []).find(x => x.id === it.svc); return !sv || sv.category !== 'supplies'; });
+    const dcOnly = real.length > 0 && real.every(it => ((state.services || []).find(x => x.id === it.svc) || {}).category === 'drycleaning');
+    return dcOnly || (o && o.status === 'drycleaning') ? DC_STAGES : STAGES;
+  };
 
   const stamp = (d) => SAFI_TIME.stamp(d || new Date());
 
@@ -623,8 +630,9 @@ window.SAFI_STORE = (() => {
     advanceStatus(id) {
       state.orders = state.orders.map(o => {
         if (o.id !== id) return o;
-        const idx = STAGES.indexOf(o.status);
-        return { ...o, status: STAGES[Math.min(idx + 1, STAGES.length - 1)] };
+        const ST = stagesFor(o);
+        const idx = ST.indexOf(o.status);
+        return { ...o, status: ST[Math.min(idx + 1, ST.length - 1)] };
       });
       save();
     },
@@ -944,6 +952,6 @@ window.SAFI_STORE = (() => {
     },
 
     // Stage constants (for screens)
-    STAGES,
+    STAGES, stagesFor, DC_STAGES,
   };
 })();

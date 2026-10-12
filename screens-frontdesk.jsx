@@ -175,6 +175,24 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   useEffectFD(() => { if (customer) setGroup(customer.group); }, [customerId]);
 
   const P = window.SAFI_PRICING;
+  // Laundry Express = 50% of the laundry lines (wash/dry/fold, duvets…); dry cleaning, shoes excluded.
+  const expressBase = items.reduce((s, it) => {
+    if (it.svc === 'express') return s;
+    const sv = D.services.find(x => x.id === it.svc);
+    return sv && sv.category === 'laundry' ? s + P.line(sv, it.qty, effGroup, it.customPrice) : s;
+  }, 0);
+  const expressPct = Number((D.settings && D.settings.expressPct) ?? 50);
+  // Keep Express priced at expressPct% of the laundry lines, and always as the last line.
+  useEffectFD(() => {
+    const i = items.findIndex(it => it.svc === 'express');
+    if (i < 0) return;
+    const want = Math.round(expressBase * expressPct / 100);
+    const last = i === items.length - 1;
+    if (items[i].customPrice !== want || items[i].qty !== 1 || !last) {
+      const ex = { ...items[i], qty: 1, customPrice: want, note: `${expressPct}% of laundry value` };
+      setItems([...items.filter((_, j) => j !== i), ex]);
+    }
+  }, [expressBase, items, expressPct]);
   const subtotal = items.reduce((s, it) => {
     const svc = D.services.find(x => x.id === it.svc);
     return s + P.line(svc, it.qty, effGroup, it.customPrice);
@@ -305,7 +323,10 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
             <div className="safi-svc-grid">
               {D.services.map(s => (
                 <button key={s.id} className="safi-svc-tile" onClick={() => {
-                  if (s.id === 'other') {
+                  if (s.id === 'express') {
+                    if (items.some(it => it.svc === 'express')) { toast('Express is already on this order'); return; }
+                    setItems([...items, { svc: 'express', qty: 1, customPrice: Math.round(expressBase * expressPct / 100), note: `${expressPct}% of laundry value` }]);
+                  } else if (s.id === 'other') {
                     setOtherForm({ desc: '', unit: 'piece', qty: 1, price: '' });
                   } else if (s.subtypes && s.subtypes.length) {
                     setSubtypePicker({ svc: s });
@@ -315,7 +336,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                 }}>
                   <span className="safi-svc-tile__ico"><Icon name={s.icon} size={20}/></span>
                   <span className="safi-svc-tile__lbl">{s.name}</span>
-                  <span className="safi-svc-tile__price">{s.id === 'other' ? 'Any item · kg or pieces' : P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
+                  <span className="safi-svc-tile__price">{s.id === 'other' ? 'Any item · kg or pieces' : s.id === 'express' ? `${expressPct}% of order value` : s.tellerPrice ? 'Price set by teller' : P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
                   {s.subtypes && s.subtypes.length > 0 && <span className="safi-svc-tile__sub">Pick from {s.subtypes.length} types →</span>}
                 </button>
               ))}
@@ -542,6 +563,12 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
               if (q > 0) {
                 const sub = subtypePicker.svc.subtypes.find(s => (typeof s === 'string' ? s : s.name) === name);
                 const subObj = typeof sub === 'string' ? { name: sub } : sub;
+                if (subtypePicker.svc.tellerPrice) {
+                  const pr = Number((subtypePicker.price || {})[name]) || 0;
+                  if (pr <= 0) { toast(`Enter a price for ${name}`, 'error'); return; }
+                  toAdd.push({ svc: subtypePicker.svc.id, subtype: name, qty: q, customPrice: pr });
+                  continue;
+                }
                 toAdd.push({
                   svc: subtypePicker.svc.id, subtype: name, qty: q,
                   // store override price if subtype has explicit price, else fall back to tier
@@ -562,7 +589,8 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
             {subtypePicker.svc.subtypes.map((st, i) => {
               const sub = typeof st === 'string' ? { name: st } : st;
               const tier = subtypePicker.svc.tiers[effGroup] || 0;
-              const sp = window.SAFI_PRICING.subPrice(subtypePicker.svc, sub, effGroup);
+              const tp = !!subtypePicker.svc.tellerPrice;
+              const sp = tp ? { price: Number((subtypePicker.price || {})[sub.name]) || 0, promo: '' } : window.SAFI_PRICING.subPrice(subtypePicker.svc, sub, effGroup);
               const price = sp.price;
               const q = (subtypePicker.qty && subtypePicker.qty[sub.name]) || 0;
               const setQ = (newQ) => setSubtypePicker({ ...subtypePicker, qty: { ...(subtypePicker.qty || {}), [sub.name]: Math.max(0, newQ) }});
@@ -570,7 +598,8 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                 <div key={i} className={`safi-subtype-multi__row ${q > 0 ? 'is-picked' : ''}`}>
                   <Icon name={subtypePicker.svc.icon} size={16}/>
                   <span className="safi-subtype-multi__name">{sub.name}</span>
-                  <span className="safi-subtype-multi__price safi-mono">{money(price)}{sub.price != null && sub.price !== tier ? ' *' : ''}</span>
+                  {tp ? <input type="number" min="0" className="safi-input safi-mono" style={{ width: 90 }} placeholder="KES" value={(subtypePicker.price || {})[sub.name] ?? ''} onChange={e => setSubtypePicker({ ...subtypePicker, price: { ...(subtypePicker.price || {}), [sub.name]: e.target.value } })}/>
+                  : <span className="safi-subtype-multi__price safi-mono">{money(price)}{sub.price != null && sub.price !== tier ? ' *' : ''}</span>}
                   {sp.promo && <span className="safi-tag safi-tag--green" style={{ fontSize: 10 }}>{sp.promo}</span>}
                   <div className="safi-qty">
                     <button onClick={() => setQ(q - 1)}>−</button>
@@ -727,8 +756,9 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
 
   // Counts follow the chosen day (Today / Yesterday / a date); Any date = everything.
   const dateOrders = dateFilter ? D.orders.filter(o => String(o.in).startsWith(dateFilter)) : D.orders;
-  const statusCounts = ['intake', 'washing', 'drying', 'ironing', 'ready', 'collected'].map(s => ({ s, n: dateOrders.filter(o => o.status === s).length }));
+  const statusCounts = ['intake', 'washing', 'drying', 'ironing', 'drycleaning', 'ready', 'collected'].map(s => ({ s, n: dateOrders.filter(o => o.status === s).length }));
   const activeCount = dateOrders.filter(o => o.status !== 'collected').length;
+  const dayTellers = [...new Set(dateOrders.map(o => (D.staff.find(s => s.id === o.cashier) || {}).name).filter(Boolean))];
 
   const todayStr = SAFI_TIME.day();
   const yesterdayStr = SAFI_TIME.day(new Date(Date.now() - 86400e3));
@@ -737,7 +767,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
     <>
       <Topbar
         title={t('nav_orders', lang)}
-        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter} · ` : ''}${activeCount} active · ${D.orders.length} all-time`}
+        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter} · ` : ''}${activeCount} active · ${D.orders.length} all-time${dateFilter && dayTellers.length ? ` · Teller${dayTellers.length > 1 ? 's' : ''}: ${dayTellers.join(', ')}` : ''}`}
         right={<>
           {role === 'owner' && <Button kind="ghost" icon="print" onClick={() => window.print()}>{t('print', lang)}</Button>}
           <Button kind="primary" icon="plus" onClick={() => setView('new-order')}>{t('new_order', lang)}</Button>
@@ -780,6 +810,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
                 return <div><div className="safi-cell-strong">{c?.name || orderNo(r.id)}</div><div className="safi-cell-sub">{c?.phone || ''}</div></div>;
               }},
             { label: 'In', render: r => <span className="safi-cell-sub">{r.in.slice(5, 16)}</span> },
+            { label: 'Teller', render: r => { const s = D.staff.find(x => x.id === r.cashier); return <span className="safi-cell-sub">{s ? s.name.split(' ')[0] : '—'}</span>; } },
             { label: 'Due', render: r => <span className="safi-cell-sub">{(r.due || '').slice(5, 16)}</span> },
             { label: 'Items', render: r => <span>{r.items.map(i => D.services.find(s => s.id === i.svc)?.name.split(' ')[0]).join(', ')}</span> },
             { label: t('total', lang), render: r => <span className="safi-mono">{money(r.total)}</span> },
@@ -809,7 +840,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
   const isManagement = role === 'owner';
   if (!o) return <div style={{ padding: 40 }}><h2>No order selected.</h2><Button onClick={() => setView('orders')}>Back to orders</Button></div>;
   const c = D.customers.find(x => x.id === o.customer);
-  const stages = window.SAFI_STORE.STAGES;
+  const stages = window.SAFI_STORE.stagesFor(o);
   const curIdx = stages.indexOf(o.status);
   const parent = o.rewashOf ? D.orders.find(x => x.id === o.rewashOf) : null;
   const rewashChild = o.rewashedBy ? D.orders.find(x => x.id === o.rewashedBy) : null;
@@ -824,7 +855,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
     });
     toast('Order marked Collected', 'success');
     // Mandatory SMS for collection
-    if (c && c.phone) {
+    if (c && c.phone && (((D.settings && D.settings.smsStages) || {}).collected !== false)) {
       const tpl = (D.smsTemplates || {}).collected || 'Hi {name}, your order {id} has been collected. Asante, karibu tena!';
       const body = tpl
         .replace(/\{name\}/g, c.name.split(' ')[0])
@@ -1036,7 +1067,9 @@ function AdvanceModal({ open, onClose, order, customer, stages, curIdx }) {
   const [includeIroning, setIncludeIroning] = useStateFD(false);
   const targetStage = (canSkipIroning && !includeIroning) ? 'ready' : nextStage;
   // SMS is mandatory for washing & collected, optional for others
-  const smsMandatory = targetStage === 'washing' || targetStage === 'ready' || targetStage === 'collected';
+  const SMS_DEF = { washing: true, drying: false, ironing: false, drycleaning: true, ready: true, collected: true };
+  const smsStageOn = ({ ...SMS_DEF, ...((D.settings && D.settings.smsStages) || {}) })[targetStage] !== false;
+  const smsMandatory = smsStageOn;
 
   const [sendSms, setSendSms] = useStateFD(true);
   const [body, setBody]       = useStateFD('');
@@ -1081,7 +1114,7 @@ function AdvanceModal({ open, onClose, order, customer, stages, curIdx }) {
       window.SAFI_STORE.advanceStatus(order.id);
     }
     toast(`Moved to ${targetStage}`);
-    if (includeSms && customer && customer.phone && body.trim()) {
+    if (smsStageOn && includeSms && customer && customer.phone && body.trim()) {
       window.SAFI_STORE.logMessage({
         to: `${customer.prefix || ''} ${customer.phone}`.trim(),
         name: customer.name, body: body.trim(),
@@ -1097,8 +1130,7 @@ function AdvanceModal({ open, onClose, order, customer, stages, curIdx }) {
   return (
     <Modal open={open} onClose={onClose} title={`Advance order`} width={560}
       footer={<>
-        {!smsMandatory && <Button kind="ghost" onClick={() => doAdvance(false)}>Advance, skip SMS</Button>}
-        <Button kind="primary" icon="check" onClick={() => doAdvance(sendSms || smsMandatory)}>Advance{(sendSms || smsMandatory) ? ' & send SMS' : ''}</Button>
+        <Button kind="primary" icon="check" onClick={() => doAdvance(smsStageOn)}>Advance{smsStageOn && customer && customer.phone ? ' & send SMS' : ''}</Button>
       </>}>
       <div className="safi-form">
         <div className="safi-callout">
@@ -1114,7 +1146,9 @@ function AdvanceModal({ open, onClose, order, customer, stages, curIdx }) {
           </label>
         )}
 
-        {customer && customer.phone ? (
+        {!smsStageOn ? (
+          <p className="safi-cell-sub">SMS for {t(targetStage, 'en')} is switched off in Settings → Stage SMS.</p>
+        ) : customer && customer.phone ? (
           <>
             {smsMandatory ? (
               <div className="safi-callout" style={{ background: 'var(--green-bg)', color: 'var(--green)', borderLeft: '3px solid var(--green)' }}>
@@ -1570,6 +1604,8 @@ function CustomersScreen({ lang, money, setView, role }) {
   }
 
   const joinedTs = c => { const t = Date.parse(c.joined); return isNaN(t) ? 0 : t; };
+  const ordersOf = c => Number(c.orders) || 0;
+  const spendOf = c => Number(c.spend) || 0;
   const rows = D.customers.filter(c => {
     if (group !== 'all' && c.group !== group) return false;
     if (q && !(c.name.toLowerCase().includes(q.toLowerCase()) || c.phone.includes(q))) return false;
@@ -1578,6 +1614,12 @@ function CustomersScreen({ lang, money, setView, role }) {
     sort === 'name-desc' ? b.name.localeCompare(a.name, undefined, { sensitivity: 'base' })
     : sort === 'joined-new' ? joinedTs(b) - joinedTs(a)
     : sort === 'joined-old' ? joinedTs(a) - joinedTs(b)
+    : sort === 'orders-high' ? ordersOf(b) - ordersOf(a)
+    : sort === 'orders-low' ? ordersOf(a) - ordersOf(b)
+    : sort === 'spend-high' ? spendOf(b) - spendOf(a)
+    : sort === 'spend-low' ? spendOf(a) - spendOf(b)
+    : sort === 'loyalty-high' ? (b.loyalty || 0) - (a.loyalty || 0)
+    : sort === 'loyalty-low' ? (a.loyalty || 0) - (b.loyalty || 0)
     : a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
   function handleImport(file) {
@@ -1631,6 +1673,18 @@ function CustomersScreen({ lang, money, setView, role }) {
               <option value="name-desc">Name Z–A</option>
               <option value="joined-new">Newest joined</option>
               <option value="joined-old">Oldest joined</option>
+              <optgroup label="Orders">
+                <option value="orders-high">Most orders</option>
+                <option value="orders-low">Fewest orders</option>
+              </optgroup>
+              <optgroup label="Lifetime spend">
+                <option value="spend-high">Highest spend</option>
+                <option value="spend-low">Lowest spend</option>
+              </optgroup>
+              <optgroup label="Loyalty">
+                <option value="loyalty-high">Most loyal</option>
+                <option value="loyalty-low">Least loyal</option>
+              </optgroup>
             </select>
           </label>
         </div>

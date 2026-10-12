@@ -1,13 +1,18 @@
-VAZI SAFI LMS v2.2.5
-- Expense categories tidied (expenses move to the kept category, nothing lost):
-  Detergent & chemicals -> Detergent & supplies; Electricity & water -> Water & electricity;
-  Wages -> Salaries & wages; Equipment & repairs -> Repairs & maintenance; duplicate Rent and
-  Transport & delivery merged. NEW: Bike charging, refuelling & wash; Airtime & internet.
-- Existing expenses re-filed once: bike top-up/fuel/wash -> Bike; Airtime -> Airtime;
-  Overtime -> Salaries & wages; Extension and Tape -> Repairs & maintenance.
-- Expense category filters: three rows, each with its own colour and icon. Packaging & bags, Licenses & permits and Labour fees added.
-  Management can drag chips to reorder them (order syncs to every laptop).
-- "Other" expenses: choose Operational or Special on each one when logging/editing.
-- Management: "Profit by cost group" card. Drag category chips into Operational or Special;
-  shows Revenue, Operating profit (after operational) and Net profit (after special). Syncs to all laptops.
-- Publish from the MANAGEMENT laptop first: the shop login cannot delete categories.
+VAZI SAFI LMS v2.2.6
+EXPENSES
+- Newest first. "Paid by" is now "Recorded by"; anything logged from Management shows Management.
+- Log expense: Cash removed (M-Pesa / Bank). Transaction code min. 5 characters (ideally last 5).
+- Outsourced dry cleaning must link at least one order. Linked orders / customers take several;
+  typing an order number autocompletes and fills its customer.
+ORDERS
+- Teller column on Orders; picking a date shows who was on the till that day.
+- Dry-cleaning-only orders: Intake -> Dry cleaning -> Ready -> Collected.
+- New tiles: Wash & Fold (per piece, teller enters price) and Laundry Express (50% of laundry value,
+  dry cleaning and shoes excluded). The % is set in Settings -> Laundry Express Service;
+  Express always prints as the last line.
+SMS
+- Settings -> Stage SMS: switch each stage on/off (synced). On = always sent, Off = never sent.
+RECEIPT
+- Space after Date and Cashier; Client # and Cashier aligned right.
+CUSTOMERS
+- Sort box: Most/Fewest orders, Highest/Lowest spend, Most/Least loyal (plus name and joined).

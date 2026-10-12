@@ -36,6 +36,7 @@ window.SAFI_I18N = {
     washing: 'Washing',
     ironing: 'Ironing',
     drying: 'Drying',
+    drycleaning: 'Dry cleaning',
     collected: 'Collected',
 
     new_order: 'New Order',
@@ -127,6 +128,7 @@ window.SAFI_I18N = {
     washing: 'Inafuliwa',
     ironing: 'Pasi',
     drying: 'Kukaushwa',
+    drycleaning: 'Dry cleaning',
     collected: 'Imechukuliwa',
 
     new_order: 'Oda Mpya',

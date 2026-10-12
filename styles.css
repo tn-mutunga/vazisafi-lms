@@ -2929,3 +2929,22 @@ button { font-family: inherit; }
 @media (max-width:900px){.safi-costgrps{grid-template-columns:1fr}.safi-profitline{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .safi-catchip.is-dropping{box-shadow:-4px 0 0 0 var(--brand)}
+
+.safi-multi{position:relative;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:44px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card)}
+.safi-multi:focus-within{border-color:var(--brand)}
+.safi-multi__chip{display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 9px;border-radius:999px;background:var(--brand-soft,#ede5f7);color:var(--brand-ink);font-size:12.5px;text-transform:none;letter-spacing:0}
+.safi-multi__chip button{border:0;background:transparent;cursor:pointer;font-size:14px;line-height:1;padding:0 4px;color:inherit;opacity:.6}
+.safi-multi__input{flex:1;min-width:110px;border:0;outline:0;background:transparent;font-size:14px;padding:4px;text-transform:none;letter-spacing:0}
+.safi-multi__menu{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:0 10px 30px rgba(0,0,0,.12);max-height:240px;overflow:auto}
+.safi-multi__menu button{display:grid;grid-template-columns:auto 1fr auto;gap:10px;width:100%;text-align:left;padding:9px 12px;border:0;background:transparent;cursor:pointer;font-size:13px;text-transform:none;letter-spacing:0}
+.safi-multi__menu button:hover{background:var(--paper)}
+.safi-req-inline{display:inline;background:none;padding:0;color:#ef4444;font-size:11px;margin-left:4px;text-transform:none;letter-spacing:0}
+.safi-input.is-error{border-color:#ef4444}
+.safi-hint--err{color:#ef4444}
+
+.safi-smsstages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:800px){.safi-smsstages{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.safi-receipt__meta>div{display:flex;gap:8px;align-items:baseline}
+.safi-receipt__meta>div:nth-child(even){justify-content:flex-end;text-align:right}
+
+.safi-receipt__meta{grid-template-columns:1.15fr 1fr}.safi-receipt__meta b{white-space:nowrap}
