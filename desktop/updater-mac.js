@@ -32,6 +32,26 @@ const newer = (a, b) => {
   return false;
 };
 
+// GitHub's API allows only 60 anonymous checks an hour per internet connection, shared by
+// every laptop at the shop. When it says 403/429, read the public releases page instead,
+// which has no such limit.
+async function latestRelease() {
+  const H = { 'User-Agent': 'VaziSafi-LMS' };
+  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`, { headers: { ...H, 'Accept': 'application/vnd.github+json' } });
+  if (res.ok) return await res.json();
+  if (res.status !== 403 && res.status !== 429) throw new Error(`GitHub answered ${res.status}`);
+  const page = await fetch(`https://github.com/${OWNER}/${REPO}/releases/latest`, { headers: H, redirect: 'follow' });
+  if (!page.ok) throw new Error(`GitHub answered ${page.status} (try again in an hour)`);
+  const m = String(page.url).match(/\/tag\/([^/?#]+)/);
+  if (!m) throw new Error('Could not read the latest version from GitHub');
+  const tag = decodeURIComponent(m[1]);
+  const ex = await fetch(`https://github.com/${OWNER}/${REPO}/releases/expanded_assets/${encodeURIComponent(tag)}`, { headers: H });
+  const html = ex.ok ? await ex.text() : '';
+  const assets = [...new Set([...html.matchAll(/href="([^"]+\/releases\/download\/[^"]+)"/g)].map(x => x[1]))]
+    .map(href => ({ name: decodeURIComponent(href.split('/').pop()), browser_download_url: href.startsWith('http') ? href : 'https://github.com' + href, size: 0 }));
+  return { tag_name: tag, assets };
+}
+
 function pickAsset(assets) {
   const zips = assets.filter(a => /-mac\.zip$/i.test(a.name));
   const arm = zips.find(a => /arm64/i.test(a.name));
@@ -70,11 +90,7 @@ function init({ app, dialog, getWindow, onStatus }) {
     busy = true;
     say({ state: 'checking' });
     try {
-      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`, {
-        headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'VaziSafi-LMS' }
-      });
-      if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
-      const rel = await res.json();
+      const rel = await latestRelease();
       const version = String(rel.tag_name || '').replace(/^v/, '');
 
       if (!newer(version, app.getVersion())) {

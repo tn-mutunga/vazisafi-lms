@@ -1,4 +1,7 @@
-VAZI SAFI LMS v2.3.2
+VAZI SAFI LMS v2.3.3
+- Mac updater: if GitHub says 403 (too many checks from the shop connection), it reads the public releases page instead.
+
+(everything from v2.3.2:)
 ORDERS
 - Dates show day-month (15-10 19:33). Status shows the current stage, the time it began, and a running timer for Washing / Drying.
 - Washing alert: green flashing outline + green dot. Drying alert: sky-blue flashing outline + dot. Drying badge is now brown.
