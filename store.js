@@ -317,6 +317,7 @@ window.SAFI_STORE = (() => {
   // Append-only trail. Every write that could hide money leaves a line here. Nothing in
   // the front-desk UI reads it, so it costs staff nothing to be honest and nothing to
   // forget it exists.
+  function stageMark(id, stage) { audit('order.stage', id, stage, { stage }); }
   function audit(action, target, detail, meta) {
     state.auditLog = [{
       id: nextId('au'), at: new Date().toISOString(),
@@ -674,6 +675,7 @@ window.SAFI_STORE = (() => {
     updateOrder(id, patch) {
       const before = state.orders.find(o => o.id === id);
       state.orders = state.orders.map(o => o.id === id ? { ...o, ...patch } : o);
+      if (before && patch.status && patch.status !== before.status) stageMark(id, patch.status);
       if (before) {
         const changed = Object.keys(patch).filter(k => String(before[k]) !== String(patch[k]));
         if (changed.length) {
@@ -688,13 +690,28 @@ window.SAFI_STORE = (() => {
         if (o.id !== id) return o;
         const ST = stagesFor(o);
         const idx = ST.indexOf(o.status);
-        return { ...o, status: ST[Math.min(idx + 1, ST.length - 1)] };
+        const next = ST[Math.min(idx + 1, ST.length - 1)];
+        if (next !== o.status) stageMark(id, next);
+        return { ...o, status: next };
       });
       save();
+    },
+    // When each order entered each stage (from the synced audit log, so all laptops agree).
+    stageTimes(id) {
+      const o = state.orders.find(x => x.id === id);
+      const t = {};
+      if (o && o.in) t.intake = new Date(String(o.in).replace(' ', 'T')).toISOString();
+      for (const a of [...(state.auditLog || [])].reverse()) {
+        if (a.target !== id) continue;
+        const sg = a.action === 'order.stage' ? (a.meta && a.meta.stage) : null;
+        if (sg && !t[sg]) t[sg] = a.at;
+      }
+      return t;
     },
     setStatus(id, status) {
       const before = state.orders.find(o => o.id === id);
       state.orders = state.orders.map(o => o.id === id ? { ...o, status } : o);
+      if (before && before.status !== status) stageMark(id, status);
       audit('order.status', id, `${before?.status || '—'} → ${status}`);
       save();
     },

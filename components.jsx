@@ -19,7 +19,15 @@ const Modal = ({ open, onClose, title, children, footer, width = 480 }) => {
   if (!open) return null;
   return (
     <div className="safi-modal" onClick={onClose}>
-      <div className="safi-modal__sheet" style={{ width }} onClick={e => e.stopPropagation()}>
+      <div className="safi-modal__sheet" style={{ width }} onClick={e => e.stopPropagation()}
+        onKeyDown={e => {
+          // Enter = the main (purple) button: logs the expense, adds the customer, etc.
+          if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+          const tg = e.target; if (tg && (tg.tagName === 'TEXTAREA' || tg.tagName === 'BUTTON' || tg.tagName === 'SELECT')) return;
+          if (tg && tg.closest && tg.closest('.safi-ac, [data-enter-own]')) return;
+          const btn = e.currentTarget.querySelector('.safi-modal__ft .safi-btn--primary:not([disabled])');
+          if (btn) { e.preventDefault(); btn.click(); }
+        }}>
         <header className="safi-modal__hd">
           <h3>{title}</h3>
           <button className="safi-modal__x" onClick={onClose}>×</button>
@@ -274,7 +282,7 @@ const StatusBadge = ({ status }) => {
   const map = {
     intake:    { c: 'amber',  label: 'Intake' },
     washing:   { c: 'blue',   label: 'Washing' },
-    drying:    { c: 'gray',   label: 'Drying' },
+    drying:    { c: 'brown',  label: 'Drying' },
     ironing:   { c: 'violet', label: 'Ironing' },
     drycleaning: { c: 'violet', label: 'Dry cleaning' },
     ready:     { c: 'green',  label: 'Ready' },

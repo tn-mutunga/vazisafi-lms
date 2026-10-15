@@ -14,13 +14,19 @@ const isOtherCat = (c) => !!c && /^other$/i.test(String(c.name || '').trim());
 function costGroupOf(D, ex) {
   const cat = (D.expenseCategories || []).find(c => c.id === ex.category);
   const ov = (D.settings && D.settings.expenseGroupOverrides) || {};
-  if (isOtherCat(cat)) return ov[ex.id] === 'special' ? 'special' : 'operational';
+  if (ov[ex.id] === 'special' || ov[ex.id] === 'operational') return ov[ex.id];
+  return catGroupOf(D, ex.category);
+}
+// Default group for a category (Other = operational unless chosen per expense).
+function catGroupOf(D, catId) {
+  const cat = (D.expenseCategories || []).find(c => c.id === catId);
+  if (isOtherCat(cat)) return 'operational';
   const g = (D.settings && D.settings.expenseGroups) || {};
-  return g[ex.category] === 'special' ? 'special' : 'operational';
+  return g[catId] === 'special' ? 'special' : 'operational';
 }
 function setExpenseGroup(D, id, g) {
   const ov = { ...((D.settings && D.settings.expenseGroupOverrides) || {}) };
-  if (g === 'special') ov[id] = 'special'; else delete ov[id];
+  ov[id] = g === 'special' ? 'special' : 'operational';
   window.SAFI_STORE.setSetting('expenseGroupOverrides', ov);
 }
 
@@ -184,11 +190,11 @@ function ExpensesScreen({ lang, money, role }) {
     if (isOutsourced(form.category) && !splitIds(form.linkedOrder).length) { toast('Outsourced dry cleaning needs at least one linked order', 'error'); return; }
     if (editId) {
       window.SAFI_STORE.updateExpense(editId, { ...form, amount: parseFloat(form.amount) });
-      if (isOtherCat(D.expenseCategories.find(c => c.id === form.category))) setExpenseGroup(D, editId, form.costGroup);
+      setExpenseGroup(D, editId, form.costGroup || 'operational');
       toast('Expense updated', 'success');
     } else {
-      const made = window.SAFI_STORE.addExpense({ ...form, amount: parseFloat(form.amount), paidBy: (isManagement || !isShopComputer()) ? 'management' : undefined });
-      if (made && form.costGroup === 'special' && isOtherCat(D.expenseCategories.find(c => c.id === form.category))) setExpenseGroup(D, made.id, 'special');
+      const made = window.SAFI_STORE.addExpense({ ...form, amount: parseFloat(form.amount), paidBy: isManagement ? 'management' : undefined });
+      if (made) setExpenseGroup(D, made.id, form.costGroup || 'operational');
       toast('Expense logged', 'success');
     }
     setShowAdd(false); setEditId(null);
@@ -297,15 +303,15 @@ function ExpensesScreen({ lang, money, role }) {
           <label>Category
             <div className="safi-cat-pick">
               {orderedCats(D).map(c => (
-                <button key={c.id} className={`safi-cat-pick__btn safi-cat-pick__btn--${c.color} ${form.category === c.id ? 'is-active' : ''}`} onClick={() => setForm({ ...form, category: c.id })}>
+                <button key={c.id} className={`safi-cat-pick__btn safi-cat-pick__btn--${c.color} ${form.category === c.id ? 'is-active' : ''}`} onClick={() => setForm({ ...form, category: c.id, costGroup: catGroupOf(D, c.id) })}>
                   <Icon name={c.icon} size={16}/>
                   <span>{c.name}</span>
                 </button>
               ))}
             </div>
           </label>
-          {isOtherCat(D.expenseCategories.find(c => c.id === form.category)) && (
-            <label>This "Other" cost counts as
+          {true && (
+            <label>This cost counts as
               <div className="safi-seg">
                 {[['operational', 'Operational expense'], ['special', 'Special expense']].map(([k, l]) => (
                   <button key={k} type="button" className={`safi-seg__btn ${(form.costGroup || 'operational') === k ? 'is-active' : ''}`} onClick={() => setForm({ ...form, costGroup: k })}>{l}</button>

@@ -243,6 +243,8 @@ function SettingsScreen({ lang, shop, setShop }) {
         </div>
       </Card>
 
+      <MachineTimersCard/>
+
       <Card title="Operations">
         <ul className="safi-form" style={{ gap: 14 }}>
           <li>
@@ -891,3 +893,40 @@ function TimeSeries({ money }) {
 }
 
 Object.assign(window, { PeriodSummary, SettingsScreen, DispatchScreen, MessagesScreen, ApprovalsScreen, TimeSeries, renderSmsTemplate });
+
+// ─── Washer & dryer timers (Management) ───────────────────────────────────
+// Top-level so the input keeps focus while typing; the value commits on blur / Enter.
+function TimerDial({ value, label, unit, step = 1, onCommit }) {
+  const [draft, setDraft] = useStateX(String(value));
+  useEffectX(() => { setDraft(String(value)); }, [value]);
+  const commit = (v) => { const n = Math.max(1, Math.round(Number(v) || 0)); setDraft(String(n)); if (n !== value) onCommit(n); };
+  return (
+    <label className="safi-dial">
+      <span>{label}</span>
+      <div className="safi-qty">
+        <button type="button" onClick={() => commit(value - step)}>−</button>
+        <input type="number" min="1" value={draft} onChange={e => setDraft(e.target.value)} onBlur={e => commit(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(e.currentTarget.value); } }}/>
+        <span className="safi-qty__unit">{unit}</span>
+        <button type="button" onClick={() => commit(value + step)}>+</button>
+      </div>
+    </label>
+  );
+}
+function MachineTimersCard() {
+  const D = useStore();
+  const cur = { wash: 60, dry: 90, every: 30, length: 7, flash: 3, ...((D.settings || {}).machineTimers || {}) };
+  const set = (k) => (n) => window.SAFI_STORE.setSetting('machineTimers', { ...cur, [k]: n });
+  return (
+    <Card title="Washer & dryer timers" action={<span className="safi-cell-sub">Green flashing outline on the Washing / Drying badge</span>}>
+      <div className="safi-dials">
+        <TimerDial value={cur.wash} label="Washing alert after" unit="min" step={5} onCommit={set('wash')}/>
+        <TimerDial value={cur.dry} label="Drying alert after" unit="min" step={5} onCommit={set('dry')}/>
+        <TimerDial value={cur.every} label="Repeat every" unit="min" step={5} onCommit={set('every')}/>
+        <TimerDial value={cur.length} label="Alert lasts" unit="min" onCommit={set('length')}/>
+        <TimerDial value={cur.flash} label="Flash every" unit="sec" onCommit={set('flash')}/>
+      </div>
+      <p className="safi-hint">Now: washing alerts at {cur.wash} min, drying at {cur.dry} min, then every {cur.every} min, each for {cur.length} min, flashing every {cur.flash} s. Saved to the cloud for all laptops.</p>
+    </Card>
+  );
+}
+Object.assign(window, { MachineTimersCard });

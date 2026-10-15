@@ -252,6 +252,8 @@
     // A failed attempt (Wi-Fi still connecting at start-up, a dropped line) retries
     // on its own after 30 s, then 1, 2 and 5 minutes, instead of waiting for a change.
     timer = setTimeout(() => {
+      // Never pull while someone is filling a form; a refresh mid-typing made the screen jump.
+      if (document.querySelector('.safi-modal')) { schedule(20000); return; }
       API.syncNow().then(() => { retryStep = 0; }).catch(() => {
         const waits = [30000, 60000, 120000, 300000];
         schedule(waits[Math.min(retryStep++, waits.length - 1)]);
@@ -261,13 +263,14 @@
 
   // Subscribe once the store exists.
   setTimeout(() => {
-    if (window.SAFI_STORE) window.SAFI_STORE.subscribe(() => schedule(60000));
+    // Changes are saved on this computer straight away (they survive a power cut) and go
+    // up with the next 5-minute sync.
     if (window.SAFI_SYNC) window.SAFI_SYNC.setBranch(cfg.branch);
   }, 0);
 
   // Fetch other laptops' changes even when nobody is typing here.
   // Every 10 minutes (plus on open, on wake, when the internet returns and on close).
-  setInterval(() => schedule(0), 600000);
+  setInterval(() => schedule(0), 300000);
   window.addEventListener('beforeunload', () => { try { if (cfg.liveSync && session && navigator.onLine) API.syncNow().catch(() => {}); } catch (e) {} });
   // Renew the sign-in in the background every 30 minutes, so a till left open (or
   // reopened the next morning) never finds an expired token at the counter.
