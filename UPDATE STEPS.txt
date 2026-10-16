@@ -1,5 +1,7 @@
-VAZI SAFI LMS v2.3.9
-- Order page: "Mark as Collected" hint now reads "only after the clothes leave the shop with the
-  customer or the rider has delivered them" (no more "picked up", which staff use for collecting
-  clothes from customers).
-- Ready step: order duration shows as a clock icon + time (e.g. clock 2hr 48min).
+VAZI SAFI LMS v2.4.0
+- FIX: unpaid orders could be marked Collected by pressing Advance past Ready
+  (ironing-only and dry-cleaning-only orders). Advance now stops at Ready for every order;
+  Collected only via "Mark as Collected", and the app refuses Collected while a balance is owed.
+- Orders list Items column: one entry per service with its types, e.g. "Ironing (Shirt, Trouser)".
+- Mark as Collected hint: pale blue, new wording (paid / balance due).
+- Duration chip under Ready: classic clock icon.

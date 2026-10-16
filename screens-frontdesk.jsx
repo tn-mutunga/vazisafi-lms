@@ -858,7 +858,16 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
               }},
             { label: 'In', render: r => <span className="safi-cell-sub">{dm(r.in)}</span> },
             { label: 'Due', render: r => <span className="safi-cell-sub">{dm(r.due)}</span> },
-            { label: 'Items', render: r => <span>{r.items.map(i => D.services.find(s => s.id === i.svc)?.name.split(' ')[0]).join(', ')}</span> },
+            { label: 'Items', render: r => {
+              // One entry per service, its types in brackets: "Ironing (Shirt, Trouser)".
+              const g = [];
+              for (const i of r.items) {
+                const nm = (D.services.find(s => s.id === i.svc)?.name || i.svc || '').split(' ')[0];
+                let e = g.find(x => x.nm === nm); if (!e) { e = { nm, subs: [] }; g.push(e); }
+                if (i.subtype && !e.subs.includes(i.subtype)) e.subs.push(i.subtype);
+              }
+              return <span>{g.map(e => e.subs.length ? `${e.nm} (${e.subs.join(', ')})` : e.nm).join(', ')}</span>;
+            } },
             { label: t('total', lang), render: r => <span className="safi-mono">{money(r.total)}</span> },
             { label: t('paid', lang), render: r => <PayBadge paid={r.paid} total={r.total}/> },
             { label: t('method', lang), render: r => <MethodBadge method={r.method}/> },
@@ -930,7 +939,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
           <Button kind="ghost" icon="alert" onClick={() => setView('issues')}>Issue</Button>
           <Button kind="ghost" icon="print" onClick={() => setView('receipt')}>{t('print', lang)}</Button>
           {o.status === 'washing' && <Button kind="ghost" icon="clock" onClick={() => { window.SAFI_STORE.holdOrder(o.id); toast('Moved to Holding (waiting for a dryer)'); }}>Hold (dryers busy)</Button>}
-          {curIdx < 4 && <Button kind="primary" icon="arrow" onClick={() => { setShowAdvance(true); }}>Advance → {stages[curIdx + 1]}</Button>}
+          {curIdx >= 0 && curIdx < stages.length - 1 && stages[curIdx + 1] !== 'collected' && <Button kind="primary" icon="arrow" onClick={() => { setShowAdvance(true); }}>Advance → {stages[curIdx + 1]}</Button>}
           <Button kind="ghost" onClick={() => setShowDelete(true)} icon="alert"><span style={{ color: 'var(--red)' }}>Delete</span></Button>
         </>}
       />
@@ -945,7 +954,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
                 {i < curIdx ? <Icon name="check" size={14} stroke="#fff"/> : <span>{i + 1}</span>}
               </div>
               <div className="safi-stepper__lbl">{t(s, lang)}</div>
-              {(() => { const tm = window.SAFI_STORE.stageTimes(o.id); const at = tm[s]; if (!at) return null; const nx = (s === 'washing' && tm.holding) ? tm.holding : stages.slice(i + 1).map(x => tm[x]).find(Boolean); const dur = (s === 'washing' || s === 'drying') ? durTxt((nx ? new Date(nx) : (s === o.status ? new Date() : null)) - new Date(at)) : null; const total = (s === 'ready' && tm.washing) ? durTxt(new Date(at) - new Date(tm.washing)) : null; return <div className="safi-stepper__at"><span className="safi-mono">{hmOf(at)}</span>{dur && (nx || s === o.status) ? <span>{nx ? dur : `${dur} so far`}</span> : null}{total ? <span className="safi-stepper__total" title="Order duration: start of washing to Ready"><Icon name="clock" size={13}/>{total}</span> : null}</div>; })()}
+              {(() => { const tm = window.SAFI_STORE.stageTimes(o.id); const at = tm[s]; if (!at) return null; const nx = (s === 'washing' && tm.holding) ? tm.holding : stages.slice(i + 1).map(x => tm[x]).find(Boolean); const dur = (s === 'washing' || s === 'drying') ? durTxt((nx ? new Date(nx) : (s === o.status ? new Date() : null)) - new Date(at)) : null; const total = (s === 'ready' && tm.washing) ? durTxt(new Date(at) - new Date(tm.washing)) : null; return <div className="safi-stepper__at"><span className="safi-mono">{hmOf(at)}</span>{dur && (nx || s === o.status) ? <span>{nx ? dur : `${dur} so far`}</span> : null}{total ? <span className="safi-stepper__total" title="Order duration: start of washing to Ready"><Icon name="clockface" size={16}/>{total}</span> : null}</div>; })()}
               {i < stages.length - 1 && <div className={`safi-stepper__line ${i < curIdx ? 'is-done' : ''}`}/>}
               {s === 'washing' && (() => { const tm = window.SAFI_STORE.stageTimes(o.id); if (!tm.holding && o.status !== 'holding') return null; const cur = o.status === 'holding'; const end = tm.drying ? new Date(tm.drying) : (cur ? new Date() : null); return (
                 <div className={`safi-stepper__hold${cur ? ' is-cur' : ''}`} title="Holding: washed, waiting for a free dryer">
@@ -962,8 +971,8 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
               <Icon name="alert" size={14}/>
               <span>
                 {(o.paid || 0) >= (o.total || 0) && (o.total || 0) > 0
-                  ? <><b>Paid in full.</b> If the customer has taken it or it has been delivered, mark it as collected now. If it is still at the shop, mark it collected on the day it leaves.</>
-                  : <><b>Mark as Collected</b> only after the clothes leave the shop with the customer or the rider has delivered them. Collect the balance first ({`KES ${Math.max(0, (o.total || 0) - (o.paid || 0)).toLocaleString('en-KE')}`}).</>}
+                  ? <><b>Paid in full.</b> Mark as Collected only after the clothes leave the shop with the customer or the rider has delivered them.</>
+                  : <><b>Mark as Collected</b> only after the clothes leave the shop with the customer or the rider has delivered them, and payment has been made in full. Balance due: {`KES ${Math.max(0, (o.total || 0) - (o.paid || 0)).toLocaleString('en-KE')}`}.</>}
               </span>
             </div>
           </div>

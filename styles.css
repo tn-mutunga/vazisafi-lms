@@ -3177,3 +3177,7 @@ button { font-family: inherit; }
 .safi-receipt__items td:nth-child(2), .safi-receipt__items td:nth-child(3) { white-space: nowrap; }
 .safi-receipt__items th:nth-child(4), .safi-receipt__items td:nth-child(4) { text-align: right !important; white-space: nowrap; padding-left: 6px; }
 .safi-stepper__total{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.safi-stepper__total svg{flex-shrink:0}
+/* Collection hint: pale blue with a blue edge (paid and unpaid alike). */
+.safi-collect-hint,.safi-collect-hint.is-paid{background:#E0F2FE;color:#0c3b5c;border-left:4px solid #0284C7;animation:none}
+.safi-collect-hint svg{color:#0284C7;flex-shrink:0;margin-top:2px}
+.safi-stepper__total svg{color:#0f7a4f}

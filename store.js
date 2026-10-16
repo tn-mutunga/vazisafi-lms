@@ -692,6 +692,7 @@ window.SAFI_STORE = (() => {
         // Holding sits between Washing and Drying and is not in the stage list.
         const idx = o.status === 'holding' ? ST.indexOf('washing') : ST.indexOf(o.status);
         const next = ST[Math.min(idx + 1, ST.length - 1)];
+        if (next === 'collected' && (o.total || 0) - (o.paid || 0) > 0) return o; // balance first
         if (next !== o.status) stageMark(id, next);
         return { ...o, status: next };
       });
@@ -719,6 +720,7 @@ window.SAFI_STORE = (() => {
     },
     setStatus(id, status) {
       const before = state.orders.find(o => o.id === id);
+      if (status === 'collected' && before && (before.total || 0) - (before.paid || 0) > 0) return; // balance first
       state.orders = state.orders.map(o => o.id === id ? { ...o, status } : o);
       if (before && before.status !== status) stageMark(id, status);
       audit('order.status', id, `${before?.status || '—'} → ${status}`);
