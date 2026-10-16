@@ -1,6 +1,9 @@
-VAZI SAFI LMS v2.3.7
-- Order page (Ready): reminder under "Mark as Collected". Paid in full -> amber note to mark it
-  collected when delivered/picked up (or on the day it leaves the shop). Balance owed -> collect first.
-- Front Desk "Washing / Drying / Ready / Collected": Collected now counts orders marked collected
-  today, whatever day they came in.
-- Includes everything from v2.3.6.
+VAZI SAFI LMS v2.3.8
+MACHINES
+- Standalone dryer is now Dryer 3 in Set 3 (between Sets 2 and 4), on small dark feet like the washers.
+- Names follow the floor: Washer 1, Dryer 1, Washer 2, Dryer 2, Dryer 3, Washer 4, Dryer 4, Washer 5, Dryer 5.
+  Saved timers and run history stay with the same physical machine.
+- Stacked sets are sealed (no gap between dryer and washer). Machine log: Started by column removed.
+RECEIPT
+- "pc" instead of "piece". Price column shows the number only; Total column and totals keep KES.
+- Qty and Price centred under their headings.

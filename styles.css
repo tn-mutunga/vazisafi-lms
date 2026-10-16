@@ -3116,3 +3116,63 @@ button { font-family: inherit; }
 .safi-stepper__at{align-items:center!important;text-align:center}.safi-stepper__total{align-self:center}
 
 .safi-collect-hint{display:flex;gap:8px;align-items:flex-start;max-width:560px;padding:10px 14px;border-radius:10px;background:var(--paper);color:var(--ink-2);font-size:12.5px;line-height:1.45;border-left:3px solid var(--line)}.safi-collect-hint.is-paid{background:var(--amber-soft);color:#92450C;border-left-color:var(--amber);animation:safiHintPulse 2.4s ease-in-out infinite}@keyframes safiHintPulse{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 3px rgba(217,119,6,.18)}}
+
+/* ── Live machines floor ── */
+.safi-mc-stats{display:flex;flex-wrap:wrap;gap:10px}.safi-mc-stats>span{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px;color:var(--ink-2)}.safi-mc-stats>span>i{width:9px;height:9px;border-radius:50%;background:#9ca3af}.safi-mc-stats>.is-run>i{background:#22c55e}.safi-mc-stats>.is-done>i{background:#38bdf8}.safi-mc-stats>.is-service>i{background:#f59e0b}.safi-mc-stats>span>b{color:var(--ink)}
+.safi-mc-floor{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr));gap:18px;align-items:end;padding:22px;border-radius:18px;background:linear-gradient(180deg,#eef1f6 0%,#e2e6ee 100%);border:1px solid var(--line)}
+.safi-mc-unit{display:flex;flex-direction:column;gap:6px;align-items:stretch}.safi-mc-unit.is-single{align-self:end}.safi-mc-unit__label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:700;text-align:center}.safi-mc-unit__base{height:10px;border-radius:0 0 8px 8px;background:#b9c0cc;margin:0 6px}
+.safi-mc{appearance:none;border:0;background:none;cursor:pointer;font:inherit;padding:0;display:flex;flex-direction:column;gap:4px;align-items:stretch;transition:transform .12s}
+.safi-mc:hover{transform:translateY(-2px)}
+.safi-mc__photo{position:relative;width:100%}
+.safi-mc__photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;user-select:none;filter:drop-shadow(0 6px 10px rgba(11,16,32,.18))}
+.safi-mc__lcd{position:absolute;display:flex;align-items:center;justify-content:center;padding:0 2px;background:#0d1a10;color:#9dff6a;font-family:var(--ff-mono);font-size:clamp(6px,.6vw,10px);font-weight:700;letter-spacing:.06em;border-radius:2px;line-height:1;overflow:hidden;white-space:nowrap}
+.safi-mc__spin{position:absolute;aspect-ratio:1/1;border-radius:50%;overflow:hidden;pointer-events:none}
+.safi-mc__spin i{position:absolute;inset:0;background:conic-gradient(from 0deg,transparent 0 40deg,rgba(249,115,22,.85) 40deg 75deg,transparent 75deg 150deg,rgba(96,165,250,.85) 150deg 190deg,transparent 190deg 260deg,rgba(244,244,245,.9) 260deg 300deg,transparent 300deg);clip-path:circle(44% at 50% 64%);opacity:0;mix-blend-mode:multiply}
+.safi-mc__ring{position:absolute;aspect-ratio:1/1;border-radius:50%;pointer-events:none;box-shadow:0 0 0 0 transparent}
+.safi-mc__name{font-size:12px;font-weight:700;text-align:center;color:var(--ink)}
+.safi-mc__foot{font-size:11.5px;color:var(--ink-2);text-align:center;min-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.safi-mc.is-run .safi-mc__spin i{opacity:1;animation:safiDrum 1.4s linear infinite}.safi-mc--d.is-run .safi-mc__spin i{animation-duration:2.4s}
+.safi-mc.is-run .safi-mc__ring{box-shadow:0 0 0 3px #22c55e,0 0 12px rgba(34,197,94,.55)}
+.safi-mc.is-done .safi-mc__ring{animation:safiMcDone 1.2s ease-in-out infinite}.safi-mc.is-done .safi-mc__lcd{color:#fff;background:#0284c7}
+.safi-mc.is-service .safi-mc__photo img{filter:grayscale(1) brightness(.85)}.safi-mc.is-service .safi-mc__lcd{color:#fbbf24}
+.safi-mc.is-idle .safi-mc__lcd{color:#9dff6a}
+@keyframes safiDrum{to{transform:rotate(360deg)}}
+@keyframes safiMcDone{0%,100%{box-shadow:0 0 0 3px rgba(56,189,248,.25)}50%{box-shadow:0 0 0 4px #38bdf8,0 0 16px rgba(56,189,248,.8)}}
+@media (max-width:1100px){.safi-mc-floor{grid-template-columns:repeat(3,minmax(150px,1fr))}}
+@media (prefers-reduced-motion:reduce){.safi-mc.is-run .safi-mc__spin i,.safi-mc.is-done .safi-mc__ring{animation:none}}
+.safi-mc-stack{display:flex;flex-direction:column;gap:0}.safi-mc-stack .safi-mc+.safi-mc{margin-top:-1px}.safi-mc-stack .safi-mc{gap:0}
+.safi-mc-unit__info{display:flex;flex-direction:column;gap:3px;margin-top:6px}.safi-mc-info{display:grid;grid-template-columns:8px auto 1fr;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2);min-width:0}.safi-mc-info i{width:8px;height:8px;border-radius:50%;background:#9ca3af}.safi-mc-info.is-run i{background:#22c55e}.safi-mc-info.is-done i{background:#38bdf8}.safi-mc-info.is-service i{background:#f59e0b}.safi-mc-info b{color:var(--ink);font-size:12px}.safi-mc-info span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* All drums turn (each at its own speed); running ones keep the green ring. */
+.safi-mc .safi-mc__spin i{opacity:.9;animation:safiDrum 1.6s linear infinite}
+.safi-mc.is-service .safi-mc__spin i{animation:none;opacity:.35}
+/* Washer photo has less margin than the dryer photo: scale it so both bodies are the same width. */
+.safi-mc--w .safi-mc__photo{width:100%}
+.safi-receipt__name2{font-family:var(--ff-display);font-size:13px;font-weight:600;color:var(--brand);margin-top:-2px;letter-spacing:.01em}
+
+.safi-mc .safi-mc__photo img{filter:none}.safi-mc-stack{filter:drop-shadow(0 8px 12px rgba(11,16,32,.18))}
+.safi-mc__lcd{font-size:clamp(5px,.48vw,8px)!important;padding:0 1px!important;border-radius:1px!important}
+.safi-setpanel{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--card);border:1px solid var(--line)}
+.safi-setpanel__hd{display:flex;align-items:center;gap:6px;font-size:12px}.safi-setpanel__hd i{width:8px;height:8px;border-radius:50%;background:#9ca3af}.safi-setpanel__hd i.is-run{background:#22c55e}.safi-setpanel__hd i.is-done{background:#38bdf8}.safi-setpanel__hd i.is-service{background:#f59e0b}.safi-setpanel__hd b{color:var(--ink)}.safi-setpanel__hd span{margin-left:auto;color:var(--ink-3);font-size:11px}
+.safi-setpanel__runs{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}.safi-setpanel__runs span{font-family:var(--ff-mono);font-size:11px;padding:1px 6px;border-radius:5px;background:var(--paper);color:var(--ink)}.safi-setpanel__runs small{color:var(--ink-3);margin-left:3px}.safi-setpanel__runs em{font-size:11px;color:var(--ink-3);font-style:normal}
+
+
+.safi-mc-floor{grid-template-columns:repeat(5,minmax(0,1fr))!important;align-items:end!important}
+.safi-mc-unit{display:flex!important;flex-direction:column;justify-content:flex-end;min-width:0}
+.safi-mc-stack .safi-mc+.safi-mc{margin-top:0!important}
+.safi-mtable td,.safi-mtable th{white-space:nowrap}
+.safi-mstat{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}.safi-mstat i{width:8px;height:8px;border-radius:50%;background:#9ca3af}.safi-mstat.is-run i{background:#22c55e}.safi-mstat.is-done i{background:#38bdf8}.safi-mstat.is-service i{background:#f59e0b}
+.safi-mbar{display:inline-block;width:70px;height:6px;border-radius:999px;background:var(--line);overflow:hidden;vertical-align:middle;margin-right:6px}.safi-mbar>div{height:100%;background:var(--brand)}
+.safi-receipt__letterhead{display:block;width:100%;max-width:62mm;height:auto;margin:0 auto 4px}
+.safi-receipt__items th:nth-child(n+2),.safi-receipt__items td:nth-child(n+2){padding-left:6px!important;white-space:nowrap}
+.safi-card__hd .safi-cell-sub{white-space:nowrap}
+.safi-mc-stack{gap:0!important}.safi-mc-stack>.safi-mc+.safi-mc{margin-top:-7px;position:relative;z-index:0}.safi-mc-stack>.safi-mc:first-child{position:relative;z-index:1}
+.safi-mc-stand{position:relative;height:5px;margin:0}
+.safi-mc-stand i{position:absolute;top:-1px;width:3.2%;height:5px;border-radius:0 0 2px 2px;background:#2b2d33}.safi-mc-stand i:first-child{left:.8%}.safi-mc-stand i:last-child{right:.8%}
+.safi-mc-unit.is-single .safi-mc{width:100%}
+
+/* Receipt: centre Qty and Price under their headings; Total stays right-aligned. */
+.safi-receipt__items th:nth-child(2), .safi-receipt__items td:nth-child(2),
+.safi-receipt__items th:nth-child(3), .safi-receipt__items td:nth-child(3) { text-align: center !important; padding-left: 4px; padding-right: 4px; }
+.safi-receipt__items td:nth-child(2), .safi-receipt__items td:nth-child(3) { white-space: nowrap; }
+.safi-receipt__items th:nth-child(4), .safi-receipt__items td:nth-child(4) { text-align: right !important; white-space: nowrap; padding-left: 6px; }

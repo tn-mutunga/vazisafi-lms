@@ -114,15 +114,6 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
 
           {window.ServiceClientsToday && <window.ServiceClientsToday/>}
 
-          <Card title="Live machines">
-            <ul className="safi-mach">
-              <li><span className="safi-mach__dot is-run"/><span>Washer 1</span><span className="safi-mach__time">22:14 left</span></li>
-              <li><span className="safi-mach__dot is-run"/><span>Washer 2</span><span className="safi-mach__time">04:30 left</span></li>
-              <li><span className="safi-mach__dot is-idle"/><span>Washer 3</span><span className="safi-mach__time">idle</span></li>
-              <li><span className="safi-mach__dot is-run"/><span>Dryer 1</span><span className="safi-mach__time">11:02 left</span></li>
-              <li><span className="safi-mach__dot is-warn"/><span>Dryer 2</span><span className="safi-mach__time">service due</span></li>
-            </ul>
-          </Card>
 
         </div>
       </div>
@@ -656,15 +647,15 @@ function NewOrderPreview({ items, subtotal, discount, discountPct, total, deposi
                 const l = g.lines[0];
                 const unit = l.customPrice ?? s?.tiers[effGroup] ?? 0;
                 const rule = l.customPrice == null ? PR.ruleFor(s, effGroup) : null;
-                return [<tr key={gi}><td><b>{s?.name}</b></td><td>{l.qty} {l.unit || s?.unit}</td><td className="safi-mono">{rule ? PR.describe(rule) : money(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td></tr>];
+                return [<tr key={gi}><td><b>{s?.name}</b></td><td>{l.qty} {(l.unit || s?.unit) === 'piece' ? 'pc' : (l.unit || s?.unit)}</td><td className="safi-mono">{rule ? PR.describe(rule) : (v => Math.round(v || 0).toLocaleString('en-KE'))(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td></tr>];
               }
               return [
                 <tr key={`gh${gi}`} className="safi-receipt__items-group"><td colSpan="4"><b>{s?.name}</b></td></tr>,
                 ...g.lines.map((l, li) => {
                   const unit = l.customPrice ?? s?.tiers[effGroup] ?? 0;
                   return <tr key={`g${gi}l${li}`} className="safi-receipt__items-sub">
-                    <td>{l.subtype || s?.name}</td><td>{l.qty} {l.unit || s?.unit}</td>
-                    <td className="safi-mono">{money(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td>
+                    <td>{l.subtype || s?.name}</td><td>{l.qty} {(l.unit || s?.unit) === 'piece' ? 'pc' : (l.unit || s?.unit)}</td>
+                    <td className="safi-mono">{(v => Math.round(v || 0).toLocaleString('en-KE'))(unit)}</td><td className="safi-mono">{money(PR.line(s, l.qty, effGroup, l.customPrice))}</td>
                   </tr>;
                 }),
                 g.lines.length > 1 && <tr key={`gs${gi}`} className="safi-receipt__items-subtotal"><td colSpan="3" style={{ textAlign: 'right' }}>Subtotal</td><td className="safi-mono"><b>{money(subSum)}</b></td></tr>,
@@ -1654,13 +1645,8 @@ function Receipt({ orderId, setView, lang, money, shop }) {
         <div className="safi-receipt" id="safi-print-area">
           <div className="safi-receipt__hd">
             <div className="safi-receipt__logo">
-              <image-slot id="shop-logo-full" shape="rect"
-                          src={window.VAZI_LOGO_LOCKUP || 'assets/vazi-logo-full.png'}
-                          placeholder="Drop logo"
-                          style={{ width: '220px', height: '220px' }}>
-              </image-slot>
+              <img className="safi-receipt__letterhead" src={window.VAZI_LOGO_LETTERHEAD || window.VAZI_LOGO_LOCKUP} alt="Vazi Safi Laundry & Executive Dry Cleaners — We do laundry. You do life."/>
             </div>
-            <div className="safi-receipt__name">{shop?.name || 'VAZI SAFI LAUNDRY'}</div>
             <div className="safi-receipt__addr">{shop?.address || ''}</div>
             <div className="safi-receipt__addr">{shop?.kra || ''}</div>
           </div>
@@ -1705,8 +1691,8 @@ function Receipt({ orderId, setView, lang, money, shop }) {
                     return [
                       <tr key={`g${gi}`}>
                         <td><b>{s?.name}</b>{l.free && ' (free)'}</td>
-                        <td>{l.qty} {l.unit || s?.unit}</td>
-                        <td className="safi-mono">{money(l.qty ? l.price / l.qty : 0)}</td>
+                        <td>{l.qty} {(l.unit || s?.unit) === 'piece' ? 'pc' : (l.unit || s?.unit)}</td>
+                        <td className="safi-mono">{(v => Math.round(v || 0).toLocaleString('en-KE'))(l.qty ? l.price / l.qty : 0)}</td>
                         <td className="safi-mono">{money(l.price)}</td>
                       </tr>
                     ];
@@ -1718,8 +1704,8 @@ function Receipt({ orderId, setView, lang, money, shop }) {
                     ...g.lines.map((l, li) => (
                       <tr key={`g${gi}l${li}`} className="safi-receipt__items-sub">
                         <td>{l.subtype || s?.name}{l.free && ' (free)'}</td>
-                        <td>{l.qty} {l.unit || s?.unit}</td>
-                        <td className="safi-mono">{money(l.qty ? l.price / l.qty : 0)}</td>
+                        <td>{l.qty} {(l.unit || s?.unit) === 'piece' ? 'pc' : (l.unit || s?.unit)}</td>
+                        <td className="safi-mono">{(v => Math.round(v || 0).toLocaleString('en-KE'))(l.qty ? l.price / l.qty : 0)}</td>
                         <td className="safi-mono">{money(l.price)}</td>
                       </tr>
                     )),

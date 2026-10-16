@@ -119,6 +119,7 @@ function App() {
         case 'rider-cards':        return <RiderCardsScreen {...props}/>;
         case 'job-card':           return <JobCardSheet {...props}/>;
         case 'messages':     return <MessagesScreen {...props} role="frontdesk"/>;
+        case 'machines':     return <MachinesScreen {...props}/>;
         default:             return <FrontDeskDashboard {...props}/>;
       }
     } else {
@@ -135,6 +136,7 @@ function App() {
         case 'expenses':   return <ExpensesScreen {...props} role="owner"/>;
         case 'dispatch':   return <DispatchScreen {...props}/>;
         case 'messages':   return <MessagesScreen {...props} role="owner"/>;
+        case 'machines':   return <MachinesScreen {...props}/>;
         case 'approvals':  return <ApprovalsScreen {...props}/>;
         case 'settings':   return <SettingsScreen {...props}/>;
         case 'data':       return <DataScreen {...props}/>;

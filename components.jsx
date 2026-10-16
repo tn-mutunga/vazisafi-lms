@@ -342,6 +342,7 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
         ['messages',   'Messages',      'sms'],
         ['packages',   'nav_packages',  'tag'],
         ['issues',     'nav_issues',    'alert'],
+        ['machines',   'Live machines', 'wash'],
       ]
     : [
         ['dashboard',  'nav_dashboard', 'dashboard'],
@@ -359,6 +360,7 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
         ['messages',   'Messages',      'sms'],
         ['staff',      'nav_staff',     'staff'],
         ['issues',     'nav_issues',    'alert'],
+        ['machines',   'Live machines', 'wash'],
         ['settings',   'Settings',      'settings'],
         ['integrity',  'Integrity',     'shield'],
         ['data',       'Data & Backup', 'box'],
