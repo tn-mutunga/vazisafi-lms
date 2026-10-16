@@ -3176,3 +3176,4 @@ button { font-family: inherit; }
 .safi-receipt__items th:nth-child(3), .safi-receipt__items td:nth-child(3) { text-align: center !important; padding-left: 4px; padding-right: 4px; }
 .safi-receipt__items td:nth-child(2), .safi-receipt__items td:nth-child(3) { white-space: nowrap; }
 .safi-receipt__items th:nth-child(4), .safi-receipt__items td:nth-child(4) { text-align: right !important; white-space: nowrap; padding-left: 6px; }
+.safi-stepper__total{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.safi-stepper__total svg{flex-shrink:0}
