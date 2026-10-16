@@ -19,6 +19,34 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "ownerPin": "123456"
 }/*EDITMODE-END*/;
 
+// Front Desk: shows Management's decisions on requests this laptop hasn't seen yet.
+function DecisionNotice() {
+  const D = useStore();
+  const KEY = 'safi_seen_decisions_v1';
+  const [seen, setSeen] = useAppState(() => { try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch (e) { return null; } });
+  // First run: treat everything already decided as seen, so old decisions don't pop up.
+  useAppEffect(() => { if (seen === null) { const ids = (D.approvals || []).filter(a => a.status !== 'pending').map(a => a.id); localStorage.setItem(KEY, JSON.stringify(ids)); setSeen(ids); } }, [seen]);
+  if (seen === null) return null;
+  const fresh = (D.approvals || []).filter(a => a.status !== 'pending' && !seen.includes(a.id));
+  if (!fresh.length) return null;
+  const label = { delete_order: 'Delete order', rewash_order: 'Rewash', edit_order: 'Edit order', refund_order: 'Refund', reprint_receipt: 'Receipt reprint' };
+  const dismiss = () => { const ids = [...seen, ...fresh.map(a => a.id)]; localStorage.setItem(KEY, JSON.stringify(ids)); setSeen(ids); };
+  return (
+    <div className="safi-decision">
+      <div className="safi-decision__hd"><Icon name="bell" size={16}/><b>Management replied to {fresh.length} request{fresh.length > 1 ? 's' : ''}</b></div>
+      <ul>
+        {fresh.slice(0, 5).map(a => (
+          <li key={a.id}>
+            <span className={`safi-pill safi-pill--${a.status === 'approved' ? 'green' : 'red'}`}>{a.status === 'approved' ? 'Approved' : 'Rejected'}</span>
+            <span>{label[a.action] || a.action} · <b className="safi-mono">{orderNo(a.target)}</b>{a.decisionNote ? <span className="safi-cell-sub"> — {a.decisionNote}</span> : null}</span>
+          </li>
+        ))}
+      </ul>
+      <Button kind="primary" size="sm" icon="check" onClick={dismiss}>OK, got it</Button>
+    </div>
+  );
+}
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [role, setRole] = useAppState('frontdesk');
@@ -127,6 +155,7 @@ function App() {
       <main className="safi-main"><UpdateBar/>{window.DispatchReminders && <window.DispatchReminders setView={setView}/>}{screen}</main>
       <ToastHost/>
       <PinConfirmHost/>
+      {role === 'frontdesk' && <DecisionNotice/>}
 
       <Modal open={pinPrompt} onClose={() => setPinPrompt(false)} title="Enter Owner PIN" width={360}
         footer={<>

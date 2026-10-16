@@ -375,8 +375,8 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
           <div className="safi-side__tag">{shop?.tagline || t('appTagline', lang)}</div>
         </div>
         {/* Pending approvals badge for management */}
-        {role === 'owner' && store.approvals?.filter(a => a.status === 'pending').length > 0 && (
-          <button className="safi-side__pending" onClick={() => setView('approvals')} title="Pending approvals">
+        {store.approvals?.filter(a => a.status === 'pending').length > 0 && (
+          <button className="safi-side__pending" onClick={() => role === 'owner' ? setView('approvals') : setRole('owner')} title={role === 'owner' ? 'Pending approvals' : 'Requests waiting for Management approval (PIN to open)'}>
             {store.approvals.filter(a => a.status === 'pending').length}
           </button>
         )}

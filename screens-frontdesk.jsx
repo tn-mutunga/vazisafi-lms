@@ -39,7 +39,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
   return (
     <>
       <Topbar
-        title={`${t('today', lang)} · ${new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}`}
+        title={<>{`${t('today', lang)} · ${new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}`}<LiveClock/></>}
         subtitle="Karibu Vazi Safi 👋 — here is what's happening at the shop right now."
         right={<>
           <Button kind="ghost" icon="search">Search</Button>
@@ -63,7 +63,6 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
         <StatCard label="Washing / Drying / Ready / Collected" value={`${washing} / ${D.orders.filter(o => o.status === 'drying').length} / ${D.orders.filter(o => o.status === 'ready').length} / ${todayOrders.filter(o => o.status === 'collected').length}`} icon="wash" delta="Today's Orders Stats"/>
       </div>
 
-      {window.ServiceClientsToday && <window.ServiceClientsToday/>}
 
       <div className="safi-grid safi-grid--2-1">
         <Card title={t('todays_queue', lang)} action={<Button kind="ghost" size="sm" onClick={() => setView('orders')}>View all →</Button>}>
@@ -112,6 +111,8 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
               </button>
             </div>
           </Card>
+
+          {window.ServiceClientsToday && <window.ServiceClientsToday/>}
 
           <Card title="Live machines">
             <ul className="safi-mach">
@@ -953,7 +954,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
                 {i < curIdx ? <Icon name="check" size={14} stroke="#fff"/> : <span>{i + 1}</span>}
               </div>
               <div className="safi-stepper__lbl">{t(s, lang)}</div>
-              {(() => { const tm = window.SAFI_STORE.stageTimes(o.id); const at = tm[s]; if (!at) return null; const nx = (s === 'washing' && tm.holding) ? tm.holding : stages.slice(i + 1).map(x => tm[x]).find(Boolean); const dur = (s === 'washing' || s === 'drying') ? durTxt((nx ? new Date(nx) : (s === o.status ? new Date() : null)) - new Date(at)) : null; return <div className="safi-stepper__at"><span className="safi-mono">{hmOf(at)}</span>{dur && (nx || s === o.status) ? <span>{nx ? dur : `${dur} so far`}</span> : null}</div>; })()}
+              {(() => { const tm = window.SAFI_STORE.stageTimes(o.id); const at = tm[s]; if (!at) return null; const nx = (s === 'washing' && tm.holding) ? tm.holding : stages.slice(i + 1).map(x => tm[x]).find(Boolean); const dur = (s === 'washing' || s === 'drying') ? durTxt((nx ? new Date(nx) : (s === o.status ? new Date() : null)) - new Date(at)) : null; const total = (s === 'ready' && tm.washing) ? durTxt(new Date(at) - new Date(tm.washing)) : null; return <div className="safi-stepper__at"><span className="safi-mono">{hmOf(at)}</span>{dur && (nx || s === o.status) ? <span>{nx ? dur : `${dur} so far`}</span> : null}{total ? <span className="safi-stepper__total" title="Start of washing to Ready">{total} total</span> : null}</div>; })()}
               {i < stages.length - 1 && <div className={`safi-stepper__line ${i < curIdx ? 'is-done' : ''}`}/>}
               {s === 'washing' && (() => { const tm = window.SAFI_STORE.stageTimes(o.id); if (!tm.holding && o.status !== 'holding') return null; const cur = o.status === 'holding'; const end = tm.drying ? new Date(tm.drying) : (cur ? new Date() : null); return (
                 <div className={`safi-stepper__hold${cur ? ' is-cur' : ''}`} title="Holding: washed, waiting for a free dryer">
@@ -2070,6 +2071,176 @@ function exportCustomersCSV(customers) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// Small 24-hour clock beside the date (this computer's time), ticks every second.
+function LiveClock() {
+  const [now, setNow] = useStateFD(new Date());
+  useEffectFD(() => { const t = setInterval(() => setNow(new Date()), 15000); return () => clearInterval(t); }, []);
+  const p = (n) => String(n).padStart(2, '0');
+  return <span className="safi-liveclock">{p(now.getHours())}:{p(now.getMinutes())}</span>;
+}
+
+// ─── Statement reconcile: upload an M-Pesa or bank statement, match codes, verify ───
+// Reads PDF (pdf.js, loaded on first use) or CSV/TXT. A payment matches when its code's
+// last 5 characters equal the last 5 of a code-like word in the statement (or the whole
+// code, when staff typed the full code). Matched payments are verified automatically.
+async function loadPdfJs() {
+  if (window.pdfjsLib) return window.pdfjsLib;
+  await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js'; s.onload = res; s.onerror = () => rej(new Error('Could not load the PDF reader (check the internet)')); document.head.appendChild(s); });
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  return window.pdfjsLib;
+}
+async function statementText(file) {
+  if (!/\.pdf$/i.test(file.name)) return await file.text();
+  const lib = await loadPdfJs();
+  const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  let t = '';
+  for (let i = 1; i <= doc.numPages; i++) { const pg = await doc.getPage(i); const tc = await pg.getTextContent(); t += tc.items.map(x => x.str).join(' ') + '\n'; }
+  return t;
+}
+// Pull "code + amount (+ date)" lines out of statement text, for month-end reconciliation.
+// M-Pesa codes are 10 letters/digits; bank refs vary, so take any code-like word followed
+// within ~160 characters by an amount like 1,050.00.
+function parseStatementEntries(text) {
+  const T = String(text || '').toUpperCase().replace(/\s+/g, ' ');
+  const out = {};
+  const re = /\b([A-Z0-9]{8,14})\b/g; let m;
+  while ((m = re.exec(T))) {
+    const code = m[1];
+    if (!/\d/.test(code) || !/[A-Z]/.test(code)) continue;
+    const ahead = T.slice(m.index, m.index + 160);
+    const am = ahead.match(/(\d{1,3}(?:,\d{3})+|\d+)\.\d{2}/);
+    if (!am) continue;
+    const amount = parseFloat(am[0].replace(/,/g, ''));
+    if (!amount) continue;
+    const around = T.slice(Math.max(0, m.index - 60), m.index + 160);
+    const d1 = around.match(/(20\d{2})-(\d{2})-(\d{2})/), d2 = around.match(/(\d{2})\/(\d{2})\/(20\d{2})/);
+    const date = d1 ? `${d1[1]}-${d1[2]}-${d1[3]}` : d2 ? `${d2[3]}-${d2[2]}-${d2[1]}` : '';
+    if (!out[code]) out[code] = { code, amount, date };
+  }
+  return out;
+}
+function saveStatementEntries(text, fileLabel) {
+  const prev = (window.SAFI_STORE.get().settings || {}).statementEntries || {};
+  const got = parseStatementEntries(text);
+  const at = SAFI_TIME.stamp();
+  const next = { ...prev };
+  for (const [k, v] of Object.entries(got)) next[k] = { ...v, file: fileLabel, at };
+  window.SAFI_STORE.setSetting('statementEntries', next);
+}
+
+// Month-end check: matched, money with no order, paid with no money. Cash is not part of it.
+function ReconcilePeriod() {
+  const D = useStore();
+  const now = new Date();
+  const [open, setOpen] = useStateFD(false);
+  const [month, setMonth] = useStateFD(SAFI_TIME.day(new Date(now.getFullYear(), now.getMonth(), 1)).slice(0, 7));
+  const st = D.settings || {};
+  const entries = Object.values(st.statementEntries || {});
+  const ignored = st.statementIgnored || {};
+  const closed = (st.reconciled || {})[month];
+  const tail = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-5);
+  const pays = (D.payments || []).filter(p => String(p.date).startsWith(month) && (p.method === 'mpesa' || p.method === 'bank'));
+  const matched = pays.filter(p => p.verified);
+  const noMoney = pays.filter(p => !p.verified);
+  const known = new Set([...(D.payments || []).map(p => tail(p.txn)), ...(D.expenses || []).map(e => tail(e.txn))].filter(Boolean));
+  const noOrder = entries.filter(e => (!e.date || e.date.startsWith(month)) && !known.has(tail(e.code)) && !ignored[e.code]);
+  const sum = (a) => a.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const byM = (m) => matched.filter(p => p.method === m);
+  const label = new Date(month + '-01T00:00').toLocaleDateString('en-KE', { month: 'long', year: 'numeric' });
+  const ignore = (code) => { window.SAFI_STORE.setSetting('statementIgnored', { ...ignored, [code]: true }); toast('Marked as not a customer payment'); };
+  function closeMonth() {
+    window.SAFI_STORE.setSetting('reconciled', { ...(st.reconciled || {}), [month]: { by: 'Management', at: SAFI_TIME.stamp(), matched: sum(matched), mpesa: sum(byM('mpesa')), bank: sum(byM('bank')), noMoney: noMoney.length, noOrder: noOrder.length } });
+    toast(`${label} reconciled`, 'success');
+  }
+  function download() {
+    const rows = [['Section', 'Order', 'Customer', 'Method', 'Code', 'Amount', 'Date']];
+    matched.forEach(p => rows.push(['Matched', orderNo(p.order), p.customer || '', p.method, p.txn, p.amount, p.date]));
+    noMoney.forEach(p => rows.push(['Paid, no money found', orderNo(p.order), p.customer || '', p.method, p.txn, p.amount, p.date]));
+    noOrder.forEach(e => rows.push(['Money, no order', '', '', '', e.code, e.amount, e.date]));
+    const csv = rows.map(r => r.map(v => /[,"\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v).join(',')).join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `vazi-safi-reconcile-${month}.csv`; a.click();
+  }
+  const T = ({ rows, cols }) => rows.length ? <table className="safi-approval-items"><thead><tr>{cols.map(c => <th key={c}>{c}</th>)}</tr></thead><tbody>{rows}</tbody></table> : <p className="safi-cell-sub" style={{ margin: 0 }}>None.</p>;
+  return (
+    <>
+      <Button kind="ghost" icon="check" onClick={() => setOpen(true)}>Reconcile period</Button>
+      <Modal open={open} onClose={() => setOpen(false)} title={`Reconcile ${label}`} width={820}
+        footer={<>
+          <Button kind="ghost" icon="box" onClick={download}>Download summary (CSV)</Button>
+          <Button kind="ghost" onClick={() => setOpen(false)}>Close</Button>
+          {!closed && <Button kind="primary" icon="check" onClick={closeMonth}>Mark {label} reconciled</Button>}
+        </>}>
+        <div className="safi-form">
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>Month <input type="month" className="safi-input" style={{ width: 170 }} value={month} max={SAFI_TIME.day().slice(0, 7)} onChange={e => e.target.value && setMonth(e.target.value)}/></label>
+            {closed && <span className="safi-pill safi-pill--green"><Icon name="check" size={10}/> Reconciled {closed.at} by {closed.by}</span>}
+          </div>
+          {!entries.length && <div className="safi-callout"><Icon name="alert" size={14}/><span>No statements uploaded yet. Use <b>Upload statement & verify</b> first, so the check can see what reached the accounts.</span></div>}
+          <div className="safi-recon-sum">
+            <div><span>Matched</span><b className="safi-mono">KES {sum(matched).toLocaleString()}</b><small>M-Pesa {sum(byM('mpesa')).toLocaleString()} · Bank {sum(byM('bank')).toLocaleString()}</small></div>
+            <div className={noOrder.length ? 'is-warn' : ''}><span>Money with no order</span><b className="safi-mono">{noOrder.length} · KES {sum(noOrder).toLocaleString()}</b><small>On the statement, not recorded</small></div>
+            <div className={noMoney.length ? 'is-warn' : ''}><span>Paid with no money</span><b className="safi-mono">{noMoney.length} · KES {sum(noMoney).toLocaleString()}</b><small>Recorded, not on a statement</small></div>
+          </div>
+          <h4 className="safi-section-h">1 · Matched ({matched.length})</h4>
+          <T cols={['Order', 'Customer', 'Method', 'Code', 'Amount']} rows={matched.map(p => <tr key={p.id}><td className="safi-mono">{orderNo(p.order)}</td><td>{p.customer || '—'}</td><td>{p.method === 'mpesa' ? 'M-Pesa' : 'Bank'}</td><td className="safi-mono">{p.txn}</td><td className="safi-mono">KES {Number(p.amount).toLocaleString()}</td></tr>)}/>
+          <h4 className="safi-section-h">2 · Money with no order ({noOrder.length})</h4>
+          <p className="safi-cell-sub" style={{ margin: '0 0 4px' }}>Received in the account but no payment in the system has this code. Find the order and record the payment, or mark it as not a customer payment.</p>
+          <T cols={['Code', 'Date', 'Amount', '']} rows={noOrder.map(e => <tr key={e.code}><td className="safi-mono">{e.code}</td><td>{e.date || '—'}</td><td className="safi-mono">KES {Number(e.amount).toLocaleString()}</td><td><button className="safi-rowlink" onClick={() => ignore(e.code)}>Not a customer payment</button></td></tr>)}/>
+          <h4 className="safi-section-h">3 · Paid with no money ({noMoney.length})</h4>
+          <p className="safi-cell-sub" style={{ margin: '0 0 4px' }}>Recorded at the till but the code was not found on any statement uploaded. Check the code, or upload the right statement.</p>
+          <T cols={['Order', 'Customer', 'Method', 'Code', 'Amount', 'Date']} rows={noMoney.map(p => <tr key={p.id}><td className="safi-mono">{orderNo(p.order)}</td><td>{p.customer || '—'}</td><td>{p.method === 'mpesa' ? 'M-Pesa' : 'Bank'}</td><td className="safi-mono">{p.txn || '—'}</td><td className="safi-mono">KES {Number(p.amount).toLocaleString()}</td><td>{String(p.date).slice(5, 16)}</td></tr>)}/>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+function StatementReconcile() {
+  const D = useStore();
+  const ref = useRefFD(null);
+  const [busy, setBusy] = useStateFD(false);
+  const [report, setReport] = useStateFD(null);
+  async function onFiles(files) {
+    if (!files || !files.length) return;
+    setBusy(true);
+    try {
+      let text = '';
+      for (const fl of files) text += '\n' + await statementText(fl);
+      // Code-like words: 5+ letters/digits with at least one digit and one letter.
+      const words = new Set((text.toUpperCase().match(/[A-Z0-9]{5,}/g) || []).filter(w => /\d/.test(w) && /[A-Z]/.test(w)));
+      const tails = new Set([...words].map(w => w.slice(-5)));
+      const pending = (D.payments || []).filter(p => !p.verified && String(p.txn || '').replace(/\s/g, '').length >= 5);
+      const matched = [], missed = [];
+      for (const p of pending) {
+        const code = String(p.txn).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (words.has(code) || tails.has(code.slice(-5))) { window.SAFI_STORE.verifyPayment(p.id); matched.push(p); } else missed.push(p);
+      }
+      saveStatementEntries(text, [...files].map(x => x.name).join(', '));
+      setReport({ files: [...files].map(x => x.name), words: words.size, matched, missed });
+      toast(matched.length ? `${matched.length} payment${matched.length > 1 ? 's' : ''} verified` : 'No matching codes found', matched.length ? 'success' : 'error');
+    } catch (e) { toast(e.message || 'Could not read the statement', 'error'); }
+    setBusy(false);
+  }
+  const row = (p) => <tr key={p.id}><td className="safi-mono">{orderNo(p.order)}</td><td>{p.customer || '—'}</td><td>{p.method === 'mpesa' ? 'M-Pesa' : p.method === 'bank' ? 'Bank' : p.method}</td><td className="safi-mono">{p.txn}</td><td className="safi-mono">KES {Number(p.amount || 0).toLocaleString()}</td></tr>;
+  return (
+    <>
+      <input ref={ref} type="file" accept=".pdf,.csv,.txt" multiple style={{ display: 'none' }} onChange={e => { onFiles(e.target.files); e.target.value = ''; }}/>
+      <Button kind="primary" icon="check" onClick={() => ref.current && ref.current.click()} disabled={busy}>{busy ? 'Reading statement…' : 'Upload statement & verify'}</Button>
+      <Modal open={!!report} onClose={() => setReport(null)} title="Statement check" width={720}
+        footer={<Button kind="primary" onClick={() => setReport(null)}>Done</Button>}>
+        {report && <div className="safi-form">
+          <p className="safi-cell-sub" style={{ margin: 0 }}>Read {report.files.join(', ')} · {report.words} codes found in the statement.</p>
+          <h4 className="safi-section-h">Verified now ({report.matched.length})</h4>
+          {report.matched.length ? <table className="safi-approval-items"><thead><tr><th>Order</th><th>Customer</th><th>Method</th><th>Code</th><th>Amount</th></tr></thead><tbody>{report.matched.map(row)}</tbody></table> : <p className="safi-cell-sub">None.</p>}
+          <h4 className="safi-section-h">Still unverified ({report.missed.length})</h4>
+          {report.missed.length ? <table className="safi-approval-items"><thead><tr><th>Order</th><th>Customer</th><th>Method</th><th>Code</th><th>Amount</th></tr></thead><tbody>{report.missed.map(row)}</tbody></table> : <p className="safi-cell-sub">Everything with a code is verified.</p>}
+          <p className="safi-hint">Not found usually means the payment is in a different month's statement, the code was typed wrongly, or it went to another account. Cash payments are checked by hand.</p>
+        </div>}
+      </Modal>
+    </>
+  );
+}
+
 // ─── Payments & Audit ─────────────────────────────────────────────────────
 function PaymentsScreen({ lang, money, role }) {
   const D = useStore();
@@ -2109,7 +2280,8 @@ function PaymentsScreen({ lang, money, role }) {
           : "Record payments and transaction codes. Management will verify them against statements."}
         right={<>
           {isManagement && <Button kind="ghost" icon="print" onClick={() => window.print()}>{t('print_summary', lang)}</Button>}
-          {isManagement && <Button kind="primary" icon="check">Reconcile period</Button>}
+          {isManagement && <ReconcilePeriod/>}
+          {isManagement && <StatementReconcile/>}
         </>}
       />
 

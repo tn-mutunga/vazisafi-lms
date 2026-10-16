@@ -146,7 +146,7 @@ setInterval(() => {
   S.setSetting('winbackLastRun', today);
 }, 60000);
 
-function WinbackCard() {
+function WinbackCard({ readOnly }) {
   const D = useStore();
   const st = D.settings || {};
   const days = Number(st.winbackDays) || 14;
@@ -155,26 +155,27 @@ function WinbackCard() {
   return (
     <Card title="Win-back messages" action={<span className="safi-cell-sub">For customers who haven't come back</span>}>
       <div className="safi-form" style={{ maxWidth: 760 }}>
+        {readOnly && <div className="safi-callout"><Icon name="lock" size={14}/><span>Win-back messages are set by Management. Automatic sending is <b>{st.winbackAuto ? 'ON' : 'OFF'}</b>.</span></div>}
         <div className="safi-form__row">
           <label>Send after
-            <select className="safi-input" value={days} onChange={e => window.SAFI_STORE.setSetting('winbackDays', Number(e.target.value))}>
+            <select className="safi-input" value={days} disabled={readOnly} onChange={e => window.SAFI_STORE.setSetting('winbackDays', Number(e.target.value))}>
               {[7, 10, 14, 15, 21, 30, 45, 60].map(n => <option key={n} value={n}>{n} days without an order</option>)}
             </select>
           </label>
         </div>
-        <label className="safi-toggle safi-toggle--lg">
+        {!readOnly && <label className="safi-toggle safi-toggle--lg">
           <input type="checkbox" checked={!!st.winbackAuto} onChange={e => window.SAFI_STORE.setSetting('winbackAuto', e.target.checked)}/>
           <span/>
           <div><b>Send automatically once a day</b></div>
-        </label>
+        </label>}
         <label><span>{'Message (tokens: {name} {days})'}</span>
-          <textarea className="safi-input" rows="3" defaultValue={(D.smsTemplates || {}).winback || WINBACK_DEFAULT}
+          <textarea className="safi-input" rows="3" readOnly={readOnly} defaultValue={(D.smsTemplates || {}).winback || WINBACK_DEFAULT}
             onBlur={e => window.SAFI_STORE.setSmsTemplate('winback', e.target.value)}/>
         </label>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <b>{due.length} customer{due.length === 1 ? '' : 's'} due now</b>
           {due.length > 0 && <button className="safi-rowlink" onClick={() => setShow(!show)}>{show ? 'Hide list' : 'Show list'}</button>}
-          {due.length > 0 && <Button kind="primary" icon="sms" onClick={() => { sendWinback(D, due, days); toast(`${due.length} win-back message(s) sent`, 'success'); }}>Send to all {due.length}</Button>}
+          {due.length > 0 && !readOnly && <Button kind="primary" icon="sms" onClick={() => { sendWinback(D, due, days); toast(`${due.length} win-back message(s) sent`, 'success'); }}>Send to all {due.length}</Button>}
         </div>
         {show && due.length > 0 && (
           <ul className="safi-wb__list">
@@ -302,7 +303,7 @@ function ServiceClientsToday() {
   const rows = D.services.map(s => ({ s, n: per[s.id] ? per[s.id].size : 0 })).filter(r => r.n > 0).sort((a, b) => b.n - a.n);
   const sd = window.SAFI_PRICING && window.SAFI_PRICING.studentDayLive();
   return (
-    <Card title={`Clients by service · today`} action={<span className="safi-cell-sub">{all.size} client{all.size === 1 ? '' : 's'} in total{sd ? ' · Student Thursday is on' : ''}</span>}>
+    <Card title={`Clients by service · today`} action={<span className="safi-cell-sub">{all.size} client{all.size === 1 ? '' : 's'} in total{sd ? ' · Student Thursday is on' : ''}</span>} className="safi-svcday-card">
       {rows.length ? (
         <div className="safi-svcday">
           {rows.map(({ s, n }) => <div key={s.id} className="safi-svcday__c"><span className="safi-svcday__n">{n}</span><span className="safi-svcday__l">{s.name}</span></div>)}

@@ -1,5 +1,20 @@
-VAZI SAFI LMS v2.3.4
-- NEW optional Holding stage (washed, waiting for a free dryer): "Hold (dryers busy)" button on Washing orders.
-  Shows as a teal H between Washing and Drying with start time and duration. Advance -> drying works from Holding.
-- Management dashboard: "Average time per stage" (Washing / Holding / Drying) for Today, 7 days, This month.
-- Includes the Mac updater fallback for GitHub 403 (from 2.3.3).
+VAZI SAFI LMS v2.3.5
+FIRST (once): Supabase > SQL Editor > paste supabase/07_stages.sql > Run.
+  The cloud did not accept the stages "holding" and "drycleaning", so orders moved there
+  were refused and the next sync put them back (e.g. Holding showed as Washing).
+- Expenses > Profit by cost group: each category shows in the box(es) where its expenses are,
+  with the amount. A category split between Operational and Special shows in both.
+  Changing an expense to Special moves its amount straight away. Dragging a chip moves all
+  of that category's expenses in the period.
+- Payments & Audit (Management): "Upload statement & verify" — upload M-Pesa/bank PDF (or CSV/TXT);
+  payments whose code's last 5 characters appear are verified automatically, with a report.
+- Payments & Audit: "Reconcile period" (M-Pesa & Bank only): pick a month to see Matched,
+  Money with no order (on the statement, not recorded), Paid with no money (recorded, not on a
+  statement). Download the summary as CSV; mark the month reconciled.
+- Win-back messages: only Management can change them (Front Desk sees them read-only).
+- Red approvals badge also shows on Front Desk (tap = PIN, then Approvals).
+- Front Desk gets a notice box when Management approves/rejects a request.
+- Front Desk heading shows the computer time (24h) after the date.
+- Front Desk: "Clients by service · today" moved to the right column, between Quick actions and Live machines.
+- Order page: under Ready, total time from start of washing to Ready.
+- Includes Holding stage + stage averages (2.3.4).

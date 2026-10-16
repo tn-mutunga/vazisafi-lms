@@ -110,7 +110,16 @@ function CostGroups({ D, money, periodCutoff, period }) {
   const [over, setOver] = useStateEx('');
   const groups = (D.settings && D.settings.expenseGroups) || {};
   const groupOf = (id) => groups[id] === 'special' ? 'special' : 'operational';
-  const setGroup = (id, g) => { if (!id || isOtherCat(D.expenseCategories.find(c => c.id === id)) || groupOf(id) === g) return; window.SAFI_STORE.setSetting('expenseGroups', { ...groups, [id]: g }); const c = D.expenseCategories.find(x => x.id === id); toast(`${c ? c.name : 'Category'} → ${g === 'special' ? 'Special' : 'Operational'}`); };
+  // Dragging a chip moves that category: its default AND every expense of it in the period.
+  const setGroup = (id, g) => {
+    if (!id) return;
+    const c = D.expenseCategories.find(x => x.id === id);
+    if (!isOtherCat(c)) window.SAFI_STORE.setSetting('expenseGroups', { ...groups, [id]: g });
+    const ov = { ...((D.settings && D.settings.expenseGroupOverrides) || {}) };
+    D.expenses.filter(x => x.category === id && inP(x.date)).forEach(x => { ov[x.id] = g; });
+    window.SAFI_STORE.setSetting('expenseGroupOverrides', ov);
+    toast(`${c ? c.name : 'Category'} → ${g === 'special' ? 'Special' : 'Operational'}`);
+  };
   const inP = (d) => !periodCutoff || String(d || '').slice(0, 10) >= periodCutoff;
   const revenue = D.orders.filter(o => inP(o.in)).reduce((s, o) => s + (o.total || 0), 0);
   const exp = D.expenses.filter(x => inP(x.date));
@@ -119,18 +128,22 @@ function CostGroups({ D, money, periodCutoff, period }) {
   const opCost = sumG('operational'), spCost = sumG('special');
   const opProfit = revenue - opCost, net = opProfit - spCost;
   const box = (g, title) => {
-    const cats = orderedCats(D).filter(c => !isOtherCat(c) && groupOf(c.id) === g);
+    // A category shows in a box when any of its expenses (this period) are in that box,
+    // so a category split between Operational and Special appears in both with its own amount.
+    // Categories with no expenses yet sit in their default box.
+    const amt = (c) => exp.filter(x => x.category === c.id && costGroupOf(D, x) === g).reduce((s2, x) => s2 + (x.amount || 0), 0);
+    const cats = orderedCats(D).map(c => ({ c, v: amt(c), any: exp.some(x => x.category === c.id) }))
+      .filter(r => r.v > 0 || (!r.any && !isOtherCat(r.c) && groupOf(r.c.id) === g));
     return (
       <div className={`safi-costgrp ${over === g ? 'is-over' : ''}`}
         onDragOver={ev => { ev.preventDefault(); setOver(g); }} onDragLeave={() => setOver('')}
         onDrop={ev => { ev.preventDefault(); setOver(''); setGroup(ev.dataTransfer.getData('text/safi-cat'), g); }}>
         <div className="safi-costgrp__hd"><b>{title}</b><span className="safi-mono">{money(g === 'special' ? spCost : opCost)}</span></div>
         <div className="safi-costgrp__chips">
-          {cats.map(c => { const k = catLook(c.name); return (
-            <span key={c.id} className="safi-catchip" style={{ '--c': k.c }} draggable onDragStart={ev => ev.dataTransfer.setData('text/safi-cat', c.id)}><Icon name={k.i} size={13}/>{c.name}</span>
+          {cats.map(({ c, v }) => { const k = isOtherCat(c) ? { c: '#9ca3af', i: 'package' } : catLook(c.name); return (
+            <span key={c.id} className="safi-catchip" style={{ '--c': k.c }} draggable onDragStart={ev => ev.dataTransfer.setData('text/safi-cat', c.id)} title="Drag to the other box to move all of this category's expenses"><Icon name={k.i} size={13}/>{c.name}{v > 0 ? <span className="safi-mono"> · {money(v)}</span> : null}</span>
           ); })}
           {!cats.length && <span className="safi-cell-sub">Drag categories here</span>}
-          {otherIn(g) > 0 && <span className="safi-catchip" style={{ '--c': '#9ca3af', cursor: 'default' }} title="Other is chosen per expense"><Icon name="package" size={13}/>Other · {money(otherIn(g))}</span>}
         </div>
       </div>
     );

@@ -554,7 +554,7 @@ function MessagesScreen({ lang, role }) {
         <StatCard label="Delivery alerts" value={D.messages.filter(m => m.stage === 'delivery').length} icon="truck"/>
         <StatCard label="Last sent" value={D.messages[0]?.date.slice(11) || '—'} icon="clock"/>
       </div>
-      {window.WinbackCard && <window.WinbackCard/>}
+      {window.WinbackCard && <window.WinbackCard readOnly={role !== 'owner'}/>}
 
       {failed.length > 0 && (D.settings || {}).smsLive && (
         <div className="safi-sms-fail">
