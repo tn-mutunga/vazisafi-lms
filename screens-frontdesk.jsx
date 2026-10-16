@@ -60,7 +60,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
         <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" delta={`${todayOrders.length} orders · ${money(collectedToday)} collected`}
           sparkline={<div className="safi-streams">{streams.map(x => <span key={x.k} className={`safi-streams__i safi-streams__i--${x.k}`}><i/>{x.l} <b className="safi-mono">{money(x.v)}</b></span>)}</div>}/>
         <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} orders ready now`}/>
-        <StatCard label="Washing / Drying / Ready / Collected" value={`${washing} / ${D.orders.filter(o => o.status === 'drying').length} / ${D.orders.filter(o => o.status === 'ready').length} / ${todayOrders.filter(o => o.status === 'collected').length}`} icon="wash" delta="Today's Orders Stats"/>
+        <StatCard label="Washing / Drying / Ready / Collected" value={`${washing} / ${D.orders.filter(o => o.status === 'drying').length} / ${D.orders.filter(o => o.status === 'ready').length} / ${D.orders.filter(o => o.status === 'collected' && String(window.SAFI_STORE.stageTimes(o.id).collected || '').startsWith(todayStr)).length}`} icon="wash" delta="Today's Orders Stats"/>
       </div>
 
 
@@ -965,8 +965,16 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
           ))}
         </div>
         {o.status === 'ready' && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginTop: 14 }}>
             <Button kind="primary" icon="check" onClick={markCollected}>Mark as Collected</Button>
+            <div className={`safi-collect-hint${(o.paid || 0) >= (o.total || 0) && (o.total || 0) > 0 ? ' is-paid' : ''}`}>
+              <Icon name="alert" size={14}/>
+              <span>
+                {(o.paid || 0) >= (o.total || 0) && (o.total || 0) > 0
+                  ? <><b>Paid in full.</b> If the customer has taken it or it has been delivered, mark it as collected now. If it is still at the shop, mark it collected on the day it leaves.</>
+                  : <><b>Mark as Collected</b> once the order has been delivered or picked up. Collect the balance first ({`KES ${Math.max(0, (o.total || 0) - (o.paid || 0)).toLocaleString('en-KE')}`}).</>}
+              </span>
+            </div>
           </div>
         )}
       </Card>

@@ -1,8 +1,6 @@
-VAZI SAFI LMS v2.3.6
-- Collected orders: green tick on the top-right of the Collected tag. Part collected (part payment
-  with a note): green circle with a white bar (-).
-- Holding: crimson tag with a sweep running left to right (like a car indicator).
-- Orders page opens on All, so Today / Yesterday / Any date also list collected orders.
-  (Active still hides collected. Today's queue still drops them.)
-- Order page: "Order duration 2hr 49min" under Ready (start of washing to Ready), centred.
-- Includes everything from v2.3.5.
+VAZI SAFI LMS v2.3.7
+- Order page (Ready): reminder under "Mark as Collected". Paid in full -> amber note to mark it
+  collected when delivered/picked up (or on the day it leaves the shop). Balance owed -> collect first.
+- Front Desk "Washing / Drying / Ready / Collected": Collected now counts orders marked collected
+  today, whatever day they came in.
+- Includes everything from v2.3.6.

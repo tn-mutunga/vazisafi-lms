@@ -3114,3 +3114,5 @@ button { font-family: inherit; }
 @media (prefers-reduced-motion:reduce){.safi-pill--teal::before{animation:none}}
 .safi-stepper__holddot{background:#e11d48!important}.safi-stepper__hold.is-cur{border-color:#e11d48!important;box-shadow:0 0 0 3px #FDE2E4!important}
 .safi-stepper__at{align-items:center!important;text-align:center}.safi-stepper__total{align-self:center}
+
+.safi-collect-hint{display:flex;gap:8px;align-items:flex-start;max-width:560px;padding:10px 14px;border-radius:10px;background:var(--paper);color:var(--ink-2);font-size:12.5px;line-height:1.45;border-left:3px solid var(--line)}.safi-collect-hint.is-paid{background:var(--amber-soft);color:#92450C;border-left-color:var(--amber);animation:safiHintPulse 2.4s ease-in-out infinite}@keyframes safiHintPulse{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 3px rgba(217,119,6,.18)}}
