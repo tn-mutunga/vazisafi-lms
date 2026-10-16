@@ -689,11 +689,20 @@ window.SAFI_STORE = (() => {
       state.orders = state.orders.map(o => {
         if (o.id !== id) return o;
         const ST = stagesFor(o);
-        const idx = ST.indexOf(o.status);
+        // Holding sits between Washing and Drying and is not in the stage list.
+        const idx = o.status === 'holding' ? ST.indexOf('washing') : ST.indexOf(o.status);
         const next = ST[Math.min(idx + 1, ST.length - 1)];
         if (next !== o.status) stageMark(id, next);
         return { ...o, status: next };
       });
+      save();
+    },
+    // Optional Holding stage: washed, waiting for a free dryer. Washing → Holding → Drying.
+    holdOrder(id) {
+      const o = state.orders.find(x => x.id === id);
+      if (!o || o.status !== 'washing') return;
+      state.orders = state.orders.map(x => x.id === id ? { ...x, status: 'holding' } : x);
+      stageMark(id, 'holding');
       save();
     },
     // When each order entered each stage (from the synced audit log, so all laptops agree).

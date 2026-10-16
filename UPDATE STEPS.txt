@@ -1,22 +1,5 @@
-VAZI SAFI LMS v2.3.3
-- Mac updater: if GitHub says 403 (too many checks from the shop connection), it reads the public releases page instead.
-
-(everything from v2.3.2:)
-ORDERS
-- Dates show day-month (15-10 19:33). Status shows the current stage, the time it began, and a running timer for Washing / Drying.
-- Washing alert: green flashing outline + green dot. Drying alert: sky-blue flashing outline + dot. Drying badge is now brown.
-- Order page stepper: time entered for every stage (incl. Ironing, Dry cleaning) and how long Washing / Drying took.
-- Status buttons wrap to a second row; new Show filter: All, Unpaid, Part-paid, Paid, Uncollected, Ready not collected.
-- Today's queue lists every order from Intake to Ready (scrolls inside its card); collected orders leave.
-- Items column counts lines on the order (2 lines = 2 items).
-- Edit order: pick the type (e.g. Sweater, Shirt) for services that have types; price follows.
-PAYMENTS
-- Part payment needs a note (what was collected / what is left); saved to order Notes. Payment card lists every payment and code.
-EXPENSES
-- Operational / Special switch on every expense.
-- LOGGED BY: Front Desk = attendant on duty; Management = Management.
-- Category buttons fit the window.
-GENERAL
-- ENTER confirms the main button in pop-up windows.
-- Sync on open, then every 5 minutes (plus on wake, when internet returns, on close). No sync while a form is open.
-- Management → Settings → Washer & dryer timers: set alert start times, repeat, length and flash speed.
+VAZI SAFI LMS v2.3.4
+- NEW optional Holding stage (washed, waiting for a free dryer): "Hold (dryers busy)" button on Washing orders.
+  Shows as a teal H between Washing and Drying with start time and duration. Advance -> drying works from Holding.
+- Management dashboard: "Average time per stage" (Washing / Holding / Drying) for Today, 7 days, This month.
+- Includes the Mac updater fallback for GitHub 403 (from 2.3.3).

@@ -43,6 +43,49 @@ function MonthRevenue({ orders, money }) {
   );
 }
 
+// ─── Average time in Washing / Holding / Drying ───────────────────────────
+function StageAverages() {
+  const D = useStore();
+  const [per, setPer] = useStateOw('day');
+  const fmt = (ms) => { if (!ms) return '—'; const m = Math.round(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}hr ${m % 60}min` : `${m} min`; };
+  // One pass over the audit log: when each order entered each stage.
+  const T = {};
+  for (const a of [...(D.auditLog || [])].reverse()) {
+    if (a.action !== 'order.stage' || !a.meta || !a.meta.stage) continue;
+    const m = T[a.target] = T[a.target] || {};
+    if (!m[a.meta.stage]) m[a.meta.stage] = new Date(a.at).getTime();
+  }
+  const now = new Date();
+  const from = per === 'day' ? SAFI_TIME.day() : per === 'week' ? SAFI_TIME.daysAgo(6) : SAFI_TIME.day(new Date(now.getFullYear(), now.getMonth(), 1));
+  const acc = { washing: [], holding: [], drying: [] };
+  for (const id in T) {
+    const t = T[id];
+    if (!t.washing || SAFI_TIME.day(new Date(t.washing)) < from) continue;
+    const wEnd = t.holding || t.drying; if (wEnd > t.washing) acc.washing.push(wEnd - t.washing);
+    if (t.holding && t.drying > t.holding) acc.holding.push(t.drying - t.holding);
+    const dEnd = [t.ironing, t.ready, t.collected].filter(Boolean).sort((a, b) => a - b)[0];
+    if (t.drying && dEnd > t.drying) acc.drying.push(dEnd - t.drying);
+  }
+  const avg = (a) => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
+  const rows = [['washing', 'Washing', 'blue'], ['holding', 'Holding', 'teal'], ['drying', 'Drying', 'brown']];
+  return (
+    <Card title="Average time per stage" action={
+      <div className="safi-seg">{[['day', 'Today'], ['week', '7 days'], ['month', 'This month']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${per === k ? 'is-active' : ''}`} onClick={() => setPer(k)}>{l}</button>)}</div>
+    }>
+      <div className="safi-stageavg">
+        {rows.map(([k, l, c]) => (
+          <div key={k} className={`safi-stageavg__i safi-stageavg__i--${c}`}>
+            <span className="safi-stageavg__l">{l}</span>
+            <b className="safi-stageavg__v">{fmt(avg(acc[k]))}</b>
+            <span className="safi-cell-sub">{acc[k].length} order{acc[k].length === 1 ? '' : 's'}</span>
+          </div>
+        ))}
+      </div>
+      <p className="safi-hint" style={{ marginTop: 8 }}>Counted from when each order started washing. Holding only applies to orders that waited for a dryer.</p>
+    </Card>
+  );
+}
+
 function OwnerDashboard({ lang, money, setView }) {
   const D = useStore();
   const todayStr = SAFI_TIME.day();
@@ -129,6 +172,8 @@ function OwnerDashboard({ lang, money, setView }) {
       </div>
 
       <PeriodSummary money={money}/>
+
+      <StageAverages/>
 
       {window.ServiceClientsToday && <window.ServiceClientsToday/>}
 

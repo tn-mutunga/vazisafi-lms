@@ -756,7 +756,7 @@ function StageTrail({ order }) {
   useStore();
   const times = window.SAFI_STORE.stageTimes(order.id);
   const at = times[order.status];
-  const timed = order.status === 'washing' || order.status === 'drying';
+  const timed = order.status === 'washing' || order.status === 'drying' || order.status === 'holding';
   const [, tick] = useStateFD(0);
   useEffectFD(() => { if (!timed || !at) return; const t = setInterval(() => tick(n => n + 1), 1000); return () => clearInterval(t); }, [timed, at]);
   const mins = at ? (Date.now() - new Date(at)) / 60000 : 0;
@@ -802,7 +802,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
 
   // Counts follow the chosen day (Today / Yesterday / a date); Any date = everything.
   const dateOrders = dateFilter ? D.orders.filter(o => String(o.in).startsWith(dateFilter)) : D.orders;
-  const statusCounts = ['intake', 'washing', 'drying', 'ironing', 'drycleaning', 'ready', 'collected'].map(s => ({ s, n: dateOrders.filter(o => o.status === s).length }));
+  const statusCounts = ['intake', 'washing', 'holding', 'drying', 'ironing', 'drycleaning', 'ready', 'collected'].map(s => ({ s, n: dateOrders.filter(o => o.status === s).length }));
   const activeCount = dateOrders.filter(o => o.status !== 'collected').length;
   const tierOf = (o) => (D.customers.find(c => c.id === o.customer) || {}).group || 'normal';
   const tierN = (g) => dateOrders.filter(o => tierOf(o) === g).length;
@@ -895,7 +895,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
   if (!o) return <div style={{ padding: 40 }}><h2>No order selected.</h2><Button onClick={() => setView('orders')}>Back to orders</Button></div>;
   const c = D.customers.find(x => x.id === o.customer);
   const stages = window.SAFI_STORE.stagesFor(o);
-  const curIdx = stages.indexOf(o.status);
+  const curIdx = o.status === 'holding' ? stages.indexOf('washing') : stages.indexOf(o.status);
   const parent = o.rewashOf ? D.orders.find(x => x.id === o.rewashOf) : null;
   const rewashChild = o.rewashedBy ? D.orders.find(x => x.id === o.rewashedBy) : null;
 
@@ -937,13 +937,14 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
           <Button kind="ghost" icon="pen" onClick={() => setShowEdit(true)}>Edit</Button>
           <Button kind="ghost" icon="alert" onClick={() => setView('issues')}>Issue</Button>
           <Button kind="ghost" icon="print" onClick={() => setView('receipt')}>{t('print', lang)}</Button>
+          {o.status === 'washing' && <Button kind="ghost" icon="clock" onClick={() => { window.SAFI_STORE.holdOrder(o.id); toast('Moved to Holding (waiting for a dryer)'); }}>Hold (dryers busy)</Button>}
           {curIdx < 4 && <Button kind="primary" icon="arrow" onClick={() => { setShowAdvance(true); }}>Advance → {stages[curIdx + 1]}</Button>}
           <Button kind="ghost" onClick={() => setShowDelete(true)} icon="alert"><span style={{ color: 'var(--red)' }}>Delete</span></Button>
         </>}
       />
 
       <Card>
-        <div className="safi-stepper">
+        <div className={`safi-stepper${(o.status === 'holding' || window.SAFI_STORE.stageTimes(o.id).holding) ? ' has-hold' : ''}`}>
           {stages.map((s, i) => (
             <div key={s} className={`safi-stepper__node ${i < curIdx ? 'is-done' : i === curIdx ? 'is-cur' : ''} ${(s === 'collected' && o.status === 'ready') ? 'is-clickable' : ''}`}
                  onClick={() => { if (s === 'collected' && o.status === 'ready') markCollected(); }}
@@ -952,8 +953,13 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
                 {i < curIdx ? <Icon name="check" size={14} stroke="#fff"/> : <span>{i + 1}</span>}
               </div>
               <div className="safi-stepper__lbl">{t(s, lang)}</div>
-              {(() => { const tm = window.SAFI_STORE.stageTimes(o.id); const at = tm[s]; if (!at) return null; const nx = stages.slice(i + 1).map(x => tm[x]).find(Boolean); const dur = (s === 'washing' || s === 'drying') ? durTxt((nx ? new Date(nx) : (s === o.status ? new Date() : null)) - new Date(at)) : null; return <div className="safi-stepper__at"><span className="safi-mono">{hmOf(at)}</span>{dur && (nx || s === o.status) ? <span>{nx ? dur : `${dur} so far`}</span> : null}</div>; })()}
+              {(() => { const tm = window.SAFI_STORE.stageTimes(o.id); const at = tm[s]; if (!at) return null; const nx = (s === 'washing' && tm.holding) ? tm.holding : stages.slice(i + 1).map(x => tm[x]).find(Boolean); const dur = (s === 'washing' || s === 'drying') ? durTxt((nx ? new Date(nx) : (s === o.status ? new Date() : null)) - new Date(at)) : null; return <div className="safi-stepper__at"><span className="safi-mono">{hmOf(at)}</span>{dur && (nx || s === o.status) ? <span>{nx ? dur : `${dur} so far`}</span> : null}</div>; })()}
               {i < stages.length - 1 && <div className={`safi-stepper__line ${i < curIdx ? 'is-done' : ''}`}/>}
+              {s === 'washing' && (() => { const tm = window.SAFI_STORE.stageTimes(o.id); if (!tm.holding && o.status !== 'holding') return null; const cur = o.status === 'holding'; const end = tm.drying ? new Date(tm.drying) : (cur ? new Date() : null); return (
+                <div className={`safi-stepper__hold${cur ? ' is-cur' : ''}`} title="Holding: washed, waiting for a free dryer">
+                  <span className="safi-stepper__holddot">H</span>
+                  <span><b>Holding</b> <span className="safi-mono">{tm.holding ? hmOf(tm.holding) : ''}</span>{tm.holding && end ? <span> · {durTxt(end - new Date(tm.holding))}{cur ? ' so far' : ''}</span> : null}</span>
+                </div>); })()}
             </div>
           ))}
         </div>
