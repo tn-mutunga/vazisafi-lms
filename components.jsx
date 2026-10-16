@@ -278,7 +278,8 @@ const Button = ({ kind = 'primary', size = 'md', icon, children, onClick, type =
 };
 
 // ─── Badges + status pills ────────────────────────────────────────────────
-const StatusBadge = ({ status }) => {
+// mark: 'full' = collected (green tick, top-right), 'half' = part of the laundry collected.
+const StatusBadge = ({ status, mark }) => {
   const map = {
     intake:    { c: 'amber',  label: 'Intake' },
     washing:   { c: 'blue',   label: 'Washing' },
@@ -290,8 +291,11 @@ const StatusBadge = ({ status }) => {
     collected: { c: 'gray',   label: 'Collected' },
   };
   const m = map[status] || { c: 'gray', label: status };
-  return <span className={`safi-pill safi-pill--${m.c}`}><span className="safi-pill__dot"/>{m.label}</span>;
+  const tick = mark || null;
+  return <span className={`safi-pill safi-pill--${m.c}${tick ? ' has-tick' : ''}`}><span className="safi-pill__dot"/>{m.label}{tick && <span className={`safi-tick safi-tick--${tick}`} title={tick === 'full' ? 'Collected' : 'Part collected'}><svg viewBox="0 0 12 12" width="10" height="10">{tick === 'half' ? <path d="M3 6h6" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"/> : <path d="M2.5 6.4l2.3 2.3 4.7-5" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/>}</svg></span>}</span>;
 };
+// Part of the laundry already taken: a part payment was recorded with a note, and the order is not yet fully collected.
+const collectMark = (o) => o && o.status === 'collected' ? 'full' : (o && /Part payment/.test(String(o.notes || '')) ? 'half' : null);
 
 const PayBadge = ({ paid, total }) => {
   if (paid >= total) return <span className="safi-pill safi-pill--green">Paid</span>;
@@ -640,7 +644,7 @@ Object.assign(window, { PinConfirmHost, safiPinConfirm,
   // utils
   fmtMoney, t, toast,
   // primitives
-  Icon, Button, StatusBadge, PayBadge, GroupBadge, MethodBadge,
+  Icon, Button, StatusBadge, collectMark, PayBadge, GroupBadge, MethodBadge,
   Sidebar, Topbar, Card, StatCard, SyncPill,
   Sparkline, BarChart, Donut, HBar,
   Table, Placeholder, Modal, ToastHost,

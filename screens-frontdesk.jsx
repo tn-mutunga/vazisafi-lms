@@ -135,7 +135,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
             return (
               <div key={o.id} className="safi-orderchip" onClick={() => { setActiveOrderId(o.id); setView('order-detail'); }}>
                 <div className="safi-orderchip__hd">
-                  <span className="safi-mono">{orderNo(o.id)}</span><StatusBadge status={o.status}/>
+                  <span className="safi-mono">{orderNo(o.id)}</span><StatusBadge status={o.status} mark={collectMark(o)}/>
                 </div>
                 <div className="safi-orderchip__name">{c?.name || orderNo(o.id)}</div>
                 <div className="safi-orderchip__row">
@@ -764,7 +764,7 @@ function StageTrail({ order }) {
   const alert = timed && at && stageAlert(order.status, mins);
   return (
     <div className="safi-stage1">
-      <span className={`safi-stage1__b${alert ? ' is-alert' : ''}`} style={alert ? { '--safi-flash': machineTimers().flash + 's' } : null}><StatusBadge status={order.status}/></span>
+      <span className={`safi-stage1__b${alert ? ' is-alert' : ''}`} style={alert ? { '--safi-flash': machineTimers().flash + 's' } : null}><StatusBadge status={order.status} mark={collectMark(order)}/></span>
       {order.status !== 'collected' && <span className="safi-stage1__t safi-mono">{at ? hmOf(at) : '—'}</span>}
       {timed && at && <span className="safi-stage1__d">{durTxt(Date.now() - new Date(at))}</span>}
     </div>
@@ -774,7 +774,7 @@ function StageTrail({ order }) {
 // ─── Orders queue ─────────────────────────────────────────────────────────
 function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
   const D = useStore();
-  const [filter, setFilter] = useStateFD('active'); // default: active orders only
+  const [filter, setFilter] = useStateFD('all'); // default: every order for the chosen day, collected included
   const [q, setQ] = useStateFD('');
   const [dateFilter, setDateFilter] = useStateFD(SAFI_TIME.day()); // default: today; empty = any date
 
@@ -954,7 +954,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
                 {i < curIdx ? <Icon name="check" size={14} stroke="#fff"/> : <span>{i + 1}</span>}
               </div>
               <div className="safi-stepper__lbl">{t(s, lang)}</div>
-              {(() => { const tm = window.SAFI_STORE.stageTimes(o.id); const at = tm[s]; if (!at) return null; const nx = (s === 'washing' && tm.holding) ? tm.holding : stages.slice(i + 1).map(x => tm[x]).find(Boolean); const dur = (s === 'washing' || s === 'drying') ? durTxt((nx ? new Date(nx) : (s === o.status ? new Date() : null)) - new Date(at)) : null; const total = (s === 'ready' && tm.washing) ? durTxt(new Date(at) - new Date(tm.washing)) : null; return <div className="safi-stepper__at"><span className="safi-mono">{hmOf(at)}</span>{dur && (nx || s === o.status) ? <span>{nx ? dur : `${dur} so far`}</span> : null}{total ? <span className="safi-stepper__total" title="Start of washing to Ready">{total} total</span> : null}</div>; })()}
+              {(() => { const tm = window.SAFI_STORE.stageTimes(o.id); const at = tm[s]; if (!at) return null; const nx = (s === 'washing' && tm.holding) ? tm.holding : stages.slice(i + 1).map(x => tm[x]).find(Boolean); const dur = (s === 'washing' || s === 'drying') ? durTxt((nx ? new Date(nx) : (s === o.status ? new Date() : null)) - new Date(at)) : null; const total = (s === 'ready' && tm.washing) ? durTxt(new Date(at) - new Date(tm.washing)) : null; return <div className="safi-stepper__at"><span className="safi-mono">{hmOf(at)}</span>{dur && (nx || s === o.status) ? <span>{nx ? dur : `${dur} so far`}</span> : null}{total ? <span className="safi-stepper__total" title="Start of washing to Ready">Order duration {total}</span> : null}</div>; })()}
               {i < stages.length - 1 && <div className={`safi-stepper__line ${i < curIdx ? 'is-done' : ''}`}/>}
               {s === 'washing' && (() => { const tm = window.SAFI_STORE.stageTimes(o.id); if (!tm.holding && o.status !== 'holding') return null; const cur = o.status === 'holding'; const end = tm.drying ? new Date(tm.drying) : (cur ? new Date() : null); return (
                 <div className={`safi-stepper__hold${cur ? ' is-cur' : ''}`} title="Holding: washed, waiting for a free dryer">

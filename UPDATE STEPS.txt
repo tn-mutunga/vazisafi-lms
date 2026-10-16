@@ -1,20 +1,8 @@
-VAZI SAFI LMS v2.3.5
-FIRST (once): Supabase > SQL Editor > paste supabase/07_stages.sql > Run.
-  The cloud did not accept the stages "holding" and "drycleaning", so orders moved there
-  were refused and the next sync put them back (e.g. Holding showed as Washing).
-- Expenses > Profit by cost group: each category shows in the box(es) where its expenses are,
-  with the amount. A category split between Operational and Special shows in both.
-  Changing an expense to Special moves its amount straight away. Dragging a chip moves all
-  of that category's expenses in the period.
-- Payments & Audit (Management): "Upload statement & verify" — upload M-Pesa/bank PDF (or CSV/TXT);
-  payments whose code's last 5 characters appear are verified automatically, with a report.
-- Payments & Audit: "Reconcile period" (M-Pesa & Bank only): pick a month to see Matched,
-  Money with no order (on the statement, not recorded), Paid with no money (recorded, not on a
-  statement). Download the summary as CSV; mark the month reconciled.
-- Win-back messages: only Management can change them (Front Desk sees them read-only).
-- Red approvals badge also shows on Front Desk (tap = PIN, then Approvals).
-- Front Desk gets a notice box when Management approves/rejects a request.
-- Front Desk heading shows the computer time (24h) after the date.
-- Front Desk: "Clients by service · today" moved to the right column, between Quick actions and Live machines.
-- Order page: under Ready, total time from start of washing to Ready.
-- Includes Holding stage + stage averages (2.3.4).
+VAZI SAFI LMS v2.3.6
+- Collected orders: green tick on the top-right of the Collected tag. Part collected (part payment
+  with a note): green circle with a white bar (-).
+- Holding: crimson tag with a sweep running left to right (like a car indicator).
+- Orders page opens on All, so Today / Yesterday / Any date also list collected orders.
+  (Active still hides collected. Today's queue still drops them.)
+- Order page: "Order duration 2hr 49min" under Ready (start of washing to Ready), centred.
+- Includes everything from v2.3.5.

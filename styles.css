@@ -3102,3 +3102,15 @@ button { font-family: inherit; }
 .safi-toggle--lg{flex-direction:row!important;align-items:center!important}.safi-toggle--lg>div{flex:1;min-width:0}.safi-toggle--lg>div b{white-space:normal}
 
 .safi-recon-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.safi-recon-sum>div{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:10px;background:var(--green-soft)}.safi-recon-sum>div.is-warn{background:var(--amber-soft)}.safi-recon-sum span{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:600}.safi-recon-sum b{font-size:16px;color:var(--ink)}.safi-recon-sum small{font-size:11.5px;color:var(--ink-3)}
+
+.safi-pill.has-tick{position:relative;overflow:visible}.safi-tick{position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#16a34a;box-shadow:0 0 0 2px var(--card)}.safi-tick--half{background:#16a34a}
+.safi-pill.has-tick{padding-right:16px}.safi-pill.has-tick .safi-tick{top:-8px;right:-8px}
+
+/* Holding: crimson tag with a sweep running left to right, like a car indicator. */
+.safi-pill--teal{background:#FDE2E4!important;color:#9F1239!important;position:relative;overflow:hidden;isolation:isolate}
+.safi-pill--teal .safi-pill__dot{background:#e11d48}
+.safi-pill--teal::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,transparent 0%,#fb7185 40%,#e11d48 60%,transparent 100%);transform:translateX(-100%);animation:safiHoldSweep 1.35s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes safiHoldSweep{0%{transform:translateX(-100%)}70%,100%{transform:translateX(100%)}}
+@media (prefers-reduced-motion:reduce){.safi-pill--teal::before{animation:none}}
+.safi-stepper__holddot{background:#e11d48!important}.safi-stepper__hold.is-cur{border-color:#e11d48!important;box-shadow:0 0 0 3px #FDE2E4!important}
+.safi-stepper__at{align-items:center!important;text-align:center}.safi-stepper__total{align-self:center}
