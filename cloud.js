@@ -271,6 +271,18 @@
   // Fetch other laptops' changes even when nobody is typing here.
   // Every 10 minutes (plus on open, on wake, when the internet returns and on close).
   setInterval(() => schedule(0), 300000);
+  // Teller on duty: check the cloud every 30 seconds (one tiny request) so a change made
+  // on any laptop shows at the shop within half a minute.
+  setInterval(async () => {
+    try {
+      if (!cfg.liveSync || !session || !navigator.onLine) return;
+      const r = await call(`/rest/v1/settings?branch_id=eq.${encodeURIComponent(cfg.branch)}&key=eq.currentStaffId&select=value`, { method: 'GET' });
+      let v = r && r[0] && r[0].value;
+      if (v && typeof v === 'object' && v.v) v = v.v;
+      if (typeof v === 'string' && /^".*"$/.test(v)) { try { v = JSON.parse(v); } catch (e) {} }
+      if (v && window.SAFI_STORE.applyRemoteStaff(String(v))) emit();
+    } catch (e) {}
+  }, 30000);
   window.addEventListener('beforeunload', () => { try { if (cfg.liveSync && session && navigator.onLine) API.syncNow().catch(() => {}); } catch (e) {} });
   // Renew the sign-in in the background every 30 minutes, so a till left open (or
   // reopened the next morning) never finds an expired token at the counter.

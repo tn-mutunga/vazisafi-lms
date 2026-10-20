@@ -3181,3 +3181,41 @@ button { font-family: inherit; }
 .safi-collect-hint,.safi-collect-hint.is-paid{background:#E0F2FE;color:#0c3b5c;border-left:4px solid #0284C7;animation:none}
 .safi-collect-hint svg{color:#0284C7;flex-shrink:0;margin-top:2px}
 .safi-stepper__total svg{color:#0f7a4f}
+
+.safi-vres{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;padding:0 8px;border-radius:999px;font:700 12.5px var(--ff-mono)}.safi-vres--ok{color:#0a8f4e;background:#dcf5e7;font-size:14px}.safi-vres--up{color:#0a8f4e;background:#dcf5e7}.safi-vres--down{color:#c0262d;background:#fde4e4}
+.safi-paylist__m{display:inline-flex;align-items:center;gap:4px;border:0;background:none;padding:0;cursor:pointer}.safi-paylist__m:disabled{cursor:default}.safi-paylist__sw{font-size:12px;color:var(--ink-3)}.safi-paylist__m:not(:disabled):hover .safi-paylist__sw{color:var(--brand)}
+
+.safi-vtick{position:static!important;display:inline-flex;width:18px;height:18px;transform:none!important;box-shadow:0 0 0 2px #fff,0 1px 3px rgba(0,0,0,.15)}
+
+.safi-vtick svg{width:10px;height:10px}
+
+.safi-liveclock__s{opacity:.55;font-size:.85em}
+
+.safi-ch{position:relative;display:grid;grid-template-columns:44px 1fr;grid-template-rows:var(--ch-h) auto auto;column-gap:8px;padding-top:6px}
+.safi-ch__ylabel{position:absolute;left:0;top:-14px;font-size:10.5px;color:var(--ink-3);font-weight:600;letter-spacing:.04em}
+.safi-ch__axis{position:relative;grid-row:1}.safi-ch__axis span{position:absolute;right:0;transform:translateY(50%);font:11px var(--ff-mono);color:var(--ink-3)}
+.safi-ch__plot{position:relative;grid-row:1;grid-column:2;border-left:1px solid var(--line);border-bottom:1px solid var(--line-2,#ccc)}
+.safi-ch__grid{position:absolute;left:0;right:0;height:0;border-top:1px dashed var(--line);pointer-events:none}
+.safi-ch__bars{position:absolute;inset:0;display:grid;gap:2px;padding:0 2px}
+.safi-ch__col{position:relative;display:flex;align-items:flex-end;justify-content:center;cursor:pointer;border-radius:4px}
+.safi-ch__col.is-hover{background:rgba(92,45,145,.07)}
+.safi-ch__grp{display:flex;align-items:flex-end;gap:2px;width:78%;height:100%}
+.safi-ch__bar{flex:1;min-height:1px;border-radius:3px 3px 0 0;transition:height .3s}
+.safi-ch__col.is-hl .safi-ch__bar{box-shadow:0 0 0 2px var(--accent)}
+.safi-ch__tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);z-index:5;background:var(--ink);color:#fff;border-radius:8px;padding:8px 10px;font-size:12px;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.25);pointer-events:none}
+.safi-ch__col .safi-ch__tip{bottom:auto;top:4px}
+.safi-ch__tip.is-left{left:auto;right:50%;transform:none}.safi-ch__tip.is-right{left:50%;transform:none}
+.safi-ch__tip b{display:block;margin-bottom:4px}.safi-ch__tip div{display:flex;align-items:center;gap:6px}.safi-ch__tip div i{width:8px;height:8px;border-radius:2px}.safi-ch__tip div span{margin-left:auto;padding-left:12px;font-weight:700}
+.safi-ch__x{grid-column:2;display:grid;gap:2px;padding:4px 2px 0}.safi-ch__x span{font:10.5px var(--ff-mono);color:var(--ink-3);text-align:center;white-space:nowrap;overflow:hidden}.safi-ch__x span.is-hl{color:var(--ink);font-weight:700}
+.safi-ch__legend{grid-column:2;margin-top:8px}
+.safi-ts-totals{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.safi-ts-totals__item--op{border-left-color:#7c3aed!important;background:#f3eefe}
+.safi-period-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.safi-period-card--op{background:linear-gradient(135deg,#6d28d9,#5C2D91)!important;color:#fff}.safi-period-card--op .safi-period-card__lbl,.safi-period-card--op .safi-period-card__meta{color:rgba(255,255,255,.8)}
+.safi-stat--op{background:linear-gradient(135deg,#6d28d9,#5C2D91);color:#fff;border-color:transparent}.safi-stat--op .safi-stat__label,.safi-stat--op .safi-stat__delta,.safi-stat--op svg{color:rgba(255,255,255,.85)}.safi-stat--op .safi-stat__value{color:#fff}
+
+.safi-profit-row{grid-template-columns:repeat(2,minmax(0,1fr))}.safi-profit-row .safi-stat{min-height:0}
+
+.safi-report__grid--profit{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:-6px}.safi-report__stat.is-op{background:#f3eefe;border-left:3px solid #7c3aed;padding:10px 12px;border-radius:8px}.safi-report__stat.is-op .safi-report__big{color:#5C2D91}.safi-report__stat.is-net{background:var(--paper);border-left:3px solid #0a8f4e;padding:10px 12px;border-radius:8px}
+
+.safi-onotes{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px}.safi-onotes li{display:flex;flex-direction:column;gap:2px;padding:8px 10px;background:#fff8ec;border-left:3px solid var(--amber);border-radius:6px;font-size:13px;color:var(--ink)}.safi-onotes__at{font:11px var(--ff-mono);color:var(--ink-3)}.safi-onotes__add{display:flex;gap:8px;align-items:flex-end}.safi-onotes__add .safi-textarea{flex:1;min-height:44px}

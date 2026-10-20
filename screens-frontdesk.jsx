@@ -16,7 +16,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
   const todayStr = SAFI_TIME.day();
   const todayOrders = D.orders.filter(o => o.in.startsWith(todayStr));
   const revenueToday = todayOrders.reduce((s, o) => s + (o.total || 0), 0);
-  const streamToday = (cat) => todayOrders.reduce((s, o) => s + o.items.reduce((ss, it) => ss + (((D.services.find(x => x.id === it.svc) || {}).category || 'other') === cat ? (it.price || 0) : 0), 0), 0);
+  const streamToday = (cat) => todayOrders.reduce((s, o) => { const gross = o.items.reduce((g, it) => g + (it.price || 0), 0) || 1; const part = o.items.reduce((ss, it) => ss + (((D.services.find(x => x.id === it.svc) || {}).category || 'other') === cat ? (it.price || 0) : 0), 0); return s + Math.round(part * (o.total || 0) / gross); }, 0);
   const streams = [['laundry', 'Laundry'], ['drycleaning', 'Dry Cleaning'], ['shoes', 'Shoes'], ['other', 'Other']].map(([k, l]) => ({ k, l, v: streamToday(k) }));
   // Pending collection = every order not yet handed back. Drops as each is collected.
   const readyOrders = D.orders.filter(o => o.status !== 'collected');
@@ -24,7 +24,9 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
   const pendingBalance = readyOrders.reduce((s, o) => s + Math.max(0, (o.total || 0) - (o.paid || 0)), 0);
   const todayExpenses = (D.expenses || []).filter(e => String(e.date).startsWith(todayStr));
   const expensesToday = todayExpenses.reduce((s, e) => s + (e.amount || 0), 0);
-  const collectedToday = (D.payments || []).filter(p => String(p.date).startsWith(todayStr)).reduce((s, p) => s + (p.amount || 0), 0);
+  // Collected today = orders handed over today (any intake date), valued at their total.
+  const collectedOrdersToday = D.orders.filter(o => o.status === 'collected' && String(window.SAFI_STORE.stageTimes(o.id).collected || '').startsWith(todayStr));
+  const collectedToday = collectedOrdersToday.reduce((s, o) => s + (o.total || 0), 0);
   const washing = D.orders.filter(o => o.status === 'washing').length;
   const ironing = D.orders.filter(o => o.status === 'ironing').length;
 
@@ -60,7 +62,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
         <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" delta={`${todayOrders.length} orders · ${money(collectedToday)} collected`}
           sparkline={<div className="safi-streams">{streams.map(x => <span key={x.k} className={`safi-streams__i safi-streams__i--${x.k}`}><i/>{x.l} <b className="safi-mono">{money(x.v)}</b></span>)}</div>}/>
         <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} orders ready now`}/>
-        <StatCard label="Washing / Drying / Ready / Collected" value={`${washing} / ${D.orders.filter(o => o.status === 'drying').length} / ${D.orders.filter(o => o.status === 'ready').length} / ${D.orders.filter(o => o.status === 'collected' && String(window.SAFI_STORE.stageTimes(o.id).collected || '').startsWith(todayStr)).length}`} icon="wash" delta="Today's Orders Stats"/>
+        <StatCard label="Washing / Drying / Ready / Collected" value={`${washing} / ${D.orders.filter(o => o.status === 'drying').length} / ${D.orders.filter(o => o.status === 'ready').length} / ${collectedOrdersToday.length}`} icon="wash" delta="Today's Orders Stats"/>
       </div>
 
 
@@ -966,13 +968,13 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
         </div>
         {o.status === 'ready' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginTop: 14 }}>
-            <Button kind="primary" icon="check" onClick={markCollected}>Mark as Collected</Button>
+            <Button kind="primary" icon="check" onClick={markCollected}>Mark as Delivered/Collected</Button>
             <div className={`safi-collect-hint${(o.paid || 0) >= (o.total || 0) && (o.total || 0) > 0 ? ' is-paid' : ''}`}>
               <Icon name="alert" size={14}/>
               <span>
                 {(o.paid || 0) >= (o.total || 0) && (o.total || 0) > 0
-                  ? <><b>Paid in full.</b> Mark as Collected only after the clothes leave the shop with the customer or the rider has delivered them.</>
-                  : <><b>Mark as Collected</b> only after the clothes leave the shop with the customer or the rider has delivered them, and payment has been made in full. Balance due: {`KES ${Math.max(0, (o.total || 0) - (o.paid || 0)).toLocaleString('en-KE')}`}.</>}
+                  ? <><b>Paid in full.</b> Mark as Delivered/Collected only once the clothes have left the shop with the customer, or the rider has delivered them.</>
+                  : <><b>Mark as Delivered/Collected</b> only once the clothes have left the shop with the customer, or the rider has delivered them, and payment is complete. Balance due: {`KES ${Math.max(0, (o.total || 0) - (o.paid || 0)).toLocaleString('en-KE')}`}.</>}
               </span>
             </div>
           </div>
@@ -1000,6 +1002,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
               <div className="safi-sum__row safi-sum__row--total"><span>{t('total', lang)}</span><span className="safi-mono">{money(o.total)}</span></div>
             </div>
           </Card>
+          <OrderNotes order={o}/>
         </div>
 
         <div className="safi-stack">
@@ -1025,18 +1028,13 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
               <div className="safi-paybox__row safi-paybox__row--balance"><span>{t('balance', lang)}</span><b className="safi-mono">{money(o.total - o.paid)}</b></div>
               {(() => { const ps = D.payments.filter(p => p.order === o.id); return ps.length ? (
                 <div className="safi-paylist">
-                  {ps.map(p => <div key={p.id} className="safi-paylist__r"><MethodBadge method={p.method}/><span className="safi-mono">{p.txn || '—'}</span><span className="safi-cell-sub">{dm(p.date)}</span><b className="safi-mono">{money(p.amount)}</b></div>)}
+                  {ps.map(p => <div key={p.id} className="safi-paylist__r"><button className="safi-paylist__m" title={p.verified ? 'Verified — cannot change' : 'Wrong method? Tap to switch M-Pesa / Bank'} disabled={p.verified} onClick={() => { const m = p.method === 'bank' ? 'mpesa' : 'bank'; window.SAFI_STORE.setPaymentMethod(p.id, m); toast(`Changed to ${m === 'bank' ? 'Bank' : 'M-Pesa'}`); }}><MethodBadge method={p.method}/>{!p.verified && <span className="safi-paylist__sw">⇄</span>}</button><span className="safi-mono">{p.txn || '—'}</span><span className="safi-cell-sub">{dm(p.date)}</span><b className="safi-mono">{money(p.amount)}</b></div>)}
                 </div>
               ) : <div className="safi-paybox__meta"><span className="safi-cell-sub">No payments yet</span></div>; })()}
               {o.total - o.paid > 0 && <Button kind="primary" full icon="wallet" onClick={() => setShowPay(true)}>Collect balance · {money(o.total - o.paid)}</Button>}
             </div>
           </Card>
 
-          {o.notes && (
-            <Card title="Notes">
-              <p className="safi-notes">{o.notes}</p>
-            </Card>
-          )}
         </div>
       </div>
 
@@ -1275,6 +1273,35 @@ function BacklogAlert({ D, setView }) {
       </div>
       <Button kind="ghost" size="sm" onClick={() => { const el = document.getElementById('safi-backlog-list'); if (!el) return; const se = document.scrollingElement || document.documentElement; se.scrollTo({ top: se.scrollTop + el.getBoundingClientRect().top - 16, behavior: 'smooth' }); }}>View list</Button>
     </div>
+  );
+}
+
+// ─── Order notes: running log on the order (who, when, what). Saved in the order's notes so it syncs.
+function OrderNotes({ order }) {
+  const [text, setText] = useStateFD('');
+  const lines = String(order.notes || '').split('\n').map(s => s.trim()).filter(Boolean);
+  function add() {
+    const v = text.trim(); if (!v) return;
+    const who = (window.SAFI_STORE.getCurrentStaff() || {}).name || 'Staff';
+    const line = `[${dm(SAFI_TIME.stamp())} · ${who}] ${v}`;
+    const cur = window.SAFI_STORE.get().orders.find(x => x.id === order.id);
+    window.SAFI_STORE.updateOrder(order.id, { notes: cur && cur.notes ? `${cur.notes}\n${line}` : line });
+    setText(''); toast('Note added');
+  }
+  return (
+    <Card title="Order notes" action={<span className="safi-cell-sub">{lines.length ? `${lines.length} note${lines.length > 1 ? 's' : ''}` : ''}</span>}>
+      {lines.length > 0 && (
+        <ul className="safi-onotes">
+          {lines.map((l, i) => { const m = l.match(/^\[([^\]]+)\]\s*(.*)$/); return <li key={i}>{m ? <><span className="safi-onotes__at">{m[1]}</span><span>{m[2]}</span></> : <span>{l}</span>}</li>; })}
+        </ul>
+      )}
+      <div className="safi-onotes__add">
+        <textarea className="safi-textarea" rows={2} value={text} onChange={e => setText(e.target.value)} placeholder="Add a note — e.g. Dry cleaning will be ready on Monday. Client has been informed by phone."
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); add(); } }}/>
+        <Button kind="primary" size="sm" icon="plus" onClick={add} disabled={!text.trim()}>Add note</Button>
+      </div>
+      <p className="safi-hint" style={{ margin: '6px 0 0' }}>Enter adds the note · Shift+Enter for a new line. Saved with your name and the time.</p>
+    </Card>
   );
 }
 
@@ -2077,9 +2104,9 @@ function exportCustomersCSV(customers) {
 // Small 24-hour clock beside the date (this computer's time), ticks every second.
 function LiveClock() {
   const [now, setNow] = useStateFD(new Date());
-  useEffectFD(() => { const t = setInterval(() => setNow(new Date()), 15000); return () => clearInterval(t); }, []);
+  useEffectFD(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   const p = (n) => String(n).padStart(2, '0');
-  return <span className="safi-liveclock">{p(now.getHours())}:{p(now.getMinutes())}</span>;
+  return <span className="safi-liveclock">{p(now.getHours())}:{p(now.getMinutes())}<span className="safi-liveclock__s">:{p(now.getSeconds())}</span></span>;
 }
 
 // ─── Statement reconcile: upload an M-Pesa or bank statement, match codes, verify ───
@@ -2214,9 +2241,14 @@ function StatementReconcile() {
       const tails = new Set([...words].map(w => w.slice(-5)));
       const pending = (D.payments || []).filter(p => !p.verified && String(p.txn || '').replace(/\s/g, '').length >= 5);
       const matched = [], missed = [];
+      const ents = parseStatementEntries(text);
       for (const p of pending) {
         const code = String(p.txn).toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (words.has(code) || tails.has(code.slice(-5))) { window.SAFI_STORE.verifyPayment(p.id); matched.push(p); } else missed.push(p);
+        if (words.has(code) || tails.has(code.slice(-5))) {
+          const hit = ents[code] || Object.values(ents).find(e => e.code.slice(-5) === code.slice(-5));
+          window.SAFI_STORE.verifyPayment(p.id, { stmtAmount: hit ? hit.amount : null });
+          matched.push(p);
+        } else missed.push(p);
       }
       saveStatementEntries(text, [...files].map(x => x.name).join(', '));
       setReport({ files: [...files].map(x => x.name), words: words.size, matched, missed });
@@ -2251,7 +2283,9 @@ function PaymentsScreen({ lang, money, role }) {
   const [tab, setTab] = useStateFD('all');
   const [form, setForm] = useStateFD({ order: '', method: 'mpesa', amount: '', txn: '', date: SAFI_TIME.day() });
 
-  const rows = D.payments.filter(p => tab === 'all' || p.method === tab);
+  const rows = D.payments.filter(p => tab === 'all' || p.method === tab).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const [pinFor, setPinFor] = useStateFD(null);
+  const [vPin, setVPin] = useStateFD('');
 
   const totalsByMethod = ['mpesa', 'bank'].map(m => ({
     m, total: D.payments.filter(p => p.method === m).reduce((s, p) => s + p.amount, 0),
@@ -2343,23 +2377,43 @@ function PaymentsScreen({ lang, money, role }) {
       }>
         <Table
           cols={[
-            { label: 'Date', render: r => <span className="safi-cell-sub">{r.date.slice(5)}</span> },
+            { label: 'Date', render: r => <span className="safi-cell-sub">{dm(r.date)}</span> },
             { label: 'Order #', render: r => <span className="safi-mono safi-cell-strong">{orderNo(r.order)}</span> },
             { label: 'Customer', render: r => r.customer || '—' },
             { label: 'Method', render: r => <MethodBadge method={r.method}/> },
             { label: 'Amount', render: r => <span className="safi-mono safi-cell-strong">{money(r.amount)}</span> },
             { label: 'Txn code', render: r => r.txn ? <span className="safi-mono">{r.txn}</span> : <span className="safi-cell-sub">—</span> },
             { label: 'Status', render: r => r.verified ? <span className="safi-pill safi-pill--green"><Icon name="check" size={10}/> {t('verified', lang)}</span> : <span className="safi-pill safi-pill--amber">⚠ {t('unverified', lang)}</span> },
-            { label: '', render: r => r.verified
-                ? <span className="safi-cell-sub">—</span>
-                : (isManagement
-                    ? <button className="safi-rowlink" onClick={() => { window.SAFI_STORE.verifyPayment(r.id); toast('Verified'); }}>{t('verify', lang)} →</button>
-                    : <span className="safi-cell-sub" title="Only Management can verify payments">🔒 Mgmt</span>) },
+            { label: '', render: r => {
+                if (!r.verified) return isManagement
+                  ? <button className="safi-rowlink" onClick={() => { setVPin(''); setPinFor(r); }}>{t('verify', lang)} →</button>
+                  : <span className="safi-cell-sub" title="Only Management can verify payments">🔒 Mgmt</span>;
+                if (r.stmtAmount == null) return <span title={r.verifiedBy === 'manual' ? 'Verified manually (PIN)' : 'Verified'}><span className="safi-tick safi-tick--full safi-vtick"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M2.5 6.4l2.3 2.3 4.7-5" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg></span></span>;
+                const d = Math.round(r.stmtAmount - r.amount);
+                if (d === 0) return <span title={`Statement KES ${r.stmtAmount.toLocaleString()}`}><span className="safi-tick safi-tick--full safi-vtick"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M2.5 6.4l2.3 2.3 4.7-5" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg></span></span>;
+                return <span className={`safi-vres safi-vres--${d > 0 ? 'up' : 'down'}`} title={`Statement shows KES ${r.stmtAmount.toLocaleString()}`}>{d > 0 ? '+' : '−'}{Math.abs(d).toLocaleString()}</span>;
+              } },
           ]}
           rows={rows}
           empty="No payments yet."
         />
       </Card>
+
+      <Modal open={!!pinFor} onClose={() => setPinFor(null)} title={pinFor ? `Verify manually · ${orderNo(pinFor.order)}` : ''} width={420}
+        footer={<>
+          <Button kind="ghost" onClick={() => setPinFor(null)}>Cancel</Button>
+          <Button kind="primary" icon="check" onClick={() => {
+            if (String(vPin) !== String(window.__safiOwnerPin || '')) { toast('Wrong Management PIN', 'error'); return; }
+            window.SAFI_STORE.verifyPayment(pinFor.id, { manual: true });
+            toast('Verified'); setPinFor(null);
+          }}>Verify</Button>
+        </>}>
+        {pinFor && <div className="safi-form">
+          <p className="safi-cell-sub" style={{ margin: 0 }}>{pinFor.customer} · {pinFor.method === 'bank' ? 'Bank' : 'M-Pesa'} · KES {Number(pinFor.amount).toLocaleString()} · code {pinFor.txn}</p>
+          <p className="safi-cell-sub" style={{ margin: 0 }}>Verifying without a statement. Confirm you have checked this code yourself.</p>
+          <MgmtPinField value={vPin} onChange={setVPin}/>
+        </div>}
+      </Modal>
     </>
   );
 }

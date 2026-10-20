@@ -86,6 +86,8 @@ function PeriodSummary({ money }) {
   const gross   = sumOrdersGross(cur.from);
   const expense = sumExpenses(cur.from);
   const profit  = revenue - expense;
+  const opExpense = D.expenses.filter(e => new Date(e.date.replace(' ', 'T')) >= cur.from && (!window.costGroupOf || window.costGroupOf(D, e) !== 'special')).reduce((s, e) => s + (e.amount || 0), 0);
+  const opProfit = revenue - opExpense;
   const orders  = countOrders(cur.from);
 
   const prevRev = prev ? sumOrdersPaid(prev.from, prev.to) : 0;
@@ -131,6 +133,11 @@ function PeriodSummary({ money }) {
             <div className="safi-period-card__meta">
               {expDelta != null && <span className={expDelta >= 0 ? 'is-down' : 'is-up'}>{expDelta >= 0 ? '↑' : '↓'} {Math.abs(expDelta)}% vs last</span>}
             </div>
+          </div>
+          <div className="safi-period-card safi-period-card--op">
+            <div className="safi-period-card__lbl">Operating profit</div>
+            <div className="safi-period-card__val safi-mono">{money(opProfit)}</div>
+            <div className="safi-period-card__meta"><span>revenue − operational costs</span></div>
           </div>
           <div className="safi-period-card safi-period-card--profit">
             <div className="safi-period-card__lbl">Net profit</div>
@@ -244,6 +251,8 @@ function SettingsScreen({ lang, shop, setShop }) {
       </Card>
 
       <MachineTimersCard/>
+
+      <SoundsCard/>
 
       <Card title="Operations">
         <ul className="safi-form" style={{ gap: 14 }}>
@@ -795,6 +804,7 @@ function TimeSeries({ money }) {
   const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const monthKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 
+  const isOpEx = (e) => !window.costGroupOf || window.costGroupOf(D, e) !== 'special';
   // Build series from real data
   const points = [];
   if (granularity === 'year') {
@@ -802,8 +812,8 @@ function TimeSeries({ money }) {
       const y = now.getFullYear() - i;
       const key = String(y);
       const rev = D.orders.filter(o => String(o.in).startsWith(key)).reduce((s, o) => s + (o.total || 0), 0);
-      const exp = D.expenses.filter(e => String(e.date).startsWith(key)).reduce((s, e) => s + e.amount, 0);
-      points.push({ label: key, rev, exp, profit: rev - exp });
+      const ex = D.expenses.filter(e => String(e.date).startsWith(key)); const exp = ex.reduce((s, e) => s + e.amount, 0); const op = ex.filter(isOpEx).reduce((s, e) => s + e.amount, 0);
+      points.push({ label: key, rev, exp, op, profit: rev - exp });
     }
   } else if (granularity === 'day') {
     for (let i = 29; i >= 0; i--) {
@@ -811,8 +821,8 @@ function TimeSeries({ money }) {
       const key = dayKey(d);
       const label = d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
       const rev = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.total || 0), 0);
-      const exp = D.expenses.filter(e => e.date.startsWith(key)).reduce((s, e) => s + e.amount, 0);
-      points.push({ label, rev, exp, profit: rev - exp });
+      const ex = D.expenses.filter(e => e.date.startsWith(key)); const exp = ex.reduce((s, e) => s + e.amount, 0); const op = ex.filter(isOpEx).reduce((s, e) => s + e.amount, 0);
+      points.push({ label, rev, exp, op, profit: rev - exp });
     }
   } else {
     // Current year: the last 12 months. A past year: January to December.
@@ -826,8 +836,8 @@ function TimeSeries({ money }) {
       const key = monthKey(d);
       const label = d.toLocaleDateString('en-KE', { month: 'short', year: '2-digit' });
       const rev = D.orders.filter(o => o.in.startsWith(key)).reduce((s, o) => s + (o.total || 0), 0);
-      const exp = D.expenses.filter(e => e.date.startsWith(key)).reduce((s, e) => s + e.amount, 0);
-      points.push({ label, rev, exp, profit: rev - exp });
+      const ex = D.expenses.filter(e => e.date.startsWith(key)); const exp = ex.reduce((s, e) => s + e.amount, 0); const op = ex.filter(isOpEx).reduce((s, e) => s + e.amount, 0);
+      points.push({ label, rev, exp, op, profit: rev - exp });
     }
   }
 
@@ -835,6 +845,7 @@ function TimeSeries({ money }) {
   const totalRev = points.reduce((s, p) => s + p.rev, 0);
   const totalExp = points.reduce((s, p) => s + p.exp, 0);
   const totalProfit = totalRev - totalExp;
+  const totalOpProfit = totalRev - points.reduce((s, p) => s + (p.op || 0), 0);
 
   return (
     <Card title={`Revenue vs Expenses · ${
@@ -864,35 +875,55 @@ function TimeSeries({ money }) {
           <span className="safi-ts-totals__lbl">Expenses</span>
           <span className="safi-ts-totals__val safi-mono">— {money(totalExp)}</span>
         </div>
+        <div className="safi-ts-totals__item safi-ts-totals__item--op">
+          <span className="safi-ts-totals__lbl">Operating profit</span>
+          <span className="safi-ts-totals__val safi-mono">{money(totalOpProfit)}</span>
+        </div>
         <div className="safi-ts-totals__item safi-ts-totals__item--profit">
           <span className="safi-ts-totals__lbl">Net profit</span>
           <span className="safi-ts-totals__val safi-mono">{money(totalProfit)}</span>
         </div>
       </div>
 
-      <div className="safi-ts-chart">
-        <div className="safi-ts-bars">
-          {points.map((p, i) => (
-            <div key={i} className="safi-ts-col" title={`${p.label}: revenue ${money(p.rev)}, expenses ${money(p.exp)}`}>
-              <div className="safi-ts-stack">
-                <div className="safi-ts-bar safi-ts-bar--rev" style={{ height: `${(p.rev / max) * 100}%` }}/>
-                <div className="safi-ts-bar safi-ts-bar--exp" style={{ height: `${(p.exp / max) * 100}%` }}/>
-              </div>
-              <div className="safi-ts-lbl">{p.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <SafiChart labels={points.map(p => p.label)} height={260} yLabel="KES" fmt={money} sparseLabels
+        series={[{ name: 'Revenue', color: 'var(--brand)', values: points.map(p => p.rev) }, { name: 'Expenses', color: 'var(--amber)', values: points.map(p => p.exp) }]}/>
+    </Card>
+  );
+}
 
-      <div className="safi-legend" style={{ marginTop: 10 }}>
-        <span><i style={{ background: 'var(--brand)' }}/>Revenue</span>
-        <span><i style={{ background: 'var(--amber)' }}/>Expenses</span>
+function SoundsCard() {
+  const D = useStore();
+  const st = D.settings || {};
+  const [here, setHere] = useStateX(localStorage.getItem('safi_request_chime_here') === '1');
+  const vol = st.chimeVolume == null ? 70 : Number(st.chimeVolume);
+  return (
+    <Card title="Sounds" action={<span className="safi-cell-sub">Chimes for approval requests and replies</span>}>
+      <div className="safi-form" style={{ maxWidth: 560 }}>
+        <label className="safi-toggle safi-toggle--lg">
+          <input type="checkbox" checked={st.approvalChime !== false} onChange={e => window.SAFI_STORE.setSetting('approvalChime', e.target.checked)}/><span/>
+          <div><b>Chime when a request for approval comes in</b><p className="safi-cell-sub" style={{ margin: '2px 0 0' }}>Plays in Management, and repeats every 2 minutes while a request is waiting.</p></div>
+        </label>
+        <label className="safi-toggle safi-toggle--lg">
+          <input type="checkbox" checked={here} onChange={e => { setHere(e.target.checked); localStorage.setItem('safi_request_chime_here', e.target.checked ? '1' : '0'); }}/><span/>
+          <div><b>Also play it on this laptop in Front Desk</b><p className="safi-cell-sub" style={{ margin: '2px 0 0' }}>Tick on your own laptop (not the shop's) so you hear requests without switching to Management.</p></div>
+        </label>
+        <label className="safi-toggle safi-toggle--lg">
+          <input type="checkbox" checked={st.replyChime !== false} onChange={e => window.SAFI_STORE.setSetting('replyChime', e.target.checked)}/><span/>
+          <div><b>Chime at Front Desk when Management replies</b><p className="safi-cell-sub" style={{ margin: '2px 0 0' }}>Plays when the "Management replied" message appears.</p></div>
+        </label>
+        <label>Volume · {vol}%
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <input type="range" min="0" max="100" step="5" value={vol} style={{ flex: 1 }} onChange={e => window.SAFI_STORE.setSetting('chimeVolume', Number(e.target.value))}/>
+            <Button kind="ghost" size="sm" onClick={() => window.safiSound && window.safiSound('request')}>Test request</Button>
+            <Button kind="ghost" size="sm" onClick={() => window.safiSound && window.safiSound('reply')}>Test reply</Button>
+          </div>
+        </label>
       </div>
     </Card>
   );
 }
 
-Object.assign(window, { PeriodSummary, SettingsScreen, DispatchScreen, MessagesScreen, ApprovalsScreen, TimeSeries, renderSmsTemplate });
+Object.assign(window, { SoundsCard, PeriodSummary, SettingsScreen, DispatchScreen, MessagesScreen, ApprovalsScreen, TimeSeries, renderSmsTemplate });
 
 // ─── Washer & dryer timers (Management) ───────────────────────────────────
 // Top-level so the input keeps focus while typing; the value commits on blur / Enter.

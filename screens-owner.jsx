@@ -28,20 +28,39 @@ function MonthRevenue({ orders, money }) {
         <button onClick={() => shift(1)} disabled={isCurrent} aria-label="Next month">›</button>
       </div>
     }>
-      <div className="safi-mbars" style={{ gridTemplateColumns: `repeat(${days}, minmax(0, 1fr))` }}>
-        {data.map(d => (
-          <div key={d.key} className={`safi-mbars__col${d.key === todayKey ? ' is-today' : ''}${d.future ? ' is-future' : ''}`} title={`${d.day} ${label}: ${money(d.v)} · ${d.n} orders`}>
-            <div className="safi-mbars__track">
-              {d.v > 0 && <span className="safi-mbars__val">{d.v >= 1000 ? (d.v / 1000).toFixed(1) + 'k' : d.v}</span>}
-              <div className="safi-mbars__bar" style={{ height: `${(d.v / max) * 100}%` }}/>
-            </div>
-            <div className="safi-mbars__lbl">{d.day}</div>
-          </div>
-        ))}
-      </div>
+      <SafiChart labels={data.map(d => String(d.day))} height={230} yLabel="KES" fmt={(v) => money(v)}
+        highlight={data.findIndex(d => d.key === todayKey)}
+        series={[{ name: 'Revenue', color: 'var(--brand)', values: data.map(d => d.v) }]}/>
     </Card>
   );
 }
+
+// ─── Busiest hours: orders taken in (intake) and loads started washing, by hour ───
+function BusyHours() {
+  const D = useStore();
+  const [per, setPer] = useStateOw('week');
+  const days = per === 'today' ? 1 : per === 'week' ? 7 : 30;
+  const from = SAFI_TIME.daysAgo(days - 1);
+  const hours = Array.from({ length: 15 }, (_, i) => 7 + i);
+  const intake = hours.map(() => 0), wash = hours.map(() => 0);
+  const bump = (arr, stamp) => { const h = parseInt(String(stamp || '').slice(11, 13), 10); const i = h - 7; if (i >= 0 && i < arr.length) arr[i]++; };
+  for (const ord of D.orders) {
+    if (String(ord.in).slice(0, 10) >= from) bump(intake, ord.in);
+    const w = window.SAFI_STORE.stageTimes(ord.id).washing;
+    if (w && String(w).slice(0, 10) >= from) bump(wash, w);
+  }
+  const peak = (arr) => { const m = Math.max(...arr); return m ? `${pad2(hours[arr.indexOf(m)])}:00` : '—'; };
+  return (
+    <Card title="Busiest hours" action={
+      <div className="safi-seg">{[['today', 'Today'], ['week', '7 days'], ['month', 'Month']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${per === k ? 'is-active' : ''}`} onClick={() => setPer(k)}>{l}</button>)}</div>
+    }>
+      <SafiChart integer labels={hours.map(h => pad2(h))} height={190} yLabel="Orders" fmt={(v) => `${v} order${v === 1 ? '' : 's'}`}
+        series={[{ name: 'Intake', color: 'var(--brand)', values: intake }, { name: 'Washing started', color: '#38bdf8', values: wash }]}/>
+      <p className="safi-cell-sub" style={{ margin: '8px 0 0' }}>Peak intake {peak(intake)} · peak washing {peak(wash)}</p>
+    </Card>
+  );
+}
+const pad2 = (n) => String(n).padStart(2, '0');
 
 // ─── Average time in Washing / Holding / Drying ───────────────────────────
 function StageAverages() {
@@ -161,6 +180,16 @@ function OwnerDashboard({ lang, money, setView }) {
         <StatCard label="Expenses today" value={money(expensesToday)} deltaKind="down" delta={`${expensesTodayList.length} ${expensesTodayList.length === 1 ? 'entry' : 'entries'} today`} icon="box"/>
         <StatCard label="Total revenue" value={money(totalRevenue)} delta={`${money(totalCollected)} collected · ${money(outstanding)} unpaid`} icon="chart"/>
         <StatCard label="Total expenses" value={money(totalExpenses)} deltaKind="down" delta="all-time" icon="box"/>
+      </div>
+      <div className="safi-grid safi-grid--2 safi-profit-row">
+        <div className="safi-stat safi-stat--op">
+          <div className="safi-stat__top">
+            <div className="safi-stat__label">Operating profit</div>
+            <Icon name="chart" size={16}/>
+          </div>
+          <div className="safi-stat__value">{money(totalRevenue - D.expenses.filter(e => !window.costGroupOf || window.costGroupOf(D, e) !== 'special').reduce((s, e) => s + (e.amount || 0), 0))}</div>
+          <div className="safi-stat__delta">revenue − operational costs</div>
+        </div>
         <div className={`safi-stat safi-stat--accent`}>
           <div className="safi-stat__top">
             <div className="safi-stat__label">Net profit</div>
@@ -230,17 +259,7 @@ function OwnerDashboard({ lang, money, setView }) {
       </div>
 
       <div className="safi-grid safi-grid--3">
-        <Card title={t('busiest_hour', lang)}>
-          <div className="safi-hours">
-            {[20, 35, 48, 62, 88, 95, 72, 58, 70, 84, 91, 76, 52, 41].map((h, i) => (
-              <div key={i} className="safi-hours__col">
-                <div className="safi-hours__bar" style={{ height: `${h}%` }}/>
-                <span className="safi-hours__lbl">{8 + i}</span>
-              </div>
-            ))}
-          </div>
-          <p className="safi-cell-sub" style={{ marginTop: 8 }}>Peak: 13:00</p>
-        </Card>
+        <BusyHours/>
 
         <Card title="Loyalty & repeat">
           <div className="safi-loy-big">
@@ -282,11 +301,18 @@ function ReportsScreen({ lang, money }) {
   const cutoff = SAFI_TIME.daysAgo(periodDays - 1);
   const periodOrders = D.orders.filter(o => inRange(o.in));
   const todayRev = periodOrders.reduce((s, o) => s + (o.total || 0), 0);
-  const periodCollected = periodOrders.reduce((s, o) => s + (o.paid || 0), 0);
+  // Collected = orders handed over in this period (any intake date), at their total.
+  const collectedOrders = D.orders.filter(o => o.status === 'collected' && inRange(window.SAFI_STORE.stageTimes(o.id).collected));
+  const periodCollected = collectedOrders.reduce((s, o) => s + (o.total || 0), 0);
+  // Each service's share of the order total after discount, so services add up to revenue.
   const periodByService = D.services.map(svc => ({
     label: svc.name,
-    value: periodOrders.reduce((s, o) => s + o.items.filter(it => it.svc === svc.id).reduce((ss, it) => ss + (it.price || 0), 0), 0),
+    value: periodOrders.reduce((s, o) => { const g = o.items.reduce((x, it) => x + (it.price || 0), 0) || 1; return s + Math.round(o.items.filter(it => it.svc === svc.id).reduce((ss, it) => ss + (it.price || 0), 0) * (o.total || 0) / g); }, 0),
   })).filter(r => r.value > 0).sort((a, b) => b.value - a.value);
+  const periodExp = (D.expenses || []).filter(e => inRange(e.date));
+  const expAll = periodExp.reduce((s, e) => s + (e.amount || 0), 0);
+  const expOp = periodExp.filter(e => !window.costGroupOf || window.costGroupOf(D, e) !== 'special').reduce((s, e) => s + (e.amount || 0), 0);
+  const servedCustomers = new Set(periodOrders.map(o => o.customer).filter(Boolean)).size;
 
   const totalsByMethod = ['mpesa', 'bank'].map(m => {
     const list = D.payments.filter(p => p.method === m && inRange(p.date));
@@ -294,7 +320,9 @@ function ReportsScreen({ lang, money }) {
   });
   const totalAll = totalsByMethod.reduce((s, m) => s + m.total, 0);
   const verifiedAll = totalsByMethod.reduce((s, m) => s + m.verified, 0);
-  const mpesaPayments = D.payments.filter(p => p.method === 'mpesa' && inRange(p.date));
+  const mpesaPayments = D.payments.filter(p => inRange(p.date)).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const dmt = (s) => { const v = String(s || ''); return v.length >= 16 ? `${v.slice(8, 10)}-${v.slice(5, 7)} ${v.slice(11, 16)}` : v; };
+  const vMark = (p) => { if (!p.verified) return <span className="safi-pill safi-pill--amber">⚠ unverified</span>; const d = p.stmtAmount == null ? 0 : Math.round(p.stmtAmount - p.amount); return d === 0 ? <span className="safi-tick safi-tick--full safi-vtick"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M2.5 6.4l2.3 2.3 4.7-5" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg></span> : <span className={`safi-vres safi-vres--${d > 0 ? 'up' : 'down'}`}>{d > 0 ? '+' : '−'}{Math.abs(d).toLocaleString()}</span>; };
 
   const headerTitle = tab === 'daily' ? `Daily Close · ${new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}` :
                       tab === 'weekly' ? 'This week' : tab === 'monthly' ? 'This month' : `${from} to ${to}`;
@@ -347,7 +375,7 @@ function ReportsScreen({ lang, money }) {
             <div className="safi-report__stat">
               <div className="safi-cell-sub">Gross revenue</div>
               <div className="safi-report__big safi-mono">{money(todayRev)}</div>
-              <div className="safi-cell-sub">{money(periodCollected)} collected · {money(Math.max(0, todayRev - periodCollected))} unpaid</div>
+              <div className="safi-cell-sub">{money(periodCollected)} collected ({collectedOrders.length} orders handed over)</div>
             </div>
             <div className="safi-report__stat">
               <div className="safi-cell-sub">Orders</div>
@@ -358,9 +386,15 @@ function ReportsScreen({ lang, money }) {
               <div className="safi-report__big safi-mono">{money(periodOrders.length ? Math.round(todayRev / periodOrders.length) : 0)}</div>
             </div>
             <div className="safi-report__stat">
-              <div className="safi-cell-sub">Customers</div>
-              <div className="safi-report__big">{D.customers.length}</div>
+              <div className="safi-cell-sub">Customers served</div>
+              <div className="safi-report__big">{servedCustomers}</div>
+              <div className="safi-cell-sub">{D.customers.length} on file</div>
             </div>
+          </div>
+          <div className="safi-report__grid safi-report__grid--profit">
+            <div className="safi-report__stat"><div className="safi-cell-sub">Expenses</div><div className="safi-report__big safi-mono">{money(expAll)}</div><div className="safi-cell-sub">operational {money(expOp)} · special {money(expAll - expOp)}</div></div>
+            <div className="safi-report__stat is-op"><div className="safi-cell-sub">Operating profit</div><div className="safi-report__big safi-mono">{money(todayRev - expOp)}</div><div className="safi-cell-sub">revenue − operational costs</div></div>
+            <div className="safi-report__stat is-net"><div className="safi-cell-sub">Net profit</div><div className="safi-report__big safi-mono">{money(todayRev - expAll)}</div><div className="safi-cell-sub">revenue − all expenses</div></div>
           </div>
 
           <h4 className="safi-report__h4">Payment breakdown</h4>
@@ -389,21 +423,22 @@ function ReportsScreen({ lang, money }) {
           <h4 className="safi-report__h4">By service</h4>
           {periodByService.length ? <HBar data={periodByService}/> : <p className="safi-cell-sub">No orders in this period.</p>}
 
-          <h4 className="safi-report__h4">M-Pesa transaction codes (for audit)</h4>
+          <h4 className="safi-report__h4">M-Pesa & bank transaction codes (for audit)</h4>
           {mpesaPayments.length === 0 ? (
-            <p className="safi-cell-sub">No M-Pesa payments in this period.</p>
+            <p className="safi-cell-sub">No payments in this period.</p>
           ) : (
             <table className="safi-report__table safi-report__table--mono">
-              <thead><tr><th>Time</th><th>Code</th><th>Order</th><th>Customer</th><th>Amount</th><th>Status</th></tr></thead>
+              <thead><tr><th>Date</th><th>Method</th><th>Code</th><th>Order</th><th>Customer</th><th>Amount</th><th>Status</th></tr></thead>
               <tbody>
                 {mpesaPayments.map(p => (
                   <tr key={p.id}>
-                    <td>{p.date.slice(11)}</td>
+                    <td>{tab === 'daily' ? String(p.date).slice(11, 16) : dmt(p.date)}</td>
+                    <td><MethodBadge method={p.method}/></td>
                     <td className="safi-mono">{p.txn || '—'}</td>
                     <td className="safi-mono">{orderNo(p.order)}</td>
                     <td>{p.customer}</td>
                     <td className="safi-mono">{money(p.amount)}</td>
-                    <td>{p.verified ? <span className="safi-pill safi-pill--green"><Icon name="check" size={10}/> ok</span> : <span className="safi-pill safi-pill--amber">⚠ unverified</span>}</td>
+                    <td>{vMark(p)}</td>
                   </tr>
                 ))}
               </tbody>

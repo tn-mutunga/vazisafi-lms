@@ -300,6 +300,9 @@ window.SAFI_STORE = (() => {
     return state.orders.filter(o => String(o.in || '').startsWith(today)).length + 1;
   };
 
+  // The teller on duty is a synced setting; never read the old per-laptop copy directly.
+  const curStaff = () => (state.settings && state.settings.currentStaffId) || state.currentStaffId || '';
+
   const STAGES = ['intake', 'washing', 'drying', 'ironing', 'ready', 'collected'];
   const DC_STAGES = ['intake', 'drycleaning', 'ready', 'collected'];
   const IRON_STAGES = ['intake', 'ironing', 'ready', 'collected'];
@@ -321,7 +324,7 @@ window.SAFI_STORE = (() => {
   function audit(action, target, detail, meta) {
     state.auditLog = [{
       id: nextId('au'), at: new Date().toISOString(),
-      staff: state.currentStaffId || '', action,
+      staff: curStaff(), action,
       target: target || '', detail: detail || '', meta: meta || null,
     }, ...state.auditLog].slice(0, 5000);
   }
@@ -361,7 +364,7 @@ window.SAFI_STORE = (() => {
     openShift({ staffId, openingFloat }) {
       if (this.getOpenShift()) return null;
       const sh = {
-        id: nextId('sh'), staff: staffId || state.currentStaffId || '',
+        id: nextId('sh'), staff: staffId || curStaff(),
         openedAt: new Date().toISOString(), openedAtLabel: stamp(),
         openingFloat: Math.round(openingFloat || 0),
         closedAt: '', declaredCash: 0, expectedCash: 0, variance: 0, note: '',
@@ -408,7 +411,7 @@ window.SAFI_STORE = (() => {
     voidTag(tag, reason) {
       state.voidTags = [...(state.voidTags || []), {
         tag: String(tag), reason: reason || '', at: new Date().toISOString(),
-        staff: state.currentStaffId || '',
+        staff: curStaff(),
       }];
       audit('tag.void', String(tag), reason || '');
       save();
@@ -442,7 +445,7 @@ window.SAFI_STORE = (() => {
         rider: d?.rider || '', amountDue: due, tag: order.tag || '',
         queueNo: order.queueNo || null,
         issuedAt: new Date().toISOString(), issuedAtLabel: stamp(),
-        issuedBy: state.currentStaffId || '',
+        issuedBy: curStaff(),
         returnedAt: '', returnedBy: '', receivedAmount: 0,
         receivedMethod: '', receivedTxn: '', note: '',
       };
@@ -460,7 +463,7 @@ window.SAFI_STORE = (() => {
       const next = {
         ...card,
         returnedAt: new Date().toISOString(), returnedAtLabel: stamp(),
-        returnedBy: state.currentStaffId || '',
+        returnedBy: curStaff(),
         receivedAmount: Math.round(receivedAmount || 0),
         receivedMethod: receivedMethod || '',
         receivedTxn: receivedTxn || '',
@@ -479,7 +482,7 @@ window.SAFI_STORE = (() => {
       state.releases = [{
         id: nextId('rl'), at: new Date().toISOString(), atLabel: stamp(),
         order: orderId, tag: tag || '', releasedTo: releasedTo || '',
-        staff: state.currentStaffId || '',
+        staff: curStaff(),
         balanceAtRelease: Math.round(balanceAtRelease || 0),
       }, ...state.releases];
       audit('order.release', orderId, `To ${releasedTo || 'customer'}${balanceAtRelease > 0 ? `, balance ${balanceAtRelease} outstanding` : ''}`);
@@ -553,7 +556,19 @@ window.SAFI_STORE = (() => {
 
     // ── Active attendant ───────────────────────────────────
     // Saved in settings so it syncs: set Lydia at the shop and every laptop shows Lydia.
-    setCurrentStaff(id) { state.currentStaffId = id; state.settings = { ...(state.settings || {}), currentStaffId: id }; save(); },
+    setCurrentStaff(id) {
+      state.currentStaffId = id; state.settings = { ...(state.settings || {}), currentStaffId: id }; save();
+      // Send it to the cloud now, not at the next 5-minute sync.
+      setTimeout(() => { try { window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && window.SAFI_CLOUD.syncNow().catch(() => {}); } catch (e) {} }, 300);
+    },
+    // Applied when another laptop changes the teller.
+    applyRemoteStaff(id) {
+      if (!id || (state.settings || {}).currentStaffId === id) return false;
+      state.currentStaffId = id; state.settings = { ...(state.settings || {}), currentStaffId: id };
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+      listeners.forEach(fn => fn(state));
+      return true;
+    },
     getCurrentStaff() {
       const id = (state.settings && state.settings.currentStaffId) || state.currentStaffId || state.staff[0]?.id;
       return state.staff.find(s => s.id === id) || state.staff[0] || { name: 'Attendant', role: '—' };
@@ -661,7 +676,7 @@ window.SAFI_STORE = (() => {
         );
       }
       // Tag who took the order
-      if (state.currentStaffId) order.cashier = state.currentStaffId;
+      if (curStaff()) order.cashier = curStaff();
       order.priceModel = (state.settings || {}).activePriceModel || 'current';
       { const cu = state.customers.find(c => c.id === customerId); if (window.SAFI_PRICING && window.SAFI_PRICING.studentDayLive() && cu && cu.group === 'student') order.priceModel = 'student-thursday'; }
       audit('order.create', id, `${finalItems.length} line(s), total ${order.total}`, { tag: order.tag || '' });
@@ -772,7 +787,7 @@ window.SAFI_STORE = (() => {
         reason: reason || '',
         payload: payload || null,
         status: 'pending',
-        requestedBy: state.currentStaffId || '',
+        requestedBy: curStaff(),
         requestedAt: fmt,
         decidedBy: '', decidedAt: '', decisionNote: '',
       };
@@ -789,7 +804,7 @@ window.SAFI_STORE = (() => {
       if (!ap) return;
       ap.status = decision;
       ap.decidedAt = fmt;
-      ap.decidedBy = state.currentStaffId || '';
+      ap.decidedBy = curStaff();
       ap.decisionNote = note || '';
       if (decision === 'approved') {
         if (ap.action === 'delete_order')      this.deleteOrder(ap.target);
@@ -888,10 +903,23 @@ window.SAFI_STORE = (() => {
       save();
       return p;
     },
-    verifyPayment(id) {
+    verifyPayment(id, opts = {}) {
       const p = state.payments.find(x => x.id === id);
-      state.payments = state.payments.map(x => x.id === id ? { ...x, verified: true } : x);
+      state.payments = state.payments.map(x => x.id === id ? { ...x, verified: true,
+        stmtAmount: opts.stmtAmount != null ? Math.round(opts.stmtAmount) : x.stmtAmount,
+        verifiedBy: opts.manual ? 'manual' : (opts.stmtAmount != null ? 'statement' : (x.verifiedBy || '')) } : x);
       audit('payment.verify', p?.order || id, `${p?.method || ''} ${p?.amount || ''}`);
+      save();
+    },
+
+    // Correct a wrongly-picked method (M-Pesa ↔ Bank) before verification. Order follows.
+    setPaymentMethod(id, method) {
+      const p = state.payments.find(x => x.id === id);
+      if (!p || p.verified) return;
+      state.payments = state.payments.map(x => x.id === id ? { ...x, method } : x);
+      const last = state.payments.filter(x => x.order === p.order).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+      if (last) state.orders = state.orders.map(o => o.id === p.order ? { ...o, method: last.method } : o);
+      audit('payment.method', p.order, `${p.method} → ${method}`);
       save();
     },
 
@@ -902,7 +930,7 @@ window.SAFI_STORE = (() => {
       const e = {
         id: nextId('ex'), date: fmt, category, label,
         amount: Math.round(amount), method: method || 'cash',
-        txn: txn || '', paidBy: paidBy || state.currentStaffId || '',
+        txn: txn || '', paidBy: paidBy || curStaff(),
         notes: notes || '',
         linkedOrder: linkedOrder || '',
         linkedCustomer: linkedCustomer || '',

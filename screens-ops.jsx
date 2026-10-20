@@ -292,8 +292,11 @@ function CustomerTypeahead({ value, onChange }) {
 // Distinct clients per service for today's orders (walk-ins count once per order).
 function ServiceClientsToday() {
   const D = useStore();
-  const today = opsDay();
-  const orders = D.orders.filter(o => String(o.in || '').slice(0, 10) === today);
+  const [period, setPeriod] = useStateOps('today');
+  const days = { today: 1, week: 7, month: 30, year: 365 }[period];
+  const d0 = new Date(); d0.setDate(d0.getDate() - (days - 1));
+  const from = opsDay(d0);
+  const orders = D.orders.filter(o => String(o.in || '').slice(0, 10) >= from);
   const per = {};
   for (const o of orders) for (const it of o.items || []) {
     const set = per[it.svc] = per[it.svc] || new Set();
@@ -303,12 +306,12 @@ function ServiceClientsToday() {
   const rows = D.services.map(s => ({ s, n: per[s.id] ? per[s.id].size : 0 })).filter(r => r.n > 0).sort((a, b) => b.n - a.n);
   const sd = window.SAFI_PRICING && window.SAFI_PRICING.studentDayLive();
   return (
-    <Card title={`Clients by service · today`} action={<span className="safi-cell-sub">{all.size} client{all.size === 1 ? '' : 's'} in total{sd ? ' · Student Thursday is on' : ''}</span>} className="safi-svcday-card">
+    <Card title={`Clients by service · ${{ today: 'today', week: 'last 7 days', month: 'last 30 days', year: 'last 12 months' }[period]}`} action={<div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span className="safi-cell-sub">{all.size} client{all.size === 1 ? '' : 's'}{sd ? ' · Student Thursday is on' : ''}</span><div className="safi-seg">{[['today', 'Today'], ['week', '7 days'], ['month', 'Month'], ['year', 'Year']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${period === k ? 'is-active' : ''}`} onClick={() => setPeriod(k)}>{l}</button>)}</div></div>} className="safi-svcday-card">
       {rows.length ? (
         <div className="safi-svcday">
           {rows.map(({ s, n }) => <div key={s.id} className="safi-svcday__c"><span className="safi-svcday__n">{n}</span><span className="safi-svcday__l">{s.name}</span></div>)}
         </div>
-      ) : <p className="safi-cell-sub" style={{ margin: 0 }}>No orders yet today.</p>}
+      ) : <p className="safi-cell-sub" style={{ margin: 0 }}>No orders in this period.</p>}
     </Card>
   );
 }

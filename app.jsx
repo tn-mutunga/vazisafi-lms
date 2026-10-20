@@ -19,6 +19,49 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "ownerPin": "123456"
 }/*EDITMODE-END*/;
 
+// Chimes (offline, generated). Volume 0–100 from Settings → Sounds.
+function safiSound(kind) {
+  try {
+    const st = window.SAFI_STORE.get().settings || {};
+    const vol = Math.max(0, Math.min(100, st.chimeVolume == null ? 70 : Number(st.chimeVolume))) / 100;
+    if (!vol) return;
+    const Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+    const ctx = safiSound.ctx = safiSound.ctx || new Ctx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const notes = kind === 'request' ? [784, 988, 1175, 988, 1175] : [988, 784, 1175];
+    notes.forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + i * 0.2;
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.45 * vol + 0.0001, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.2);
+    });
+  } catch (e) {}
+}
+window.safiSound = safiSound;
+
+// Management: chime when a new request for approval arrives (and every 2 minutes while any is waiting).
+function ApprovalChime({ role }) {
+  const D = useStore();
+  const st = D.settings || {};
+  const pending = (D.approvals || []).filter(a => a.status === 'pending').map(a => a.id);
+  const key = pending.join(',');
+  const prev = React.useRef(null);
+  // Plays in Management, and on any laptop where "this laptop" was ticked in Settings → Sounds.
+  const here = role === 'owner' || localStorage.getItem('safi_request_chime_here') === '1';
+  useAppEffect(() => {
+    if (prev.current === null) { prev.current = pending; return; }
+    const isNew = pending.some(id => !prev.current.includes(id));
+    prev.current = pending;
+    if (isNew && st.approvalChime !== false && here) safiSound('request');
+  }, [key]);
+  useAppEffect(() => {
+    if (!pending.length || st.approvalChime === false || !here) return;
+    const t = setInterval(() => safiSound('request'), 120000);
+    return () => clearInterval(t);
+  }, [key, here, st.approvalChime]);
+  return null;
+}
+
 // Front Desk: shows Management's decisions on requests this laptop hasn't seen yet.
 function DecisionNotice() {
   const D = useStore();
@@ -26,11 +69,21 @@ function DecisionNotice() {
   const [seen, setSeen] = useAppState(() => { try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch (e) { return null; } });
   // First run: treat everything already decided as seen, so old decisions don't pop up.
   useAppEffect(() => { if (seen === null) { const ids = (D.approvals || []).filter(a => a.status !== 'pending').map(a => a.id); localStorage.setItem(KEY, JSON.stringify(ids)); setSeen(ids); } }, [seen]);
+  const acks = ((D.settings || {}).approvalAcks) || {};
+  // Front desk chime when Management replies.
+  const freshIds = (D.approvals || []).filter(a => a.status !== 'pending' && seen && !seen.includes(a.id) && !acks[a.id]).map(a => a.id).join(',');
+  useAppEffect(() => { if (freshIds && (D.settings || {}).replyChime !== false) safiSound('reply'); }, [freshIds]);
   if (seen === null) return null;
-  const fresh = (D.approvals || []).filter(a => a.status !== 'pending' && !seen.includes(a.id));
+  // Hidden once any laptop pressed OK (acknowledgement is synced).
+  const fresh = (D.approvals || []).filter(a => a.status !== 'pending' && !seen.includes(a.id) && !acks[a.id]);
   if (!fresh.length) return null;
   const label = { delete_order: 'Delete order', rewash_order: 'Rewash', edit_order: 'Edit order', refund_order: 'Refund', reprint_receipt: 'Receipt reprint' };
-  const dismiss = () => { const ids = [...seen, ...fresh.map(a => a.id)]; localStorage.setItem(KEY, JSON.stringify(ids)); setSeen(ids); };
+  const dismiss = () => {
+    const ids = [...seen, ...fresh.map(a => a.id)]; localStorage.setItem(KEY, JSON.stringify(ids)); setSeen(ids);
+    const next = { ...acks }; const at = SAFI_TIME.stamp(); fresh.forEach(x => { next[x.id] = at; });
+    window.SAFI_STORE.setSetting('approvalAcks', next);
+    setTimeout(() => { try { window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && window.SAFI_CLOUD.syncNow().catch(() => {}); } catch (e) {} }, 300);
+  };
   return (
     <div className="safi-decision">
       <div className="safi-decision__hd"><Icon name="bell" size={16}/><b>Management replied to {fresh.length} request{fresh.length > 1 ? 's' : ''}</b></div>
@@ -158,6 +211,7 @@ function App() {
       <ToastHost/>
       <PinConfirmHost/>
       {role === 'frontdesk' && <DecisionNotice/>}
+      <ApprovalChime role={role}/>
 
       <Modal open={pinPrompt} onClose={() => setPinPrompt(false)} title="Enter Owner PIN" width={360}
         footer={<>

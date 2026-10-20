@@ -433,4 +433,4 @@ function exportExpensesCSV(expenses, cats) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-Object.assign(window, { ExpensesScreen, CategoryManager });
+Object.assign(window, { ExpensesScreen, CategoryManager, costGroupOf });
