@@ -185,6 +185,7 @@ function App() {
         case 'packages':   return <PackagesScreen {...props}/>;
         case 'inventory':  return <InventoryScreen {...props}/>;
         case 'staff':      return <StaffScreen {...props}/>;
+        case 'payroll':    return <PayrollScreen {...props}/>;
         case 'issues':     return <IssuesScreen {...props}/>;
         case 'expenses':   return <ExpensesScreen {...props} role="owner"/>;
         case 'dispatch':   return <DispatchScreen {...props}/>;

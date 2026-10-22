@@ -794,6 +794,7 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
 function TimeSeries({ money }) {
   const D = useStore();
   const [granularity, setGranularity] = useStateX('month'); // 'day' | 'month' | 'year'
+  const [expMode, setExpMode] = useStateX('total'); // 'total' | 'op' — which expenses the chart shows
   const now = new Date();
   const [monthYear, setMonthYear] = useStateX(now.getFullYear());
   const years = [0, 1, 2, 3, 4].map(i => now.getFullYear() - i);
@@ -859,6 +860,10 @@ function TimeSeries({ money }) {
             {years.map(y => <option key={y} value={y}>{y === now.getFullYear() ? 'Last 12 months' : y}</option>)}
           </select>
         )}
+        <div className="safi-seg" title="Which expenses to show">
+          <button className={`safi-seg__btn ${expMode === 'total' ? 'is-active' : ''}`} onClick={() => setExpMode('total')}>Total expenses</button>
+          <button className={`safi-seg__btn ${expMode === 'op' ? 'is-active' : ''}`} onClick={() => setExpMode('op')}>Operational</button>
+        </div>
         <div className="safi-seg">
           <button className={`safi-seg__btn ${granularity === 'day' ? 'is-active' : ''}`} onClick={() => setGranularity('day')}>Daily</button>
           <button className={`safi-seg__btn ${granularity === 'month' ? 'is-active' : ''}`} onClick={() => setGranularity('month')}>Monthly</button>
@@ -872,8 +877,8 @@ function TimeSeries({ money }) {
           <span className="safi-ts-totals__val safi-mono">{money(totalRev)}</span>
         </div>
         <div className="safi-ts-totals__item safi-ts-totals__item--exp">
-          <span className="safi-ts-totals__lbl">Expenses</span>
-          <span className="safi-ts-totals__val safi-mono">— {money(totalExp)}</span>
+          <span className="safi-ts-totals__lbl">{expMode === 'op' ? 'Operational expenses' : 'Total expenses'}</span>
+          <span className="safi-ts-totals__val safi-mono">— {money(expMode === 'op' ? totalRev - totalOpProfit : totalExp)}</span>
         </div>
         <div className="safi-ts-totals__item safi-ts-totals__item--op">
           <span className="safi-ts-totals__lbl">Operating profit</span>
@@ -886,7 +891,7 @@ function TimeSeries({ money }) {
       </div>
 
       <SafiChart labels={points.map(p => p.label)} height={260} yLabel="KES" fmt={money} sparseLabels
-        series={[{ name: 'Revenue', color: 'var(--brand)', values: points.map(p => p.rev) }, { name: 'Expenses', color: 'var(--amber)', values: points.map(p => p.exp) }]}/>
+        series={[{ name: 'Revenue', color: 'var(--brand)', values: points.map(p => p.rev) }, { name: expMode === 'op' ? 'Operational expenses' : 'Expenses', color: 'var(--amber)', values: points.map(p => expMode === 'op' ? (p.op || 0) : p.exp) }]}/>
     </Card>
   );
 }

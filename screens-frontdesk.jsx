@@ -2133,19 +2133,43 @@ async function statementText(file) {
 function parseStatementEntries(text) {
   const T = String(text || '').toUpperCase().replace(/\s+/g, ' ');
   const out = {};
+  // Money like 1,302.00 or 1302.00, never part of a date such as 21.10.2026.
+  const AMT = /(?<![\d.,])(\d{1,3}(?:,\d{3})+|\d+)\.\d{2}(?![\d.])/g;
+  const DATE = /\b\d{2}[./-]\d{2}[./-]20\d{2}\b|\b20\d{2}-\d{2}-\d{2}\b/g;
+  const amts = (str) => (str.match(AMT) || []).map(a => parseFloat(a.replace(/,/g, ''))).filter(n => n > 0);
   const re = /\b([A-Z0-9]{8,14})\b/g; let m;
   while ((m = re.exec(T))) {
     const code = m[1];
     if (!/\d/.test(code) || !/[A-Z]/.test(code)) continue;
-    const ahead = T.slice(m.index, m.index + 160);
-    const am = ahead.match(/(\d{1,3}(?:,\d{3})+|\d+)\.\d{2}/);
-    if (!am) continue;
-    const amount = parseFloat(am[0].replace(/,/g, ''));
+    // M-Pesa statements: "Receipt No. | 2026-10-21 14:05:12 | Details | Completed | Paid In | Withdrawn | Balance".
+    // The code is followed straight away by its date; read only that row's amounts (Paid In first).
+    const rest = T.slice(m.index + code.length);
+    if (/^ ?20\d{2}-\d{2}-\d{2}/.test(rest)) {
+      const nx = rest.slice(1).search(/\b[A-Z0-9]{8,12} 20\d{2}-\d{2}-\d{2}/);
+      const seg = rest.slice(0, nx > 0 ? nx + 1 : 400);
+      const list = amts(seg);
+      if (list.length && !out[code]) {
+        const dd = seg.match(/(20\d{2})-(\d{2})-(\d{2})/);
+        out[code] = { code, amount: list[0], date: dd ? `${dd[1]}-${dd[2]}-${dd[3]}` : '', cands: list.slice(0, 2) };
+      }
+      continue;
+    }
+    // Bank statements put the amounts BEFORE the code (… 21.10.2026 PAYBILL CREDIT 0.00 1,302.00 169,514.99 UJKQJB42CZ …).
+    const back = T.slice(Math.max(0, m.index - 240), m.index);
+    let lastDate = -1; let dm; DATE.lastIndex = 0; while ((dm = DATE.exec(back))) lastDate = dm.index + dm[0].length;
+    const behind = lastDate >= 0 ? amts(back.slice(lastDate)) : [];
+    // M-Pesa statements put them AFTER the code.
+    const ahead = amts(T.slice(m.index + code.length, m.index + 160));
+    let amount = 0;
+    if (behind.length >= 2) amount = behind[0];
+    else if (behind.length === 1 && !ahead.length) amount = behind[0];
+    else if (ahead.length) amount = ahead[0];
+    else if (behind.length) amount = behind[0];
     if (!amount) continue;
-    const around = T.slice(Math.max(0, m.index - 60), m.index + 160);
-    const d1 = around.match(/(20\d{2})-(\d{2})-(\d{2})/), d2 = around.match(/(\d{2})\/(\d{2})\/(20\d{2})/);
+    const around = T.slice(Math.max(0, m.index - 240), m.index + 160);
+    const d1 = around.match(/(20\d{2})-(\d{2})-(\d{2})/), d2 = around.match(/(\d{2})[\/.](\d{2})[\/.](20\d{2})/);
     const date = d1 ? `${d1[1]}-${d1[2]}-${d1[3]}` : d2 ? `${d2[3]}-${d2[2]}-${d2[1]}` : '';
-    if (!out[code]) out[code] = { code, amount, date };
+    if (!out[code]) out[code] = { code, amount, date, cands: behind.length >= 2 ? behind : [...new Set([...behind, ...ahead])] };
   }
   return out;
 }
@@ -2230,45 +2254,85 @@ function StatementReconcile() {
   const ref = useRefFD(null);
   const [busy, setBusy] = useStateFD(false);
   const [report, setReport] = useStateFD(null);
+  const [pinAsk, setPinAsk] = useStateFD(null);   // { files, text, seen } waiting for PIN
+  const [rPin, setRPin] = useStateFD('');
+  const fpOf = (t) => { let h = 5381; const s = String(t).replace(/\s+/g, ' '); for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return 'st' + (h >>> 0).toString(36) + s.length.toString(36); };
   async function onFiles(files) {
     if (!files || !files.length) return;
     setBusy(true);
     try {
       let text = '';
       for (const fl of files) text += '\n' + await statementText(fl);
+      // A statement that was already uploaded can be checked again only with the Management PIN.
+      const fp = fpOf(text);
+      const seen = ((D.settings || {}).stmtUploads || {})[fp];
+      if (seen) { setBusy(false); setRPin(''); setPinAsk({ files: [...files].map(x => x.name), text, seen, fp }); return; }
+      runCheck([...files].map(x => x.name), text, fp, false);
+    } catch (e) { toast(e.message || 'Could not read the statement', 'error'); }
+    setBusy(false);
+  }
+  function runCheck(fileNames, text, fp, again) {
+    try {
       // Code-like words: 5+ letters/digits with at least one digit and one letter.
       const words = new Set((text.toUpperCase().match(/[A-Z0-9]{5,}/g) || []).filter(w => /\d/.test(w) && /[A-Z]/.test(w)));
       const tails = new Set([...words].map(w => w.slice(-5)));
-      const pending = (D.payments || []).filter(p => !p.verified && String(p.txn || '').replace(/\s/g, '').length >= 5);
-      const matched = [], missed = [];
+      // Also re-check payments already verified from a statement, so a re-upload corrects their amount.
+      const pending = (D.payments || []).filter(p => String(p.txn || '').replace(/\s/g, '').length >= 5);
+      const matched = [], already = [], missed = [];
       const ents = parseStatementEntries(text);
       for (const p of pending) {
         const code = String(p.txn).toUpperCase().replace(/[^A-Z0-9]/g, '');
         if (words.has(code) || tails.has(code.slice(-5))) {
           const hit = ents[code] || Object.values(ents).find(e => e.code.slice(-5) === code.slice(-5));
-          window.SAFI_STORE.verifyPayment(p.id, { stmtAmount: hit ? hit.amount : null });
-          matched.push(p);
-        } else missed.push(p);
+          // If the recorded amount appears in that statement row, it matches exactly.
+          const amt = hit ? ((hit.cands || []).some(c => Math.round(c) === Math.round(p.amount)) ? p.amount : hit.amount) : null;
+          if (p.verified) {
+            // Already verified: keep it, refresh the statement amount (PIN given on a repeat upload).
+            if (p.verifiedBy !== 'manual' && amt != null) window.SAFI_STORE.verifyPayment(p.id, { stmtAmount: amt });
+            already.push({ ...p, stmtAmount: amt != null ? amt : p.stmtAmount });
+          } else {
+            window.SAFI_STORE.verifyPayment(p.id, { stmtAmount: amt });
+            matched.push({ ...p, stmtAmount: amt });
+          }
+        } else if (!p.verified) missed.push(p);
       }
-      saveStatementEntries(text, [...files].map(x => x.name).join(', '));
-      setReport({ files: [...files].map(x => x.name), words: words.size, matched, missed });
-      toast(matched.length ? `${matched.length} payment${matched.length > 1 ? 's' : ''} verified` : 'No matching codes found', matched.length ? 'success' : 'error');
+      saveStatementEntries(text, fileNames.join(', '));
+      const ups = { ...((window.SAFI_STORE.get().settings || {}).stmtUploads || {}) };
+      const prev = ups[fp];
+      ups[fp] = { name: fileNames.join(', '), first: prev ? prev.first : SAFI_TIME.stamp(), last: SAFI_TIME.stamp(), times: (prev ? prev.times : 0) + 1 };
+      window.SAFI_STORE.setSetting('stmtUploads', ups);
+      setReport({ files: fileNames, words: words.size, matched, already, missed, again });
+      toast(matched.length ? `${matched.length} payment${matched.length > 1 ? 's' : ''} verified` : already.length ? `${already.length} already verified` : 'No matching codes found', matched.length || already.length ? 'success' : 'error');
     } catch (e) { toast(e.message || 'Could not read the statement', 'error'); }
-    setBusy(false);
   }
-  const row = (p) => <tr key={p.id}><td className="safi-mono">{orderNo(p.order)}</td><td>{p.customer || '—'}</td><td>{p.method === 'mpesa' ? 'M-Pesa' : p.method === 'bank' ? 'Bank' : p.method}</td><td className="safi-mono">{p.txn}</td><td className="safi-mono">KES {Number(p.amount || 0).toLocaleString()}</td></tr>;
+  const diffCell = (p) => { if (p.stmtAmount == null) return <span className="safi-cell-sub">—</span>; const d = Math.round(p.stmtAmount - p.amount); return d === 0 ? <span className="safi-tick safi-tick--full safi-vtick"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M2.5 6.4l2.3 2.3 4.7-5" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg></span> : <span className={`safi-vres safi-vres--${d > 0 ? 'up' : 'down'}`}>{d > 0 ? '+' : '−'}{Math.abs(d).toLocaleString()}</span>; };
+  const row = (p) => <tr key={p.id}><td className="safi-mono">{orderNo(p.order)}</td><td>{p.customer || '—'}</td><td>{p.method === 'mpesa' ? 'M-Pesa' : p.method === 'bank' ? 'Bank' : p.method}</td><td className="safi-mono">{p.txn}</td><td className="safi-mono">KES {Number(p.amount || 0).toLocaleString()}</td><td className="safi-mono">{p.stmtAmount != null ? Number(p.stmtAmount).toLocaleString() : '—'}</td><td>{diffCell(p)}</td></tr>;
+  const TH = <thead><tr><th>Order</th><th>Customer</th><th>Method</th><th>Code</th><th>Amount</th><th>Statement</th><th></th></tr></thead>;
   return (
     <>
       <input ref={ref} type="file" accept=".pdf,.csv,.txt" multiple style={{ display: 'none' }} onChange={e => { onFiles(e.target.files); e.target.value = ''; }}/>
       <Button kind="primary" icon="check" onClick={() => ref.current && ref.current.click()} disabled={busy}>{busy ? 'Reading statement…' : 'Upload statement & verify'}</Button>
-      <Modal open={!!report} onClose={() => setReport(null)} title="Statement check" width={720}
+      <Modal open={!!pinAsk} onClose={() => setPinAsk(null)} title="This statement was uploaded before" width={440}
+        footer={<><Button kind="ghost" onClick={() => setPinAsk(null)}>Cancel</Button><Button kind="primary" icon="lock" onClick={() => {
+          if (window.__safiOwnerPin && String(rPin) !== String(window.__safiOwnerPin)) { toast('Wrong Management PIN', 'error'); return; }
+          const a = pinAsk; setPinAsk(null); runCheck(a.files, a.text, a.fp, true);
+        }}>Check again</Button></>}>
+        {pinAsk && <div className="safi-form">
+          <p className="safi-cell-sub" style={{ margin: 0 }}><b>{pinAsk.seen.name}</b> was first uploaded {pinAsk.seen.first}{pinAsk.seen.times > 1 ? ` and checked ${pinAsk.seen.times} times` : ''}. Checking it again refreshes the statement amounts on verified payments.</p>
+          <MgmtPinField value={rPin} onChange={setRPin}/>
+        </div>}
+      </Modal>
+      <Modal open={!!report} onClose={() => setReport(null)} title="Statement check" width={820}
         footer={<Button kind="primary" onClick={() => setReport(null)}>Done</Button>}>
         {report && <div className="safi-form">
           <p className="safi-cell-sub" style={{ margin: 0 }}>Read {report.files.join(', ')} · {report.words} codes found in the statement.</p>
+          {report.again && <div className="safi-callout"><Icon name="lock" size={14}/><span>Repeat upload (approved with PIN). Statement amounts on already-verified payments were refreshed.</span></div>}
           <h4 className="safi-section-h">Verified now ({report.matched.length})</h4>
-          {report.matched.length ? <table className="safi-approval-items"><thead><tr><th>Order</th><th>Customer</th><th>Method</th><th>Code</th><th>Amount</th></tr></thead><tbody>{report.matched.map(row)}</tbody></table> : <p className="safi-cell-sub">None.</p>}
+          {report.matched.length ? <table className="safi-approval-items">{TH}<tbody>{report.matched.map(row)}</tbody></table> : <p className="safi-cell-sub">None new.</p>}
+          <h4 className="safi-section-h">Already verified · found on this statement ({report.already.length})</h4>
+          {report.already.length ? <table className="safi-approval-items">{TH}<tbody>{report.already.map(row)}</tbody></table> : <p className="safi-cell-sub">None.</p>}
           <h4 className="safi-section-h">Still unverified ({report.missed.length})</h4>
-          {report.missed.length ? <table className="safi-approval-items"><thead><tr><th>Order</th><th>Customer</th><th>Method</th><th>Code</th><th>Amount</th></tr></thead><tbody>{report.missed.map(row)}</tbody></table> : <p className="safi-cell-sub">Everything with a code is verified.</p>}
+          {report.missed.length ? <table className="safi-approval-items">{TH}<tbody>{report.missed.map(row)}</tbody></table> : <p className="safi-cell-sub">Everything with a code is verified.</p>}
           <p className="safi-hint">Not found usually means the payment is in a different month's statement, the code was typed wrongly, or it went to another account. Cash payments are checked by hand.</p>
         </div>}
       </Modal>

@@ -17,7 +17,7 @@ const shortNum = (v) => {
   return String(Math.round(v));
 };
 
-function SafiChart({ labels, series, height = 240, fmt, yLabel, highlight, sparseLabels, integer }) {
+function SafiChart({ labels, series, height = 240, fmt, yLabel, highlight, sparseLabels, integer, area, labelEvery }) {
   const [hover, setHover] = useStateCh(null);
   const max = Math.max(0, ...series.flatMap(s => s.values));
   let { top, step } = niceScale(max);
@@ -25,7 +25,11 @@ function SafiChart({ labels, series, height = 240, fmt, yLabel, highlight, spars
   const ticks = []; for (let v = 0; v <= top + 1e-9; v += step) ticks.push(v);
   const f = fmt || ((v) => Math.round(v).toLocaleString('en-KE'));
   const n = labels.length;
-  const every = sparseLabels ? Math.ceil(n / 16) : 1;
+  const every = labelEvery || (sparseLabels ? Math.ceil(n / 16) : 1);
+  // Area mode: smooth translucent layers drawn in a 0–100 box, so colours show through each other.
+  const pt = (v, i) => [n > 1 ? (i / (n - 1)) * 100 : 50, 100 - (v / top) * 100];
+  const areaPath = (vals) => { const p = vals.map(pt); let d = `M${p[0][0]},100 L${p[0][0]},${p[0][1]}`; for (let i = 1; i < p.length; i++) { const [x0, y0] = p[i - 1], [x1, y1] = p[i], cx = (x0 + x1) / 2; d += ` C${cx},${y0} ${cx},${y1} ${x1},${y1}`; } return d + ` L${p[p.length - 1][0]},100 Z`; };
+  const linePath = (vals) => { const p = vals.map(pt); let d = `M${p[0][0]},${p[0][1]}`; for (let i = 1; i < p.length; i++) { const [x0, y0] = p[i - 1], [x1, y1] = p[i], cx = (x0 + x1) / 2; d += ` C${cx},${y0} ${cx},${y1} ${x1},${y1}`; } return d; };
   return (
     <div className="safi-ch" style={{ '--ch-h': height + 'px' }}>
       {yLabel && <div className="safi-ch__ylabel">{yLabel}</div>}
@@ -34,11 +38,18 @@ function SafiChart({ labels, series, height = 240, fmt, yLabel, highlight, spars
       </div>
       <div className="safi-ch__plot" onMouseLeave={() => setHover(null)}>
         {ticks.map(v => <i key={v} className="safi-ch__grid" style={{ bottom: `${(v / top) * 100}%` }}/>)}
-        <div className="safi-ch__bars" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
+        {area && n > 0 && (
+          <svg className="safi-ch__area" viewBox="0 0 100 100" preserveAspectRatio="none">
+            {series.map(s => <path key={s.name + 'a'} d={areaPath(s.values)} fill={s.color} fillOpacity="0.28"/>)}
+            {series.map(s => <path key={s.name + 'l'} d={linePath(s.values)} fill="none" stroke={s.color} strokeWidth="2" vectorEffect="non-scaling-stroke"/>)}
+            {hover != null && <line x1={pt(0, hover)[0]} x2={pt(0, hover)[0]} y1="0" y2="100" stroke="var(--ink-3)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke"/>}
+          </svg>
+        )}
+        <div className={`safi-ch__bars${area ? ' is-area' : ''}`} style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
           {labels.map((lb, i) => (
             <div key={i} className={`safi-ch__col${hover === i ? ' is-hover' : ''}${highlight === i ? ' is-hl' : ''}`} onMouseEnter={() => setHover(i)} onClick={() => setHover(i)}>
               <div className="safi-ch__grp">
-                {series.map(s => <div key={s.name} className="safi-ch__bar" style={{ height: `${(s.values[i] / top) * 100}%`, background: s.color }}/>)}
+                {!area && series.map(s => <div key={s.name} className="safi-ch__bar" style={{ height: `${(s.values[i] / top) * 100}%`, background: s.color }}/>)}
               </div>
               {hover === i && (
                 <div className={`safi-ch__tip${i > n * 0.66 ? ' is-left' : i < n * 0.2 ? ' is-right' : ''}`}>

@@ -43,18 +43,21 @@ function BusyHours() {
   const from = SAFI_TIME.daysAgo(days - 1);
   const hours = Array.from({ length: 15 }, (_, i) => 7 + i);
   const intake = hours.map(() => 0), wash = hours.map(() => 0);
-  const bump = (arr, stamp) => { const h = parseInt(String(stamp || '').slice(11, 13), 10); const i = h - 7; if (i >= 0 && i < arr.length) arr[i]++; };
+  const hourOf = (stamp) => { const m = String(stamp || '').match(/[ T](\d{1,2}):\d{2}/); if (m) return parseInt(m[1], 10); const d = new Date(stamp); return isNaN(d) ? -1 : d.getHours(); };
+  const dayOf = (stamp) => { const s = String(stamp || ''); if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10); const d = new Date(s); return isNaN(d) ? '' : SAFI_TIME.day(d); };
+  const bump = (arr, stamp) => { const i = hourOf(stamp) - 7; if (i >= 0 && i < arr.length) arr[i]++; };
   for (const ord of D.orders) {
-    if (String(ord.in).slice(0, 10) >= from) bump(intake, ord.in);
+    const inAt = window.SAFI_STORE.stageTimes(ord.id).intake || ord.in;
+    if (dayOf(inAt) >= from) bump(intake, inAt);
     const w = window.SAFI_STORE.stageTimes(ord.id).washing;
-    if (w && String(w).slice(0, 10) >= from) bump(wash, w);
+    if (w && dayOf(w) >= from) bump(wash, w);
   }
   const peak = (arr) => { const m = Math.max(...arr); return m ? `${pad2(hours[arr.indexOf(m)])}:00` : '—'; };
   return (
     <Card title="Busiest hours" action={
       <div className="safi-seg">{[['today', 'Today'], ['week', '7 days'], ['month', 'Month']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${per === k ? 'is-active' : ''}`} onClick={() => setPer(k)}>{l}</button>)}</div>
     }>
-      <SafiChart integer labels={hours.map(h => pad2(h))} height={190} yLabel="Orders" fmt={(v) => `${v} order${v === 1 ? '' : 's'}`}
+      <SafiChart integer area labelEvery={3} labels={hours.map(h => `${pad2(h)}:00`)} height={190} yLabel="Orders" fmt={(v) => `${v} order${v === 1 ? '' : 's'}`}
         series={[{ name: 'Intake', color: 'var(--brand)', values: intake }, { name: 'Washing started', color: '#38bdf8', values: wash }]}/>
       <p className="safi-cell-sub" style={{ margin: '8px 0 0' }}>Peak intake {peak(intake)} · peak washing {peak(wash)}</p>
     </Card>
@@ -181,7 +184,7 @@ function OwnerDashboard({ lang, money, setView }) {
         <StatCard label="Total revenue" value={money(totalRevenue)} delta={`${money(totalCollected)} collected · ${money(outstanding)} unpaid`} icon="chart"/>
         <StatCard label="Total expenses" value={money(totalExpenses)} deltaKind="down" delta="all-time" icon="box"/>
       </div>
-      <div className="safi-grid safi-grid--2 safi-profit-row">
+      <div className="safi-grid safi-grid--4 safi-profit-row">
         <div className="safi-stat safi-stat--op">
           <div className="safi-stat__top">
             <div className="safi-stat__label">Operating profit</div>
@@ -452,6 +455,7 @@ function ReportsScreen({ lang, money }) {
           </div>
         </div>
       </Card>
+      <ExportCenter/>
     </>
   );
 }
@@ -899,6 +903,7 @@ function DataScreen({ lang }) {
     <>
       <Topbar title="Data & Backup" subtitle="Your data lives on this laptop — back it up regularly."/>
 
+      <ExportCenter/>
       <MonthExport D={D}/>
 
       <div className="safi-grid safi-grid--3">

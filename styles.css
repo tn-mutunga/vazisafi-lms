@@ -3214,8 +3214,34 @@ button { font-family: inherit; }
 .safi-period-card--op{background:linear-gradient(135deg,#6d28d9,#5C2D91)!important;color:#fff}.safi-period-card--op .safi-period-card__lbl,.safi-period-card--op .safi-period-card__meta{color:rgba(255,255,255,.8)}
 .safi-stat--op{background:linear-gradient(135deg,#6d28d9,#5C2D91);color:#fff;border-color:transparent}.safi-stat--op .safi-stat__label,.safi-stat--op .safi-stat__delta,.safi-stat--op svg{color:rgba(255,255,255,.85)}.safi-stat--op .safi-stat__value{color:#fff}
 
-.safi-profit-row{grid-template-columns:repeat(2,minmax(0,1fr))}.safi-profit-row .safi-stat{min-height:0}
+.safi-profit-row .safi-stat{min-height:0}
 
 .safi-report__grid--profit{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:-6px}.safi-report__stat.is-op{background:#f3eefe;border-left:3px solid #7c3aed;padding:10px 12px;border-radius:8px}.safi-report__stat.is-op .safi-report__big{color:#5C2D91}.safi-report__stat.is-net{background:var(--paper);border-left:3px solid #0a8f4e;padding:10px 12px;border-radius:8px}
 
 .safi-onotes{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px}.safi-onotes li{display:flex;flex-direction:column;gap:2px;padding:8px 10px;background:#fff8ec;border-left:3px solid var(--amber);border-radius:6px;font-size:13px;color:var(--ink)}.safi-onotes__at{font:11px var(--ff-mono);color:var(--ink-3)}.safi-onotes__add{display:flex;gap:8px;align-items:flex-end}.safi-onotes__add .safi-textarea{flex:1;min-height:44px}
+
+.safi-ts-totals__val{font-size:clamp(18px,2vw,26px)!important;white-space:nowrap}
+
+.safi-ch__area{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}.safi-ch__bars.is-area{gap:0;padding:0}.safi-ch__bars.is-area .safi-ch__col.is-hover{background:transparent}
+
+.safi-xp{display:flex;flex-direction:column;gap:12px}.safi-xp__sets{display:flex;flex-wrap:wrap;gap:6px}.safi-xp__row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.safi-xp__sum{display:flex;flex-wrap:wrap;gap:8px}.safi-xp__sum div{display:flex;flex-direction:column;padding:8px 12px;background:var(--paper);border-radius:8px;min-width:110px}.safi-xp__sum span{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em}
+#safi-export-print{display:none}
+@media print{
+  body.safi-exporting > *:not(#safi-export-print){display:none!important}
+  body.safi-exporting #safi-export-print{display:block!important;font:10px/1.35 Arial,sans-serif;color:#000}
+  body.safi-exporting{background:#fff!important}
+  #safi-export-print .xp-hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #5C2D91;padding-bottom:6px;margin-bottom:8px}
+  #safi-export-print h1{font-size:15px;margin:0;color:#5C2D91}#safi-export-print .xp-hd p{margin:2px 0 0;color:#555}.xp-shop{font-weight:700;color:#E87722}
+  #safi-export-print .xp-sum{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px}#safi-export-print .xp-sum span{color:#555;margin-right:4px}
+  #safi-export-print table{width:100%;border-collapse:collapse}#safi-export-print th,#safi-export-print td{border:1px solid #ccc;padding:3px 5px;text-align:left;vertical-align:top}
+  #safi-export-print th{background:#f1ecf7}#safi-export-print .n{text-align:right;white-space:nowrap}#safi-export-print thead{display:table-header-group}#safi-export-print tr{break-inside:avoid}
+  #safi-export-print .xp-ft{color:#777;margin-top:6px}
+}
+
+.safi-py-wrap{overflow-x:auto}.safi-py{min-width:1280px}.safi-py td{vertical-align:middle;padding:8px 10px}.safi-py__in{padding:5px 8px!important;font-size:13px}
+.safi-py__days{display:flex;gap:3px}.safi-py__day{width:30px;height:26px;border-radius:6px;border:1px solid var(--line);background:var(--card);font-size:11px;font-weight:600;color:var(--ink-3);cursor:pointer}
+.safi-py__day.is-on{background:#fde4e4;border-color:#f5a3a3;color:#c0262d}.safi-py__net{font-weight:700;color:var(--brand)}
+.safi-py tr.is-paid td{background:#f2fbf6}.safi-py tfoot td{border-top:2px solid var(--line);padding:10px}
+
+.safi-py__fx{display:flex;gap:8px;align-items:center}.safi-py__extra{display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:1px dashed var(--line);background:var(--card);border-radius:8px;padding:5px 9px;cursor:pointer;min-width:80px}.safi-py__extra:hover{border-color:var(--brand)}.safi-py__exrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}

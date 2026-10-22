@@ -1,18 +1,8 @@
-VAZI SAFI LMS v2.4.1
-ORDERS
-- "Mark as Delivered/Collected" button + new wording.
-- Order notes box under Items: staff add notes (time + name saved), Enter adds.
-PAYMENTS & AUDIT
-- Ledger dates dd-mm, newest first.
-- After verifying: green tick (amount matches), +N green (paid more), -N red (paid less).
-- Manual Verify needs the Management PIN.
-- Order Payment card: tap M-Pesa/Bank (⇄) to correct the method before verification.
-TELLER
-- Every record uses the teller set in the cloud; teller changes reach the shop within ~30 s.
-DASHBOARDS
-- Front Desk: "KES collected" and Collected = orders handed over today (any intake date); category figures add up to Revenue today; clock shows seconds.
-- Management: charts with y-axis, grid lines and hover values; Operating profit (purple) before Net profit; Clients by service Today/7d/Month/Year; Busiest hours from real intake & washing times.
-- Reports: collected = orders handed over; by-service adds up to revenue; Operating/Net profit row; M-Pesa & bank codes with verify marks.
-APPROVALS
-- "Management replied" closes on every laptop once anyone presses OK.
-- Chimes: request (Management) and reply (Front Desk). Settings → Sounds: on/off, volume, "this laptop" option.
+VAZI SAFI LMS v2.4.2
+- Management: Operating profit and Net profit cards are the same width as the cards above.
+- Revenue vs Expenses: switch between Total expenses and Operational expenses.
+- Busiest hours: transparent area chart (Intake + Washing started), labels every 3 hours.
+- FIX: Busiest hours intake count read order times more reliably.
+- Reports & Data & Backup: Export reports — Orders, Customers list, Payments, Verified & reconciled payments, Expenses, Audit log; Month / Date range / All time; CSV or PDF (file name filled in automatically).
+- Statement upload reads both layouts correctly: M-Pesa (Receipt No. first, Paid In after) and Family Bank (amounts before the code). Dates are never read as amounts.
+- Re-uploading a statement shows already-verified payments too; a repeat upload of the same statement needs the Management PIN.

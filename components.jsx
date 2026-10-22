@@ -361,6 +361,7 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
         ['inventory',  'nav_inventory', 'box'],
         ['messages',   'Messages',      'sms'],
         ['staff',      'nav_staff',     'staff'],
+        ['payroll',    'Payroll',       'wallet'],
         ['issues',     'nav_issues',    'alert'],
         ['machines',   'Live machines', 'wash'],
         ['settings',   'Settings',      'settings'],
