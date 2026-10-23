@@ -18,6 +18,11 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
   const todayStr = SAFI_TIME.day();
   const todayOrders = D.orders.filter(o => o.in.startsWith(todayStr));
   const revenueToday = todayOrders.reduce((s, o) => s + (o.total || 0), 0);
+  // Compared with yesterday (orders taken and their value).
+  const yStr = SAFI_TIME.daysAgo(1);
+  const yOrders = D.orders.filter(o => String(o.in).startsWith(yStr));
+  const ordDiff = todayOrders.length - yOrders.length;
+  const revDiff = revenueToday - yOrders.reduce((s, o) => s + (o.total || 0), 0);
   const streamToday = (cat) => todayOrders.reduce((s, o) => { const gross = o.items.reduce((g, it) => g + (it.price || 0), 0) || 1; const part = o.items.reduce((ss, it) => ss + (((D.services.find(x => x.id === it.svc) || {}).category || 'other') === cat ? (it.price || 0) : 0), 0); return s + Math.round(part * (o.total || 0) / gross); }, 0);
   const streams = [['laundry', 'Laundry'], ['drycleaning', 'Dry Cleaning'], ['shoes', 'Shoes'], ['other', 'Other']].map(([k, l]) => ({ k, l, v: streamToday(k) }));
   // Pending collection = every order not yet handed back. Drops as each is collected.
@@ -61,10 +66,10 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
       <div className="safi-grid safi-grid--4">
         <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" delta={`${D.orders.filter(o => o.status !== 'collected').length} active in the shop`}
           sparkline={<div className="safi-streams">{[['normal', 'Normal'], ['student', 'Student'], ['corporate', 'Corporate']].map(([k, l]) => <span key={k} className={`safi-streams__i safi-streams__i--tier-${k}`}><i/>{l} <b className="safi-mono">{todayOrders.filter(o => ((D.customers.find(c => c.id === o.customer) || {}).group || 'normal') === k).length}</b></span>)}</div>}/>
-        <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" delta={`${todayOrders.length} orders · ${money(collectedToday)} collected`}
+        <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" deltaKind="none" delta={<><span className={ordDiff < 0 ? 'safi-dn' : 'safi-up'}>{ordDiff < 0 ? '↓' : '↑'} {ordDiff > 0 ? '+' : ordDiff < 0 ? '−' : '±'}{Math.abs(ordDiff)} orders</span>{' · '}<span className={revDiff < 0 ? 'safi-dn' : 'safi-up'}>{revDiff < 0 ? '↓' : '↑'} {revDiff > 0 ? '+' : revDiff < 0 ? '−' : '±'}{money(Math.abs(revDiff))}</span><span className="safi-cell-sub"> vs yesterday</span></>}
           sparkline={<div className="safi-streams">{streams.map(x => <span key={x.k} className={`safi-streams__i safi-streams__i--${x.k}`}><i/>{x.l} <b className="safi-mono">{money(x.v)}</b></span>)}</div>}/>
         <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} orders ready now`}/>
-        <StatCard label="Washing / Drying / Ready / Collected" value={`${washing} / ${D.orders.filter(o => o.status === 'drying').length} / ${D.orders.filter(o => o.status === 'ready').length} / ${collectedOrdersToday.length}`} icon="wash" delta="Today's Orders Stats"/>
+        <StatCard label="Washing → Drying → Ready → Collected" value={<span className="safi-stagecount"><span className="is-w">W-{washing}</span> → <span className="is-d">D-{D.orders.filter(o => o.status === 'drying').length}</span> → <span className="is-r">R-{D.orders.filter(o => o.status === 'ready').length}</span> → <span className="is-c">C-{collectedOrdersToday.length}</span></span>} icon="wash" delta="Today's Orders Stats"/>
       </div>
 
 
@@ -112,6 +117,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
               {D.orders.length === 0 && <p className="safi-cell-sub">No orders yet.</p>}
             </div>
           </Modal>
+          {window.ServiceClientsToday && <window.ServiceClientsToday/>}
           <Card title={t('quick_actions', lang)}>
             <div className="safi-quick">
               <button className="safi-quick__btn" onClick={() => setView('new-order')}>
@@ -137,7 +143,6 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
             </div>
           </Card>
 
-          {window.ServiceClientsToday && <window.ServiceClientsToday/>}
 
 
         </div>
@@ -170,14 +175,16 @@ function CollectionReminders({ D, money, setView, collectedOrdersToday, collecte
   const drops = dueToday.filter(d => d.type !== 'pickup');
   const sum = (arr) => arr.reduce((s, o) => s + bal(o), 0);
   const tiles = [
-    { k: 'done', ico: 'check', label: 'Delivered / Collected today', n: collectedOrdersToday.length, sub: money(collectedToday), go: 'orders', good: true },
+    { k: 'done', ico: 'income', label: 'Delivered / Collected today', n: collectedOrdersToday.length, sub: money(collectedToday), go: 'orders', good: true },
     { k: 'paid', ico: 'package', label: 'Ready & paid · hand over', n: readyPaid.length, sub: 'Mark Collected when it leaves', go: 'orders' },
     { k: 'old', ico: 'clock', label: '24 hrs+ old orders · not delivered/collected', n: old24.length, sub: `${money(sum(old24))} unpaid`, go: 'orders' },
     { k: 'unpaid', ico: 'wallet', label: 'Ready · balance due', n: readyUnpaid.length, sub: `${money(sum(readyUnpaid))} to collect`, go: 'orders' },
-    { k: 'pick', ico: 'pickup', label: 'Pick-ups due today', n: pickups.length, sub: pickups.length ? 'Not yet collected from client' : 'None scheduled', go: 'dispatch' },
+    { k: 'pick', ico: 'phone', label: 'Pick-ups due today', n: pickups.length, sub: pickups.length ? 'Not yet collected from client' : 'None scheduled', go: 'dispatch' },
     { k: 'drop', ico: 'truck', label: 'Deliveries due today', n: drops.length, sub: drops.length ? 'Not yet completed' : 'None scheduled', go: 'dispatch' },
   ];
   return (
+    <div className="safi-remind-wrap">
+    <h3 className="safi-remind-title">Reminders deck</h3>
     <div className="safi-remind">
       {tiles.map(x => (
         <button key={x.k} className={`safi-remind__t safi-remind__t--${x.k}${!x.good && x.n > 0 ? ' is-hot' : ''}`} onClick={() => setView(x.go)} title="Open">
@@ -187,6 +194,7 @@ function CollectionReminders({ D, money, setView, collectedOrdersToday, collecte
           <span className="safi-remind__sub">{x.sub}</span>
         </button>
       ))}
+    </div>
     </div>
   );
 }

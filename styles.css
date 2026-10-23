@@ -3305,3 +3305,9 @@ button { font-family: inherit; }
 .safi-recent-list--wide{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .safi-diffsum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.safi-diffsum__t{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:10px;background:var(--paper);border:1px solid var(--line)}.safi-diffsum__t>span:first-child{font-size:12px;color:var(--ink-3)}.safi-diffsum__t b{font-family:var(--ff-display);font-size:24px}.safi-diffsum__t.is-down{background:#fff0ef;border-color:#f3b3ad}.safi-diffsum__t.is-down b{color:#b42318}.safi-diffsum__t.is-up{background:#eefaf3;border-color:#9fdcbb}.safi-diffsum__t.is-up b{color:#0a8f4e}
 .safi-cat-pick__btn.is-locked{opacity:.5;cursor:not-allowed;filter:grayscale(.4)}
+.safi-svcday--wide{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.safi-stat__delta--none{color:var(--ink-3)}.safi-stat__delta .safi-up{color:#0a8f4e}.safi-stat__delta .safi-dn{color:#b42318}
+.safi-remind-wrap{display:flex;flex-direction:column;gap:10px}.safi-remind-title{margin:0;font-family:var(--ff-display);font-size:16px;font-weight:700;color:var(--ink)}
+.safi-stagecount{color:var(--ink-4)}.safi-stagecount .is-w{color:#1d4ed8}.safi-stagecount .is-d{color:#b07a4a}.safi-stagecount .is-r{color:#0a8f4e}.safi-stagecount .is-c{color:#6b7185}
+.safi-stagecount .is-c{color:#6d3aae}
+.safi-stagecount{color:#6d3aae}.safi-stagecount .is-c{color:#6b7185}

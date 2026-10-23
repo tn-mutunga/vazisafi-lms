@@ -292,6 +292,7 @@ function CustomerTypeahead({ value, onChange }) {
 // Distinct clients per service for today's orders (walk-ins count once per order).
 function ServiceClientsToday() {
   const D = useStore();
+  const [open, setOpen] = useStateOps(false);
   const [period, setPeriod] = useStateOps('today');
   const days = { today: 1, week: 7, month: 30, year: 365 }[period];
   const d0 = new Date(); d0.setDate(d0.getDate() - (days - 1));
@@ -305,14 +306,27 @@ function ServiceClientsToday() {
   const all = new Set(orders.map(o => o.customer || 'walk:' + o.id));
   const rows = D.services.map(s => ({ s, n: per[s.id] ? per[s.id].size : 0 })).filter(r => r.n > 0).sort((a, b) => b.n - a.n);
   const sd = window.SAFI_PRICING && window.SAFI_PRICING.studentDayLive();
+  const label = { today: 'today', week: 'last 7 days', month: 'last 30 days', year: 'last 12 months' }[period];
   return (
-    <Card title={`Clients by service · ${{ today: 'today', week: 'last 7 days', month: 'last 30 days', year: 'last 12 months' }[period]}`} action={<div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span className="safi-cell-sub">{all.size} client{all.size === 1 ? '' : 's'}{sd ? ' · Student Thursday is on' : ''}</span><div className="safi-seg">{[['today', 'Today'], ['week', '7 days'], ['month', 'Month'], ['year', 'Year']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${period === k ? 'is-active' : ''}`} onClick={() => setPeriod(k)}>{l}</button>)}</div></div>} className="safi-svcday-card">
-      {rows.length ? (
-        <div className="safi-svcday">
-          {rows.map(({ s, n }) => <div key={s.id} className="safi-svcday__c"><span className="safi-svcday__n">{n}</span><span className="safi-svcday__l">{s.name}</span></div>)}
+    <>
+      <button className="safi-recent-open" onClick={() => setOpen(true)}>
+        <span className="safi-recent-open__ico"><Icon name="users" size={18}/></span>
+        <span className="safi-recent-open__txt"><b>Clients by service</b></span>
+        <span className="safi-recent-open__go">View ›</span>
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title={`Clients by service · ${label}`} width={900}
+        footer={<Button kind="ghost" onClick={() => setOpen(false)}>Close</Button>}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap' }}>
+          <span className="safi-cell-sub">{all.size} client{all.size === 1 ? '' : 's'}{sd ? ' · Student Thursday is on' : ''}</span>
+          <div className="safi-seg">{[['today', 'Today'], ['week', '7 days'], ['month', 'Month'], ['year', 'Year']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${period === k ? 'is-active' : ''}`} onClick={() => setPeriod(k)}>{l}</button>)}</div>
         </div>
-      ) : <p className="safi-cell-sub" style={{ margin: 0 }}>No orders in this period.</p>}
-    </Card>
+        {rows.length ? (
+          <div className="safi-svcday safi-svcday--wide">
+            {rows.map(({ s, n }) => <div key={s.id} className="safi-svcday__c"><span className="safi-svcday__n">{n}</span><span className="safi-svcday__l">{s.name}</span></div>)}
+          </div>
+        ) : <p className="safi-cell-sub" style={{ margin: 0 }}>No orders in this period.</p>}
+      </Modal>
+    </>
   );
 }
 

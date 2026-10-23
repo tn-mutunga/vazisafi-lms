@@ -258,6 +258,8 @@ const Icon = ({ name, size = 18, stroke = 'currentColor' }) => {
     case 'rider':      return (<svg {...props}><circle cx="6" cy="17" r="3"/><circle cx="19" cy="17" r="3"/><path d="M9 17h3v-4l5-2 2-2h-5"/></svg>);
     case 'dry':        return (<svg {...props}><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="13" r="5"/><path d="M9 13h6"/></svg>);
     case 'mpesa':      return (<svg {...props}><path d="M4 7h16v10H4z"/><path d="M4 11h16M8 7v10M12 7v10M16 7v10"/></svg>);
+    case 'income':     return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3h6l-1.5 3h-3z"/><path d="M10.5 6C6 8 4 12 4 15.5 4 19 7.5 21 12 21s8-2 8-5.5S18 8 13.5 6"/><path d="M10 15.5c0 1 1 1.5 2 1.5s2-.5 2-1.5-1-1.3-2-1.5-2-.6-2-1.5 1-1.5 2-1.5 2 .5 2 1.5M12 10v1M12 17v1"/></svg>);
+    case 'tickbold':   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="4.5 12.5 9.5 17.5 19.5 6.5"/></svg>);
     case 'calendar':   return (<svg {...props}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>);
     case 'lock':       return (<svg {...props}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>);
     case 'card':       return (<svg {...props}><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h5"/></svg>);
@@ -522,7 +524,7 @@ const StatCard = ({ label, value, delta, deltaKind, icon, sparkline }) => (
     <div className="safi-stat__value">{value}</div>
     {delta && (
       <div className={`safi-stat__delta safi-stat__delta--${deltaKind || 'up'}`}>
-        <span>{deltaKind === 'down' ? '↓' : '↑'} {delta}</span>
+        <span>{deltaKind === 'none' ? null : <>{deltaKind === 'down' ? '↓' : '↑'} </>}{delta}</span>
       </div>
     )}
     {sparkline}
