@@ -14,12 +14,15 @@ const isOtherCat = (c) => !!c && /^other$/i.test(String(c.name || '').trim());
 function costGroupOf(D, ex) {
   const cat = (D.expenseCategories || []).find(c => c.id === ex.category);
   const ov = (D.settings && D.settings.expenseGroupOverrides) || {};
+  if (isMgmtOnlyCat(cat)) return 'special';
   if (ov[ex.id] === 'special' || ov[ex.id] === 'operational') return ov[ex.id];
   return catGroupOf(D, ex.category);
 }
 // Default group for a category (Other = operational unless chosen per expense).
+const isMgmtOnlyCat = (c) => !!c && (c.mgmtOnly || c.id === 'ec-gp');
 function catGroupOf(D, catId) {
   const cat = (D.expenseCategories || []).find(c => c.id === catId);
+  if (isMgmtOnlyCat(cat)) return 'special';
   if (isOtherCat(cat)) return 'operational';
   const g = (D.settings && D.settings.expenseGroups) || {};
   return g[catId] === 'special' ? 'special' : 'operational';
@@ -170,7 +173,7 @@ function ExpensesScreen({ lang, money, role }) {
   const [showCats, setShowCats] = useStateEx(false);
   const [period, setPeriod]     = useStateEx('all');
   const [catFilter, setCatFilter] = useStateEx('all');
-  const [form, setForm]         = useStateEx({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'mpesa', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
+  const [form, setForm]         = useStateEx({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'bank', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
   const isManagement = role === 'owner';
   const [dragOver, setDragOver] = useStateEx('');
   const [txnErr, setTxnErr] = useStateEx(false);
@@ -199,6 +202,7 @@ function ExpensesScreen({ lang, money, role }) {
 
   function submit() {
     if (!form.label.trim() || !form.amount) { toast('Description and amount required', 'error'); return; }
+    { const cat = D.expenseCategories.find(c => c.id === form.category); if (isMgmtOnlyCat(cat) && !isManagement) { toast('General purchases can only be logged by Management', 'error'); return; } if (isMgmtOnlyCat(cat)) form.costGroup = 'special'; }
     if (form.method !== 'cash' && String(form.txn || '').trim().length < 5) { setTxnErr(true); toast('Transaction code needs at least 5 characters (ideally the last 5)', 'error'); return; }
     if (isOutsourced(form.category) && !splitIds(form.linkedOrder).length) { toast('Outsourced dry cleaning needs at least one linked order', 'error'); return; }
     if (editId) {
@@ -211,7 +215,7 @@ function ExpensesScreen({ lang, money, role }) {
       toast('Expense logged', 'success');
     }
     setShowAdd(false); setEditId(null);
-    setForm({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'mpesa', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
+    setForm({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'bank', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
   }
   function openEdit(e) {
     setEditId(e.id);
@@ -220,7 +224,7 @@ function ExpensesScreen({ lang, money, role }) {
   }
   function openAdd() {
     setEditId(null);
-    setForm({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'mpesa', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
+    setForm({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'bank', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
     setShowAdd(true);
   }
 
@@ -315,15 +319,20 @@ function ExpensesScreen({ lang, money, role }) {
         <div className="safi-form">
           <label>Category
             <div className="safi-cat-pick">
-              {orderedCats(D).map(c => (
-                <button key={c.id} className={`safi-cat-pick__btn safi-cat-pick__btn--${c.color} ${form.category === c.id ? 'is-active' : ''}`} onClick={() => setForm({ ...form, category: c.id, costGroup: catGroupOf(D, c.id) })}>
-                  <Icon name={c.icon} size={16}/>
+              {orderedCats(D).map(c => {
+                const locked = isMgmtOnlyCat(c) && !isManagement;
+                return (
+                <button key={c.id} disabled={locked} title={locked ? 'Management only' : ''} className={`safi-cat-pick__btn safi-cat-pick__btn--${c.color} ${form.category === c.id ? 'is-active' : ''}${locked ? ' is-locked' : ''}`} onClick={() => { if (locked) return; setForm({ ...form, category: c.id, costGroup: catGroupOf(D, c.id) }); }}>
+                  <Icon name={locked ? 'lock' : c.icon} size={16}/>
                   <span>{c.name}</span>
                 </button>
-              ))}
+                );
+              })}
             </div>
           </label>
-          {true && (
+          {isMgmtOnlyCat(D.expenseCategories.find(c => c.id === form.category)) ? (
+            <p className="safi-hint"><b>General purchases</b> always count as a <b>Special expense</b> and can only be logged by Management.</p>
+          ) : (
             <label>This cost counts as
               <div className="safi-seg">
                 {[['operational', 'Operational expense'], ['special', 'Special expense']].map(([k, l]) => (
@@ -337,7 +346,7 @@ function ExpensesScreen({ lang, money, role }) {
             <label>Amount (KES)<input type="number" className="safi-input safi-mono" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })}/></label>
             <label>Payment method
               <div className="safi-seg">
-                {['mpesa', 'bank'].map(m => (
+                {['bank', 'mpesa'].map(m => (
                   <button key={m} className={`safi-seg__btn ${form.method === m ? 'is-active' : ''}`} onClick={() => setForm({ ...form, method: m })}>{m === 'mpesa' ? 'M-Pesa' : 'Bank'}</button>
                 ))}
               </div>

@@ -12,6 +12,8 @@ const { useState: useStateFD, useMemo: useMemoFD, useEffect: useEffectFD, useRef
 
 // ─── Front Desk Dashboard ─────────────────────────────────────────────────
 function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
+  const [showRecent, setShowRecent] = useStateFD(false);
+  useEffectFD(() => { const h = () => setShowRecent(true); window.addEventListener('safi:recent', h); if (window.__safiOpenRecent) { window.__safiOpenRecent = false; setShowRecent(true); } return () => window.removeEventListener('safi:recent', h); }, []);
   const D = useStore();
   const todayStr = SAFI_TIME.day();
   const todayOrders = D.orders.filter(o => o.in.startsWith(todayStr));
@@ -89,6 +91,27 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
         </Card>
 
         <div className="safi-stack">
+          <button className="safi-recent-open" onClick={() => setShowRecent(true)}>
+            <span className="safi-recent-open__ico"><Icon name="clock" size={18}/></span>
+            <span className="safi-recent-open__txt"><b>{t('recent_orders', lang)}</b></span>
+            <span className="safi-recent-open__go">View ›</span>
+          </button>
+          <Modal open={showRecent} onClose={() => setShowRecent(false)} title={`${t('recent_orders', lang)} · last 20`} width={1100}
+            footer={<><Button kind="ghost" onClick={() => setShowRecent(false)}>Close</Button><Button kind="primary" onClick={() => { setShowRecent(false); setView('orders'); }}>All orders →</Button></>}>
+            <div className="safi-recent-list is-open safi-recent-list--wide">
+              {[...D.orders].sort((a, b) => String(b.in).localeCompare(String(a.in))).slice(0, 20).map(o => {
+                const c = D.customers.find(x => x.id === o.customer);
+                return (
+                  <button key={o.id} className="safi-recent-row" onClick={() => { setShowRecent(false); setActiveOrderId(o.id); setView('order-detail'); }}>
+                    <span className="safi-recent-row__top"><span className="safi-mono">{orderNo(o.id)}</span><StatusBadge status={o.status} mark={collectMark(o)}/></span>
+                    <span className="safi-recent-row__name">{c?.name || orderNo(o.id)}</span>
+                    <span className="safi-recent-row__meta"><span className="safi-cell-sub">{String(o.in).slice(8, 10)}-{String(o.in).slice(5, 7)} {String(o.in).slice(11, 16)} · {o.items.length} {o.items.length === 1 ? 'item' : 'items'}</span><b className="safi-mono">{money(o.total)}</b></span>
+                  </button>
+                );
+              })}
+              {D.orders.length === 0 && <p className="safi-cell-sub">No orders yet.</p>}
+            </div>
+          </Modal>
           <Card title={t('quick_actions', lang)}>
             <div className="safi-quick">
               <button className="safi-quick__btn" onClick={() => setView('new-order')}>
@@ -121,29 +144,50 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
       </div>
 
 
-      <Card title={t('recent_orders', lang)} action={<Button kind="ghost" size="sm" onClick={() => setView('orders')}>All orders →</Button>}>
-        <div className="safi-orders-strip">
-          {D.orders.slice(0, 5).map(o => {
-            const c = D.customers.find(x => x.id === o.customer);
-            return (
-              <div key={o.id} className="safi-orderchip" onClick={() => { setActiveOrderId(o.id); setView('order-detail'); }}>
-                <div className="safi-orderchip__hd">
-                  <span className="safi-mono">{orderNo(o.id)}</span><StatusBadge status={o.status} mark={collectMark(o)}/>
-                </div>
-                <div className="safi-orderchip__name">{c?.name || orderNo(o.id)}</div>
-                <div className="safi-orderchip__row">
-                  <span className="safi-cell-sub">{o.items.length} services</span>
-                  <span className="safi-mono safi-cell-strong">{money(o.total)}</span>
-                </div>
-              </div>
-            );
-          })}
-          {D.orders.length === 0 && <p className="safi-cell-sub">No orders yet — create your first one.</p>}
-        </div>
-      </Card>
+      <CollectionReminders D={D} money={money} setView={setView} collectedOrdersToday={collectedOrdersToday} collectedToday={collectedToday}/>
+
+
 
       <OverdueCard D={D} setView={setView} setActiveOrderId={setActiveOrderId} money={money}/>
     </>
+  );
+}
+
+// ─── Collection reminders (Front Desk dashboard, top row) ─────────────────
+// Nudges the attendant to hand over ready laundry, collect the balance and mark it Collected.
+function CollectionReminders({ D, money, setView, collectedOrdersToday, collectedToday }) {
+  const now = Date.now();
+  const parse = (s) => new Date(String(s || '').replace(' ', 'T')).getTime();
+  const open = D.orders.filter(o => o.status !== 'collected');
+  const bal = (o) => Math.max(0, (o.total || 0) - (o.paid || 0));
+  const old24 = open.filter(o => now - parse(o.in) >= 24 * 3600e3);
+  const ready = open.filter(o => o.status === 'ready');
+  const readyPaid = ready.filter(o => bal(o) === 0);
+  const readyUnpaid = ready.filter(o => bal(o) > 0);
+  const today = SAFI_TIME.day();
+  const dueToday = (D.dispatch || []).filter(d => d.status !== 'completed' && String(d.slotDate || '').startsWith(today));
+  const pickups = dueToday.filter(d => d.type === 'pickup');
+  const drops = dueToday.filter(d => d.type !== 'pickup');
+  const sum = (arr) => arr.reduce((s, o) => s + bal(o), 0);
+  const tiles = [
+    { k: 'done', ico: 'check', label: 'Delivered / Collected today', n: collectedOrdersToday.length, sub: money(collectedToday), go: 'orders', good: true },
+    { k: 'paid', ico: 'package', label: 'Ready & paid · hand over', n: readyPaid.length, sub: 'Mark Collected when it leaves', go: 'orders' },
+    { k: 'old', ico: 'clock', label: '24 hrs+ old orders · not delivered/collected', n: old24.length, sub: `${money(sum(old24))} unpaid`, go: 'orders' },
+    { k: 'unpaid', ico: 'wallet', label: 'Ready · balance due', n: readyUnpaid.length, sub: `${money(sum(readyUnpaid))} to collect`, go: 'orders' },
+    { k: 'pick', ico: 'pickup', label: 'Pick-ups due today', n: pickups.length, sub: pickups.length ? 'Not yet collected from client' : 'None scheduled', go: 'dispatch' },
+    { k: 'drop', ico: 'truck', label: 'Deliveries due today', n: drops.length, sub: drops.length ? 'Not yet completed' : 'None scheduled', go: 'dispatch' },
+  ];
+  return (
+    <div className="safi-remind">
+      {tiles.map(x => (
+        <button key={x.k} className={`safi-remind__t safi-remind__t--${x.k}${!x.good && x.n > 0 ? ' is-hot' : ''}`} onClick={() => setView(x.go)} title="Open">
+          <span className="safi-remind__ico"><Icon name={x.ico} size={16}/></span>
+          <span className="safi-remind__lbl">{x.label}</span>
+          <b className="safi-remind__n">{x.n}</b>
+          <span className="safi-remind__sub">{x.sub}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -164,6 +208,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   const [showAdd, setShowAdd] = useStateFD(false);
   const [subtypePicker, setSubtypePicker] = useStateFD(null);
   const [otherForm, setOtherForm] = useStateFD(null);
+  const [delForm, setDelForm] = useStateFD(null);
 
   const [showPreview, setShowPreview] = useStateFD(false);
 
@@ -329,6 +374,9 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                     setItems([...items, { svc: 'express', qty: 1, customPrice: Math.round(expressBase * expressPct / 100), note: `${expressPct}% of laundry value` }]);
                   } else if (s.id === 'other') {
                     setOtherForm({ desc: '', unit: 'piece', qty: 1, price: '' });
+                  } else if (s.id === 'delivery') {
+                    if (items.some(it => it.svc === 'delivery')) { toast('Pickup / Delivery is already on this order'); return; }
+                    setDelForm({ kind: 'Pickup', price: '' });
                   } else if (s.subtypes && s.subtypes.length) {
                     setSubtypePicker({ svc: s });
                   } else {
@@ -337,7 +385,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                 }}>
                   <span className="safi-svc-tile__ico"><Icon name={s.id === 'wash-piece' ? 'washpiece' : s.icon} size={20}/></span>
                   <span className="safi-svc-tile__lbl">{s.id === 'wash-piece' ? 'Wash & Fold (per piece)' : (s.tileName || s.name)}</span>
-                  <span className="safi-svc-tile__price">{s.id === 'other' ? 'Any item · kg or pieces' : s.id === 'express' ? `${expressPct}% of order value` : s.tellerPrice ? 'Price set by teller' : P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
+                  <span className="safi-svc-tile__price">{s.id === 'other' ? 'Any item · kg or pieces' : s.id === 'delivery' ? 'Price set by attendant' : s.id === 'express' ? `${expressPct}% of order value` : s.tellerPrice ? 'Price set by teller' : P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
                   {s.subtypes && s.subtypes.length > 0 && <span className="safi-svc-tile__sub">Pick from {s.subtypes.length} types →</span>}
                 </button>
               ))}
@@ -354,6 +402,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
               {items.map((it, i) => {
                 const svc = D.services.find(x => x.id === it.svc);
                 const isOther = it.svc === 'other';
+                const isTrip = it.svc === 'delivery';
                 const qsvc = it.unit ? { unit: it.unit } : svc;
                 const unit = it.customPrice ?? (svc?.tiers[effGroup] || 0);
                 const rule = it.customPrice == null ? P.ruleFor(svc, effGroup) : null;
@@ -379,7 +428,12 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                           </select>
                         </div>
                       )}
-                      {!isOther && svc?.subtypes && svc.subtypes.length > 0 && (
+                      {isTrip && (
+                        <select className="safi-items__subtype" value={it.subtype || 'Pickup'} onChange={e => upd({ subtype: e.target.value })}>
+                          {['Pickup', 'Delivery', 'Pickup & delivery'].map(k => <option key={k} value={k}>{k}</option>)}
+                        </select>
+                      )}
+                      {!isOther && !isTrip && svc?.subtypes && svc.subtypes.length > 0 && (
                         <select className="safi-items__subtype" value={it.subtype || ''} onChange={e => {
                           const next = [...items]; next[i] = { ...next[i], subtype: e.target.value }; setItems(next);
                         }}>
@@ -390,14 +444,14 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                         </select>
                       )}
                     </div>
-                    <div className="safi-qty">
+                    {isTrip ? <span className="safi-cell-sub">1 trip</span> : <div className="safi-qty">
                       <button onClick={() => { const n = [...items]; n[i].qty = qtyStep(qsvc, n[i].qty, -1); setItems(n); }}>−</button>
                       <input type="number" step={qsvc?.unit === 'kg' ? '0.1' : '1'} min="0" value={it.qty} onChange={e => { const n = [...items]; n[i].qty = qtyClean(qsvc, e.target.value); setItems(n); }}/>
                       <span className="safi-qty__unit">{qsvc?.unit}</span>
                       <button onClick={() => { const n = [...items]; n[i].qty = qtyStep(qsvc, n[i].qty, 1); setItems(n); }}>+</button>
-                    </div>
-                    {isOther
-                      ? <input type="number" min="0" className="safi-input safi-mono safi-other-price" placeholder={`KES / ${it.unit || 'piece'}`} value={it.customPrice ?? ''} onChange={e => upd({ customPrice: e.target.value === '' ? 0 : Math.max(0, +e.target.value || 0) })}/>
+                    </div>}
+                    {isOther || isTrip
+                      ? <input type="number" min="0" className="safi-input safi-mono safi-other-price" placeholder={isTrip ? 'KES charge' : `KES / ${it.unit || 'piece'}`} value={it.customPrice ?? ''} onChange={e => upd({ customPrice: e.target.value === '' ? 0 : Math.max(0, +e.target.value || 0) })}/>
                       : <span className={rule ? 'safi-cell-sub' : 'safi-mono'}>{rule ? P.describe(rule) : money(unit)}</span>}
                     <span className="safi-mono safi-cell-strong">{money(P.line(svc, it.qty, effGroup, it.customPrice))}</span>
                     <button className="safi-items__del" onClick={() => setItems(items.filter((_, j) => j !== i))}>×</button>
@@ -509,6 +563,25 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
           method={method} txn={txn} notes={notes}
           customer={customer} effGroup={effGroup}
           services={D.services} money={money}/>
+      </Modal>
+
+      <Modal open={!!delForm} onClose={() => setDelForm(null)} title="Pickup / Delivery" width={420}
+        footer={<>
+          <Button kind="ghost" onClick={() => setDelForm(null)}>Cancel</Button>
+          <Button kind="primary" icon="check" onClick={() => {
+            const p = Math.round(+delForm.price);
+            if (!(p >= 0) || delForm.price === '') { toast('Enter the charge (0 if free)', 'error'); return; }
+            setItems([...items, { svc: 'delivery', subtype: delForm.kind, unit: 'trip', qty: 1, customPrice: p }]);
+            setDelForm(null);
+          }}>Add to order</Button>
+        </>}>
+        {delForm && <div className="safi-form">
+          <div className="safi-seg">
+            {['Pickup', 'Delivery', 'Pickup & delivery'].map(k => <button key={k} className={`safi-seg__btn ${delForm.kind === k ? 'is-active' : ''}`} onClick={() => setDelForm({ ...delForm, kind: k })}>{k}</button>)}
+          </div>
+          <label>Charge (KES) — set by attendant<input type="number" min="0" autoFocus className="safi-input safi-mono" placeholder="e.g. 400" value={delForm.price} onChange={e => setDelForm({ ...delForm, price: e.target.value })}/></label>
+          <p className="safi-hint">Depends on distance. Enter 0 if the trip is free.</p>
+        </div>}
       </Modal>
 
       <Modal open={!!otherForm} onClose={() => setOtherForm(null)} title="Other item or service" width={460}
@@ -810,7 +883,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
     <>
       <Topbar
         title={t('nav_orders', lang)}
-        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter} · ` : ''}${activeCount} active · ${tierLine}${dateFilter && dayTellers.length ? ` · Teller${dayTellers.length > 1 ? 's' : ''}: ${dayTellers.join(', ')}` : ''}`}
+        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter.split('-').reverse().join('/')} · ` : ''}${activeCount} active · ${tierLine}${dateFilter && dayTellers.length ? ` · Teller${dayTellers.length > 1 ? 's' : ''}: ${dayTellers.join(', ')}` : ''}`}
         right={<>
           {role === 'owner' && <Button kind="ghost" icon="print" onClick={() => window.print()}>{t('print', lang)}</Button>}
           <Button kind="primary" icon="plus" onClick={() => setView('new-order')}>{t('new_order', lang)}</Button>
@@ -847,7 +920,11 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
             <button className={`safi-chip ${dateFilter === todayStr ? 'is-active' : ''}`} onClick={() => setDateFilter(todayStr)}>Today</button>
             <button className={`safi-chip ${dateFilter === yesterdayStr ? 'is-active' : ''}`} onClick={() => setDateFilter(yesterdayStr)}>Yesterday</button>
             <button className={`safi-chip ${!dateFilter ? 'is-active' : ''}`} onClick={() => setDateFilter('')}>Any date</button>
-            <input type="date" className="safi-input safi-input--inline" value={dateFilter} onChange={e => setDateFilter(e.target.value)} max={todayStr} title="Pick a specific date"/>
+            <label className="safi-input safi-input--inline safi-datepick" title="Pick a date">
+              <span className="safi-mono">{dateFilter ? dateFilter.split('-').reverse().join('/') : 'dd/mm/yyyy'}</span>
+              <Icon name="calendar" size={14}/>
+              <input type="date" className="safi-datepick__native" value={dateFilter} onChange={e => setDateFilter(e.target.value)} max={todayStr} title="Pick a specific date"/>
+            </label>
           </div>
         </div>
 
@@ -878,7 +955,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
           ]}
           rows={filtered}
           onRow={r => { setActiveOrderId(r.id); setView('order-detail'); }}
-          empty={dateFilter ? `No orders on ${dateFilter}.` : "No orders match your filter."}
+          empty={dateFilter ? `No orders on ${dateFilter.split('-').reverse().join('/')}.` : "No orders match your filter."}
         />
       </Card>
     </>
@@ -1006,8 +1083,11 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
         </div>
 
         <div className="safi-stack">
-          <Card title="Customer">
-            <div className="safi-cust-card">
+          <Card title="Customer" action={c ? <span className="safi-cell-sub">Tap to view / edit</span> : null}>
+            <div className={`safi-cust-card${c ? ' is-link' : ''}`} role={c ? 'button' : undefined} tabIndex={c ? 0 : undefined}
+              title={c ? 'Open in Customers to edit' : ''}
+              onClick={() => { if (!c) return; window.__safiOpenCustomer = c.id; setView('customers'); }}
+              onKeyDown={e => { if (c && e.key === 'Enter') { window.__safiOpenCustomer = c.id; setView('customers'); } }}>
               <div className="safi-cust-card__avatar">{(c?.name || 'WI').split(' ').map(s => s[0]).slice(0, 2).join('')}</div>
               <div>
                 <div className="safi-cust-card__name">{c?.name || orderNo(o.id)}</div>
@@ -1691,9 +1771,9 @@ function Receipt({ orderId, setView, lang, money, shop }) {
 
           <div className="safi-receipt__meta">
             <div><span>Receipt #</span><b className="safi-mono">{orderNo(o.id)}</b></div>
+            <div><span>Date</span><b>{(() => { const v = String(o.in || ''); return v.length >= 16 ? `${v.slice(8, 10)}-${v.slice(5, 7)}-${v.slice(2, 4)} ${v.slice(11, 16)}` : v; })()}</b></div>
             {o.queueNo && <div><span>Client #</span><b className="safi-mono">{String(o.queueNo).padStart(2, '0')}</b></div>}
             {o.tag && <div><span>Tag #</span><b className="safi-mono">{o.tag}</b></div>}
-            <div><span>Date</span><b>{o.in}</b></div>
             <div><span>Attendant</span><b>{(D.staff.find(s => s.id === (o.cashier || D.currentStaffId)) || D.staff[0])?.name || '—'}</b></div>
           </div>
 
@@ -1863,6 +1943,14 @@ function CustomersScreen({ lang, money, setView, role }) {
   const [editC, setEditC] = useStateFD(null);
   const fileRef = useRefFD(null);
   const owner = role === 'owner';
+  // Opened from an order's Customer card: jump straight to that customer's edit form.
+  useEffectFD(() => {
+    const id = window.__safiOpenCustomer; if (!id) return;
+    window.__safiOpenCustomer = null;
+    const c = D.customers.find(x => x.id === id); if (!c) return;
+    setQ(c.name || '');
+    setEditC({ ...c, name: c.name || '', phone: c.phone || '', prefix: c.prefix || '+254', location: c.location || '', group: c.group || 'normal' });
+  }, []);
 
   function saveEdit() {
     const e = editC;
@@ -2462,6 +2550,21 @@ function PaymentsScreen({ lang, money, role }) {
           empty="No payments yet."
         />
       </Card>
+
+      {(() => {
+        const diffs = rows.filter(r => r.verified && r.stmtAmount != null).map(r => ({ r, d: Math.round(r.stmtAmount - r.amount) }));
+        const short = diffs.filter(x => x.d < 0), over = diffs.filter(x => x.d > 0), exact = diffs.filter(x => x.d === 0);
+        const sumS = short.reduce((s, x) => s + x.d, 0), sumO = over.reduce((s, x) => s + x.d, 0);
+        return (
+          <Card title="Statement differences" action={<span className="safi-cell-sub">Verified payments in this list · statement minus recorded</span>}>
+            <div className="safi-diffsum">
+              <div className="safi-diffsum__t is-down"><span>Short-paid (−)</span><b className="safi-mono">−{Math.abs(sumS).toLocaleString()}</b><span className="safi-cell-sub">{short.length} payment{short.length === 1 ? '' : 's'}</span></div>
+              <div className="safi-diffsum__t is-up"><span>Over-paid (+)</span><b className="safi-mono">+{sumO.toLocaleString()}</b><span className="safi-cell-sub">{over.length} payment{over.length === 1 ? '' : 's'}</span></div>
+              <div className="safi-diffsum__t"><span>Net difference</span><b className="safi-mono">{sumS + sumO > 0 ? '+' : sumS + sumO < 0 ? '−' : ''}{Math.abs(sumS + sumO).toLocaleString()}</b><span className="safi-cell-sub">{exact.length} matched exactly</span></div>
+            </div>
+          </Card>
+        );
+      })()}
 
       <Modal open={!!pinFor} onClose={() => setPinFor(null)} title={pinFor ? `Verify manually · ${orderNo(pinFor.order)}` : ''} width={420}
         footer={<>

@@ -258,6 +258,7 @@ const Icon = ({ name, size = 18, stroke = 'currentColor' }) => {
     case 'rider':      return (<svg {...props}><circle cx="6" cy="17" r="3"/><circle cx="19" cy="17" r="3"/><path d="M9 17h3v-4l5-2 2-2h-5"/></svg>);
     case 'dry':        return (<svg {...props}><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="13" r="5"/><path d="M9 13h6"/></svg>);
     case 'mpesa':      return (<svg {...props}><path d="M4 7h16v10H4z"/><path d="M4 11h16M8 7v10M12 7v10M16 7v10"/></svg>);
+    case 'calendar':   return (<svg {...props}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>);
     case 'lock':       return (<svg {...props}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>);
     case 'card':       return (<svg {...props}><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h5"/></svg>);
     case 'shield':     return (<svg {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11.5 14.5 15.5 10"/></svg>);

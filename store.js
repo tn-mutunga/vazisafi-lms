@@ -265,6 +265,11 @@ window.SAFI_STORE = (() => {
     }
     for (const o of state.orders || []) for (const it of o.items || []) if (it.svc === 'coats') { it.svc = 'wash-piece'; migrated = true; }
   })();
+  // General purchases: Management-only, always a Special expense.
+  if (!(state.expenseCategories || []).some(c => c.id === 'ec-gp')) {
+    state.expenseCategories = [...(state.expenseCategories || []), { id: 'ec-gp', name: 'General purchases', icon: 'bag', color: 'violet', mgmtOnly: true }];
+    migrated = true;
+  }
   // Persist any migration changes immediately
   if (migrated) {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}

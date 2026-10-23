@@ -1,8 +1,17 @@
-VAZI SAFI LMS v2.4.2
-- Management: Operating profit and Net profit cards are the same width as the cards above.
-- Revenue vs Expenses: switch between Total expenses and Operational expenses.
-- Busiest hours: transparent area chart (Intake + Washing started), labels every 3 hours.
-- FIX: Busiest hours intake count read order times more reliably.
-- Reports & Data & Backup: Export reports — Orders, Customers list, Payments, Verified & reconciled payments, Expenses, Audit log; Month / Date range / All time; CSV or PDF (file name filled in automatically).
-- Statement upload reads both layouts correctly: M-Pesa (Receipt No. first, Paid In after) and Family Bank (amounts before the code). Dates are never read as amounts.
-- Re-uploading a statement shows already-verified payments too; a repeat upload of the same statement needs the Management PIN.
+VAZI SAFI LMS v2.4.3
+ORDERS
+- Order page: click the Customer card to open that customer's Edit form.
+- Orders date box shows dd/mm/yyyy on every computer (Windows region no longer matters).
+- New Order: Pickup / Delivery button (Pickup default, price set by attendant, 1 trip).
+RECEIPT
+- Header text matches the items (11.5px); Receipt # + Date, Client # + Attendant pairs; date 23-10-26 21:17.
+- Print margin 4mm so the 80mm roll uses its full 72mm printable width.
+FRONT DESK DASHBOARD
+- Reminder cards: Delivered/Collected today, Ready & paid, 24 hrs+ old not delivered/collected,
+  Ready balance due, Pick-ups due today, Deliveries due today.
+- Recent orders card above Quick actions; opens a wide pop-up with the last 20 orders.
+PAYMENTS & AUDIT
+- Statement differences card: total short-paid (−), over-paid (+) and net.
+EXPENSES
+- General purchases: Management only, always a Special expense.
+- Payment method: Bank first and default.
