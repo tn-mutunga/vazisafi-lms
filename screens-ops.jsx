@@ -219,8 +219,13 @@ function ActivityCounts() {
 // A thermal roll has no fixed page length. Size each printed page to its content so
 // the paper (and the PDF) ends right after the last line; the printer cuts at each page end.
 function fitRollPages() {
+  // Retired in v2.4.6: page length is now set by the measuring code in app.jsx (beforeprint),
+  // which measures at the real 76mm print width. This older version measured at screen size
+  // ×1.25 and, loading later, overrode it, giving ~360mm pages.
   const old = document.getElementById('safi-roll-pages'); if (old) old.remove();
-  const mm = (el) => Math.ceil(el.getBoundingClientRect().height * 25.4 / 96) + 6;
+  return;
+  // Print text is ~20% larger than on screen, so allow for it; the printer cuts the blank tail.
+  const mm = (el) => Math.ceil(el.getBoundingClientRect().height * 1.25 * 25.4 / 96) + 8;
   const css = [];
   const roll = document.querySelector('.safi-jcsheet--roll');
   if (roll) {

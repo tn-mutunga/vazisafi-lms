@@ -115,9 +115,9 @@ window.SAFI_DATA = (() => {
   ];
 
   const discounts = [
-    { id: 'd1', name: 'New Customer 15%',  code: 'KARIBU15', value: 15, type: 'pct', expires: '2026-06-30', uses: 42 },
-    { id: 'd2', name: 'Bulk over 30 kg',   code: 'BULK30',   value: 10, type: 'pct', expires: 'always',     uses: 18 },
-    { id: 'd3', name: 'Loyalty 10th order',code: 'AUTO',     value: 500,type: 'flat',expires: 'always',     uses: 73 },
+    { id: 'd1', name: 'New Customer 15%', code: 'KARIBU15', value: 15, type: 'pct', expires: 'always', uses: 0, active: true },
+    { id: 'd2', name: 'Bulk over 30 kg', code: 'BULK30', value: 10, type: 'pct', expires: 'always', uses: 0, active: false },
+    { id: 'd3', name: 'Loyalty 10th order', code: 'LOYAL10', value: 500, type: 'flat', expires: 'always', uses: 0, active: false },
   ];
 
   const inventory = [

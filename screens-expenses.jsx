@@ -80,7 +80,7 @@ function LinkedOrdersField({ D, form, setForm, required }) {
             onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { e.preventDefault(); addOrder(hits[0]); } if (e.key === 'Backspace' && !q && orders.length) removeOrder(orders[orders.length - 1]); }}/>
           {open && hits.length > 0 && (
             <div className="safi-multi__menu">
-              {hits.map(o => <button type="button" key={o.id} onMouseDown={() => addOrder(o)}><b className="safi-mono">{orderNo(o.id)}</b><span>{cname(o.customer)}</span><span className="safi-cell-sub">{String(o.in || '').slice(5, 10)}</span></button>)}
+              {hits.map(o => <button type="button" key={o.id} onMouseDown={() => addOrder(o)}><b className="safi-mono">{orderNo(o.id)}</b><span>{cname(o.customer)}</span><span className="safi-cell-sub">{dmy(o.in, { time: false })}</span></button>)}
             </div>
           )}
         </div>
@@ -283,7 +283,7 @@ function ExpensesScreen({ lang, money, role }) {
       <Card pad={false} title="All expenses">
         <Table
           cols={[
-            { label: 'Date', render: r => <span className="safi-cell-sub">{r.date.slice(5, 16)}</span> },
+            { label: 'Date', render: r => <span className="safi-cell-sub">{dmy(r.date)}</span> },
             { label: 'Category', render: r => {
               const c = D.expenseCategories.find(x => x.id === r.category);
               return <span className={`safi-tag safi-tag--${c?.color || 'gray'}`}>{c?.name || 'Unknown'}</span>;

@@ -3311,3 +3311,60 @@ button { font-family: inherit; }
 .safi-stagecount{color:var(--ink-4)}.safi-stagecount .is-w{color:#1d4ed8}.safi-stagecount .is-d{color:#b07a4a}.safi-stagecount .is-r{color:#0a8f4e}.safi-stagecount .is-c{color:#6b7185}
 .safi-stagecount .is-c{color:#6d3aae}
 .safi-stagecount{color:#6d3aae}.safi-stagecount .is-c{color:#6b7185}
+.safi-stagecount{font-size:.85em}.safi-stagecount .is-w,.safi-stagecount .is-d,.safi-stagecount .is-r,.safi-stagecount .is-c{white-space:nowrap}
+.safi-input--code{width:auto;max-width:150px;padding:4px 6px;font-size:12px}
+
+/* ── Thermal printing (Xprinter XP-330B, 80mm roll, 76mm printable) ─────────────
+   Drawn at the printable width so the driver doesn't shrink it; pure black, heavier
+   type (thin and grey strokes fade on thermal paper); no solid black boxes. */
+@media print{
+  @page{margin:0}
+  .safi-receipt,.safi-receipt-wrap #safi-print-area,.safi-jcsheet--roll,.safi-jcsheet--roll#safi-print-area{width:76mm!important;max-width:76mm!important;padding:1mm 1.5mm 4mm!important;margin:0!important;box-sizing:border-box!important}
+  #safi-print-area,#safi-print-area *{color:#000!important;text-shadow:none!important;opacity:1!important}
+  .safi-receipt__grand{border-top:2px solid #000!important;border-bottom:2px solid #000!important}
+  .safi-receipt__items th{border-bottom:2px solid #000!important}
+  /* Printed exactly as on screen: black tier tag, grey "how to pay" box, black balance box. */
+  .safi-receipt__tag{background:#000!important;color:#fff!important;border:0!important;padding:2px 7px!important;font-size:11px!important}
+  .safi-receipt__pay{background:#e6e6e6!important;border:0!important}
+  .safi-receipt__pay,.safi-receipt__pay *{color:#000!important}
+  .safi-receipt__balance{background:#000!important;border:0!important}
+  .safi-receipt__balance,.safi-receipt__balance *{color:#fff!important}
+  #safi-print-area .safi-receipt__tag{color:#fff!important}
+  #safi-print-area .safi-receipt__balance,#safi-print-area .safi-receipt__balance *{color:#fff!important}
+  .safi-receipt__terms,.safi-receipt__addr{hyphens:none!important;-webkit-hyphens:none!important;word-break:normal!important;overflow-wrap:normal!important}
+  .safi-receipt__terms{text-align:justify!important}
+  .safi-receipt__addr{font-size:10.5px!important;white-space:normal}
+  .safi-receipt__balance{padding:6px 8px!important}
+  .safi-receipt__balance-lbl{font-size:11.5px!important;letter-spacing:.06em}
+  .safi-receipt__balance-amt{font-size:20px!important;font-weight:800!important}
+  .safi-receipt__logo image-slot{display:none!important}
+  .safi-jcsheet--roll .safi-jc__f span,.safi-jcsheet--roll .safi-jc__ids span,.safi-jcsheet--roll .safi-dn__grid span{font-size:10.5px!important}
+  .safi-jcsheet--roll .safi-jc__f b,.safi-jcsheet--roll .safi-jc__ids b,.safi-jcsheet--roll .safi-dn__grid b{font-size:13px!important}
+  .safi-jcsheet--roll .safi-jc__stages-grid span{font-size:11px!important}
+}
+.safi-receipt__logo-print{display:none}
+@media print{
+  /* 80mm job card + delivery note: no stretched gap between them, solid black lines */
+  .safi-jcsheet--roll .safi-jc,.safi-jcsheet--roll .safi-dn{height:auto!important;min-height:0!important;flex:none!important}
+  .safi-jcsheet--roll .safi-jc__stages,.safi-jcsheet--roll .safi-dn__fill{margin-top:3mm!important}
+  .safi-jcsheet--roll .safi-tear{height:0!important;min-height:0!important;margin:3mm 0!important;padding:0!important;border:0!important;border-top:2px solid #000!important}
+  .safi-jcsheet--roll [class*="__hd"],.safi-jcsheet--roll [class*="__ft"],.safi-jcsheet--roll table th{border-color:#000!important;border-width:0 0 2px!important}
+  .safi-jcsheet--roll [class*="__ft"]{border-width:2px 0 0!important;opacity:1!important}
+  .safi-jcsheet--roll [class*="__due"],.safi-jcsheet--roll .safi-jc__stages-grid i,.safi-jcsheet--roll .safi-dn__method i{border:2px solid #000!important}
+  .safi-jcsheet--roll .safi-jc__f--fill i,.safi-jcsheet--roll .safi-dn__fill-grid label i,.safi-jcsheet--roll .safi-jc__note{border-color:#000!important}
+  .safi-jcsheet--roll .safi-jc__f--fill i,.safi-jcsheet--roll .safi-dn__fill-grid label i{border-bottom-width:1.5px!important}
+  .safi-jcsheet--roll,.safi-jcsheet--roll *{color:#000!important;opacity:1!important}
+  .safi-jcsheet--roll,.safi-jcsheet--roll#safi-print-area{padding-bottom:12mm!important}
+}
+.safi-stat__delta{display:block;white-space:normal;line-height:1.5}.safi-stat__delta>span{display:inline}
+.safi-stat__value{line-height:1.2}.safi-stat__delta{margin-top:6px}
+.safi-stat .safi-stat__delta{display:block!important;text-align:left!important}.safi-stat .safi-stat__delta>span{display:inline!important}.safi-stat .safi-stat__delta>span>span{display:inline!important;margin:0!important;width:auto!important}
+.safi-stat__delta .safi-delta-up{color:#0a8f4e}.safi-stat__delta .safi-delta-dn{color:#b42318}
+.safi-top>div:first-child{flex:1 1 auto;min-width:0}.safi-top__title{display:block!important;height:auto!important;line-height:1.25!important}.safi-top__title .safi-liveclock{white-space:nowrap}
+/* 80mm: job card and delivery note sit directly on top of each other */
+.safi-jcsheet--roll{display:block!important;height:auto!important;min-height:0!important}.safi-jcsheet--roll .safi-jc,.safi-jcsheet--roll .safi-dn{height:auto!important;min-height:0!important;flex:none!important;break-inside:avoid}.safi-jcsheet--roll .safi-jc__stages,.safi-jcsheet--roll .safi-dn__fill{margin-top:3mm!important}.safi-jcsheet--roll .safi-tear{margin:3mm 0!important;break-before:avoid!important;break-after:avoid!important;page-break-before:avoid!important;page-break-after:avoid!important}
+@media print{.safi-jcsheet--roll,.safi-jcsheet--roll *{min-height:0!important}.safi-jcsheet--roll .safi-dn{break-before:avoid!important;page-break-before:avoid!important}}
+.safi-jcsheet--roll .safi-jc__f b.safi-mono,.safi-jcsheet--roll .safi-mono{white-space:nowrap}
+.safi-jc__ids>div:first-child{grid-column:1/-1}.safi-jc__ids span{white-space:nowrap}
+@media print{.safi-jcsheet--roll .safi-jc,.safi-jcsheet--roll .safi-dn{break-after:page}.safi-jcsheet--roll .safi-dn:last-child,.safi-jcsheet--roll>:last-child{break-after:auto}}
+@media print{.safi-jcsheet--roll,.safi-jcsheet--roll#safi-print-area{padding:0 1.5mm!important}.safi-jcsheet--roll .safi-tear{display:none!important}}

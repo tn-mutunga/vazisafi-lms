@@ -154,8 +154,8 @@ function CloudCard() {
         <div className="safi-store-info" style={{ marginTop: 14 }}>
           <div><span>Status</span><b>{!st.configured ? 'Not connected' : st.signedIn ? `Signed in as ${st.email}` : 'Connected — not signed in'}</b></div>
           <div><span>Internet</span><b>{st.online ? 'Online' : 'Offline — the app still works'}</b></div>
-          <div><span>Last cloud backup</span><b>{st.lastBackup ? new Date(st.lastBackup).toLocaleString() : 'Never'}</b></div>
-          <div><span>Last live sync</span><b>{st.lastSync ? new Date(st.lastSync).toLocaleString() : 'Never'}</b></div>
+          <div><span>Last cloud backup</span><b>{st.lastBackup ? dmyT(st.lastBackup) : 'Never'}</b></div>
+          <div><span>Last live sync</span><b>{st.lastSync ? dmyT(st.lastSync) : 'Never'}</b></div>
           {st.lastCloudOrders != null && <div><span>Orders: cloud / this laptop</span><b>{st.lastCloudOrders} / {(window.SAFI_STORE.get().orders || []).length}{st.lastCloudOrders === (window.SAFI_STORE.get().orders || []).length ? ' ✓ matching' : ''}</b></div>}
         </div>
       </Card>
@@ -206,7 +206,7 @@ function CloudCard() {
           {backups && (
             <Table
               cols={[
-                { label: 'When', render: b => new Date(b.created_at).toLocaleString() },
+                { label: 'When', render: b => dmyT(b.created_at) },
                 { label: 'Device', render: b => b.device || '—' },
                 { label: '', render: b => (
                   <button className="safi-rowlink" onClick={() => {

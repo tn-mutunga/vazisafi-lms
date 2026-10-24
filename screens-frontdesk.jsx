@@ -66,7 +66,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
       <div className="safi-grid safi-grid--4">
         <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" delta={`${D.orders.filter(o => o.status !== 'collected').length} active in the shop`}
           sparkline={<div className="safi-streams">{[['normal', 'Normal'], ['student', 'Student'], ['corporate', 'Corporate']].map(([k, l]) => <span key={k} className={`safi-streams__i safi-streams__i--tier-${k}`}><i/>{l} <b className="safi-mono">{todayOrders.filter(o => ((D.customers.find(c => c.id === o.customer) || {}).group || 'normal') === k).length}</b></span>)}</div>}/>
-        <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" deltaKind="none" delta={<><span className={ordDiff < 0 ? 'safi-dn' : 'safi-up'}>{ordDiff < 0 ? '↓' : '↑'} {ordDiff > 0 ? '+' : ordDiff < 0 ? '−' : '±'}{Math.abs(ordDiff)} orders</span>{' · '}<span className={revDiff < 0 ? 'safi-dn' : 'safi-up'}>{revDiff < 0 ? '↓' : '↑'} {revDiff > 0 ? '+' : revDiff < 0 ? '−' : '±'}{money(Math.abs(revDiff))}</span><span className="safi-cell-sub"> vs yesterday</span></>}
+        <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" deltaKind="none" delta={<><span className={ordDiff < 0 ? 'safi-delta-dn' : 'safi-delta-up'}>{ordDiff < 0 ? '↓' : '↑'} {ordDiff > 0 ? '+' : ordDiff < 0 ? '−' : '±'}{Math.abs(ordDiff)} orders</span>{' · '}<span className={revDiff < 0 ? 'safi-delta-dn' : 'safi-delta-up'}>{revDiff < 0 ? '↓' : '↑'} {revDiff > 0 ? '+' : revDiff < 0 ? '−' : '±'}{money(Math.abs(revDiff))}</span><span className="safi-cell-sub"> vs yesterday</span></>}
           sparkline={<div className="safi-streams">{streams.map(x => <span key={x.k} className={`safi-streams__i safi-streams__i--${x.k}`}><i/>{x.l} <b className="safi-mono">{money(x.v)}</b></span>)}</div>}/>
         <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} orders ready now`}/>
         <StatCard label="Washing → Drying → Ready → Collected" value={<span className="safi-stagecount"><span className="is-w">W-{washing}</span> → <span className="is-d">D-{D.orders.filter(o => o.status === 'drying').length}</span> → <span className="is-r">R-{D.orders.filter(o => o.status === 'ready').length}</span> → <span className="is-c">C-{collectedOrdersToday.length}</span></span>} icon="wash" delta="Today's Orders Stats"/>
@@ -80,7 +80,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
               { label: '#', render: r => <span className="safi-mono">{orderNo(r.id)}</span> },
               { label: 'Customer', render: r => {
                 const c = D.customers.find(x => x.id === r.customer);
-                return <div><div className="safi-cell-strong">{c?.name || orderNo(r.id)}{isToday(r) ? <span className="safi-today-pill">Today</span> : <span className="safi-cell-sub" style={{ marginLeft: 6 }}>{String(r.in).slice(8, 10)}/{String(r.in).slice(5, 7)}</span>}</div><div className="safi-cell-sub">{c?.phone || ''}</div></div>;
+                return <div><div className="safi-cell-strong">{c?.name || orderNo(r.id)}{isToday(r) ? <span className="safi-today-pill">Today</span> : <span className="safi-cell-sub" style={{ marginLeft: 6 }}>{String(r.in).slice(8, 10)}-{String(r.in).slice(5, 7)}</span>}</div><div className="safi-cell-sub">{c?.phone || ''}</div></div>;
               }},
               { label: 'Items', render: r => <span className="safi-cell-sub">{r.items.length} {r.items.length === 1 ? 'item' : 'items'}</span> },
               { label: 'Total', render: r => <span className="safi-mono">{money(r.total)}</span> },
@@ -206,6 +206,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   const [group, setGroup] = useStateFD('normal');
   const [items, setItems] = useStateFD([]);
   const [discountPct, setDiscountPct] = useStateFD(0);
+  const [codeId, setCodeId] = useStateFD('');
   const [deposit, setDeposit] = useStateFD(0);
   const [method, setMethod] = useStateFD('mpesa');
   const [txn, setTxn] = useStateFD('');
@@ -250,7 +251,9 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
     const svc = D.services.find(x => x.id === it.svc);
     return s + P.line(svc, it.qty, effGroup, it.customPrice);
   }, 0);
-  const discount = Math.round(subtotal * (discountPct / 100));
+  const code = (D.discounts || []).find(x => x.id === codeId && x.active !== false);
+  const flatOff = code && code.type === 'flat' ? Number(code.value) || 0 : 0;
+  const discount = Math.min(subtotal, Math.round(subtotal * (discountPct / 100)) + flatOff);
   const total = Math.max(0, subtotal - discount);
   const balance = total;
 
@@ -262,6 +265,8 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
       const last = (c) => D.orders.filter(o => o.customer === c.id).reduce((m, o) => (o.in > m ? o.in : m), '');
       return (n(b) - n(a)) || last(b).localeCompare(last(a)) || (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base' });
     });
+  // The customer picked for this order stays first until the order is saved.
+  { const k = filteredCust.findIndex(c => c.id === customerId); if (k > 0) filteredCust.unshift(filteredCust.splice(k, 1)[0]); }
 
   function handleSave(thenPrint) {
     if (!customerId) { toast('Pick a customer or add a new one first', 'error'); return; }
@@ -279,11 +284,12 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
       return { svc: it.svc, subtype: it.subtype || '', qty: it.qty, price: P.line(svc, it.qty, effGroup, it.customPrice), ...(it.unit ? { unit: it.unit } : {}) };
     });
     const order = window.SAFI_STORE.createOrder({
-      customerId, items: linePriced, total, discount, discountPct,
+      customerId, items: linePriced, total, discount, discountPct, discountCode: code ? code.code : '',
       paid: 0, method: '—', txn: '',
       notes, tag: String(tag).trim(),
     });
 
+    if (code) window.SAFI_STORE.useDiscount(code.id);
     // The customer's copy. This is the control that matters: once they hold a text
     // naming the order and the number to pay, the order cannot quietly not exist.
     if (customer && customer.phone) {
@@ -496,7 +502,13 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
               <div className="safi-sum__row">
                 <span>{t('discount', lang)}</span>
                 <div className="safi-inline-input">
-                  <input type="number" min="0" max="100" value={discountPct} onChange={e => setDiscountPct(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}/>
+                  {(D.discounts || []).some(x => x.active !== false) && (
+                    <select className="safi-input safi-input--code" value={codeId} title="Discount code" onChange={e => { const c = (D.discounts || []).find(x => x.id === e.target.value); setCodeId(e.target.value); setDiscountPct(c && c.type === 'pct' ? Number(c.value) || 0 : 0); }}>
+                      <option value="">No code</option>
+                      {(D.discounts || []).filter(x => x.active !== false).map(x => <option key={x.id} value={x.id}>{x.code} ({x.type === 'pct' ? x.value + '%' : 'KES ' + x.value})</option>)}
+                    </select>
+                  )}
+                  <input type="number" min="0" max="100" value={discountPct} onChange={e => { setCodeId(''); setDiscountPct(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0))); }}/>
                   <span className="safi-pct">%</span>
                   <span className="safi-cell-sub safi-mono" style={{ marginLeft: 6 }}>— {money(discount)}</span>
                 </div>
@@ -891,7 +903,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
     <>
       <Topbar
         title={t('nav_orders', lang)}
-        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter.split('-').reverse().join('/')} · ` : ''}${activeCount} active · ${tierLine}${dateFilter && dayTellers.length ? ` · Attendant${dayTellers.length > 1 ? 's' : ''}: ${dayTellers.join(', ')}` : ''}`}
+        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter.split('-').reverse().join('-')} · ` : ''}${activeCount} active · ${tierLine}${dateFilter && dayTellers.length ? ` · Orders taken by: ${dayTellers.join(', ')}` : ''}${dateFilter === SAFI_TIME.day() ? ` · On duty now: ${window.SAFI_STORE.getCurrentStaff().name}` : ''}`}
         right={<>
           {role === 'owner' && <Button kind="ghost" icon="print" onClick={() => window.print()}>{t('print', lang)}</Button>}
           <Button kind="primary" icon="plus" onClick={() => setView('new-order')}>{t('new_order', lang)}</Button>
@@ -929,7 +941,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
             <button className={`safi-chip ${dateFilter === yesterdayStr ? 'is-active' : ''}`} onClick={() => setDateFilter(yesterdayStr)}>Yesterday</button>
             <button className={`safi-chip ${!dateFilter ? 'is-active' : ''}`} onClick={() => setDateFilter('')}>Any date</button>
             <label className="safi-input safi-input--inline safi-datepick" title="Pick a date">
-              <span className="safi-mono">{dateFilter ? dateFilter.split('-').reverse().join('/') : 'dd/mm/yyyy'}</span>
+              <span className="safi-mono">{dateFilter ? dateFilter.split('-').reverse().join('-') : 'dd-mm-yyyy'}</span>
               <Icon name="calendar" size={14}/>
               <input type="date" className="safi-datepick__native" value={dateFilter} onChange={e => setDateFilter(e.target.value)} max={todayStr} title="Pick a specific date"/>
             </label>
@@ -963,7 +975,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
           ]}
           rows={filtered}
           onRow={r => { setActiveOrderId(r.id); setView('order-detail'); }}
-          empty={dateFilter ? `No orders on ${dateFilter.split('-').reverse().join('/')}.` : "No orders match your filter."}
+          empty={dateFilter ? `No orders on ${dateFilter.split('-').reverse().join('-')}.` : "No orders match your filter."}
         />
       </Card>
     </>
@@ -1425,7 +1437,7 @@ function AdvanceModal({ open, onClose, order, customer, stages, curIdx }) {
       .replace(/\{name\}/g, customer.name.split(' ')[0])
       .replace(/\{id\}/g, orderNo(order.id))
       .replace(/\{balance\}/g, `KES ${Math.round(order.total - order.paid).toLocaleString('en-KE')}`)
-      .replace(/\{due\}/g, (order.due || '').slice(5, 16))
+      .replace(/\{due\}/g, dmy(order.due || ''))
       .replace(/\{rider\}/g, '—');
   }
 
@@ -1769,6 +1781,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
         <div className="safi-receipt" id="safi-print-area">
           <div className="safi-receipt__hd">
             <div className="safi-receipt__logo">
+              {window.VAZI_LOGO_PRINT && <img className="safi-receipt__logo-print" src={window.VAZI_LOGO_PRINT} alt=""/>}
               <img className="safi-receipt__letterhead" src={window.VAZI_LOGO_LETTERHEAD || window.VAZI_LOGO_LOCKUP} alt="Vazi Safi Laundry & Executive Dry Cleaners — We do laundry. You do life."/>
             </div>
             <div className="safi-receipt__addr">{shop?.address || ''}</div>
@@ -2338,7 +2351,7 @@ function ReconcilePeriod() {
           <T cols={['Code', 'Date', 'Amount', '']} rows={noOrder.map(e => <tr key={e.code}><td className="safi-mono">{e.code}</td><td>{e.date || '—'}</td><td className="safi-mono">KES {Number(e.amount).toLocaleString()}</td><td><button className="safi-rowlink" onClick={() => ignore(e.code)}>Not a customer payment</button></td></tr>)}/>
           <h4 className="safi-section-h">3 · Paid with no money ({noMoney.length})</h4>
           <p className="safi-cell-sub" style={{ margin: '0 0 4px' }}>Recorded at the till but the code was not found on any statement uploaded. Check the code, or upload the right statement.</p>
-          <T cols={['Order', 'Customer', 'Method', 'Code', 'Amount', 'Date']} rows={noMoney.map(p => <tr key={p.id}><td className="safi-mono">{orderNo(p.order)}</td><td>{p.customer || '—'}</td><td>{p.method === 'mpesa' ? 'M-Pesa' : 'Bank'}</td><td className="safi-mono">{p.txn || '—'}</td><td className="safi-mono">KES {Number(p.amount).toLocaleString()}</td><td>{String(p.date).slice(5, 16)}</td></tr>)}/>
+          <T cols={['Order', 'Customer', 'Method', 'Code', 'Amount', 'Date']} rows={noMoney.map(p => <tr key={p.id}><td className="safi-mono">{orderNo(p.order)}</td><td>{p.customer || '—'}</td><td>{p.method === 'mpesa' ? 'M-Pesa' : 'Bank'}</td><td className="safi-mono">{p.txn || '—'}</td><td className="safi-mono">KES {Number(p.amount).toLocaleString()}</td><td>{dmy(p.date)}</td></tr>)}/>
         </div>
       </Modal>
     </>
@@ -2641,7 +2654,7 @@ function PackagesScreen({ lang, money, role }) {
         </div>}
       </div>
 
-      <Card title="Active discount codes">
+      <Card title={canEdit ? "Discount codes" : "Active discount codes"} action={<span className="safi-cell-sub">{canEdit ? "Switch a code on to let Front Desk pick it in New Order" : "Pick a code in New Order → Summary → Discount"}</span>}>
         <Table
           cols={[
             { label: 'Name', render: r => <b>{r.name}</b> },
@@ -2649,8 +2662,11 @@ function PackagesScreen({ lang, money, role }) {
             { label: 'Value', render: r => <b>{r.type === 'pct' ? `-${r.value}%` : `-${money(r.value)}`}</b> },
             { label: 'Expires', render: r => r.expires },
             { label: 'Times used', render: r => r.uses || 0 },
+            { label: 'Status', render: r => canEdit
+              ? <label className="safi-toggle"><input type="checkbox" checked={r.active !== false} onChange={e => { window.SAFI_STORE.setDiscountActive(r.id, e.target.checked); toast(`${r.code} ${e.target.checked ? 'on' : 'off'}`); }}/><span/><b>{r.active !== false ? 'On' : 'Off'}</b></label>
+              : <span className={`safi-pill safi-pill--${r.active !== false ? 'green' : 'gray'}`}>{r.active !== false ? 'On' : 'Off'}</span> },
           ]}
-          rows={D.discounts}
+          rows={canEdit ? D.discounts : (D.discounts || []).filter(x => x.active !== false)}
           empty="No discounts."
         />
       </Card>
@@ -2751,7 +2767,7 @@ function IssuesScreen({ lang }) {
       }>
         <Table
           cols={[
-            { label: 'Date', render: r => <span className="safi-cell-sub">{r.date.slice(5)}</span> },
+            { label: 'Date', render: r => <span className="safi-cell-sub">{dmy(r.date)}</span> },
             { label: 'Subject', render: r => <b>{r.subject}</b> },
             { label: 'Raised by', render: r => r.raisedBy },
             { label: 'Order', render: r => r.order ? <span className="safi-mono">{orderNo(r.order)}</span> : <span className="safi-cell-sub">—</span> },

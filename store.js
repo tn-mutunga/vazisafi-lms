@@ -13,6 +13,13 @@ window.SAFI_PHONE = (prefix, phone) => {
 // Order numbers carry a 2-letter laptop code internally (SF-2446-EG) so two tills can
 // never clash. People only ever see SF-2446.
 window.orderNo = (id) => String(id || '').replace(/-[A-Z]{2}$/, '');
+// One date style on every computer: dd-mm HH:MM (or dd-mm-yy). Input "YYYY-MM-DD[ HH:MM]".
+window.dmy = (v, o = {}) => {
+  const x = String(v || ''); if (x.length < 10 || x[4] !== '-') return x;
+  const d = x.slice(8, 10) + '-' + x.slice(5, 7) + (o.year ? '-' + x.slice(2, 4) : '');
+  return o.time === false || x.length < 16 ? d : d + ' ' + x.slice(11, 16);
+};
+window.dmyT = (d) => window.dmy(SAFI_TIME.stamp(new Date(d)), { year: true });
 window.SAFI_TIME = (() => {
   const p = n => String(n).padStart(2, '0');
   const day = (d = new Date()) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -268,6 +275,16 @@ window.SAFI_STORE = (() => {
   // General purchases: Management-only, always a Special expense.
   if (!(state.expenseCategories || []).some(c => c.id === 'ec-gp')) {
     state.expenseCategories = [...(state.expenseCategories || []), { id: 'ec-gp', name: 'General purchases', icon: 'bag', color: 'violet', mgmtOnly: true }];
+    migrated = true;
+  }
+  // v2.4.6: the three discount codes, real counts from 0, each switched on/off by Management.
+  if (!(state.settings || {}).discountsV2) {
+    state.discounts = [
+      { id: 'd1', name: 'New Customer 15%', code: 'KARIBU15', value: 15, type: 'pct', expires: 'always', uses: 0, active: true },
+      { id: 'd2', name: 'Bulk over 30 kg', code: 'BULK30', value: 10, type: 'pct', expires: 'always', uses: 0, active: false },
+      { id: 'd3', name: 'Loyalty 10th order', code: 'LOYAL10', value: 500, type: 'flat', expires: 'always', uses: 0, active: false },
+    ];
+    state.settings = { ...(state.settings || {}), discountsV2: true };
     migrated = true;
   }
   // Persist any migration changes immediately
@@ -647,6 +664,7 @@ window.SAFI_STORE = (() => {
         total: Math.round(total),
         discount: Math.round(discount || 0),
         discountPct: discountPct || 0,
+        discountCode: arguments[0].discountCode || '',
         paid: Math.round(paid || 0),
         method: method || '—',
         txn: txn || '',
@@ -982,7 +1000,9 @@ window.SAFI_STORE = (() => {
     // ── Packages & discounts ───────────────────────────────
     updatePackage(id, patch) { state.packages = state.packages.map(p => p.id === id ? { ...p, ...patch } : p); save(); },
     addPackage(p)    { state.packages  = [...state.packages,  { id: nextId('pk'), subscribers: 0, active: true, ...p }]; save(); },
-    addDiscount(d)   { state.discounts = [...state.discounts, { id: nextId('d'),  uses: 0, ...d }]; save(); },
+    addDiscount(d)   { state.discounts = [...state.discounts, { id: nextId('d'),  uses: 0, active: true, ...d }]; save(); },
+    setDiscountActive(id, on) { state.discounts = state.discounts.map(d => d.id === id ? { ...d, active: !!on } : d); save(); },
+    useDiscount(id) { state.discounts = state.discounts.map(d => d.id === id ? { ...d, uses: (d.uses || 0) + 1 } : d); save(); },
 
     // ── Inventory ──────────────────────────────────────────
     addInventory(i)  { state.inventory = [...state.inventory, { id: nextId('i'), ...i }]; save(); },

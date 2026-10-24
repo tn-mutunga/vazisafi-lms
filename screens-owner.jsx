@@ -38,7 +38,7 @@ function MonthRevenue({ orders, money }) {
 // ─── Busiest hours: orders taken in (intake) and loads started washing, by hour ───
 function BusyHours() {
   const D = useStore();
-  const [per, setPer] = useStateOw('week');
+  const [per, setPer] = useStateOw('today');
   const days = per === 'today' ? 1 : per === 'week' ? 7 : 30;
   const from = SAFI_TIME.daysAgo(days - 1);
   const hours = Array.from({ length: 15 }, (_, i) => 7 + i);
@@ -370,7 +370,7 @@ function ReportsScreen({ lang, money }) {
           <div className="safi-report__hd">
             <div>
               <div className="safi-report__title">{headerTitle}</div>
-              <div className="safi-report__sub">Generated {new Date().toLocaleString('en-KE')} · Vazi Safi Laundry</div>
+              <div className="safi-report__sub">Generated {dmyT(new Date())} · Vazi Safi Laundry</div>
             </div>
           </div>
 

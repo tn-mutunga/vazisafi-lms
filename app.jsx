@@ -2,6 +2,78 @@
 // Loaded last as <script type="text/babel" src="app.jsx">
 const { useState: useAppState, useEffect: useAppEffect } = React;
 
+
+// Roll printing: make each printed page exactly as long as its content (no blank paper).
+// Measures the receipt / job card / delivery note at the 76mm print width just before
+// printing and sets the page length to fit, plus a small tear-off margin.
+(function () {
+  if (window.__safiRollFit) return; window.__safiRollFit = true;
+  const MM = 25.4 / 96;
+  // Measure with the same box the print CSS uses (76mm wide, print padding),
+  // otherwise the screen padding wraps more lines and overstates the height.
+  function measure(el, pad, width = '76mm') {
+    // Measure a copy in an empty off-screen box 76mm wide, so the screen layout
+    // (flex rows, tall neighbours, the preview frame) can't stretch the result.
+    try {
+      const box = document.createElement('div');
+      box.className = (el.parentElement && el.parentElement.className) || '';
+      box.style.cssText = 'position:absolute;left:-30000px;top:0;display:block;width:76mm;height:auto;min-height:0;padding:0;margin:0;visibility:hidden;overflow:visible';
+      const c = el.cloneNode(true);
+      const cs = c.style;
+      cs.width = '76mm'; cs.maxWidth = '76mm'; cs.boxSizing = 'border-box'; cs.height = 'auto'; cs.minHeight = '0';
+      cs.margin = '0'; cs.position = 'static'; cs.flex = 'none'; cs.alignSelf = 'auto'; cs.transform = 'none';
+      if (pad) cs.padding = pad;
+      box.appendChild(c); document.body.appendChild(box);
+      const h = c.getBoundingClientRect().height;
+      box.remove();
+      if (h > 40) { const hp = el.getBoundingClientRect().height; return Math.ceil(Math.max(h, hp) * MM) + 8; }
+    } catch (e) {}
+    // Fallback: measure in place.
+    // On screen the receipt sits in a flex row and is stretched to the row's height,
+    // so measure it un-stretched (auto height, top-aligned) and read its real content height.
+    const s = el.style, keep = [s.width, s.maxWidth, s.padding, s.boxSizing, s.height, s.minHeight, s.alignSelf];
+    if (width) { s.width = width; s.maxWidth = width; s.boxSizing = 'border-box'; }
+    if (pad) s.padding = pad;
+    s.height = 'auto'; s.minHeight = '0'; s.alignSelf = 'flex-start';
+    const h = el.getBoundingClientRect().height;
+    [s.width, s.maxWidth, s.padding, s.boxSizing, s.height, s.minHeight, s.alignSelf] = keep;
+    return Math.ceil(h * MM) + 6;
+  }
+  // Copy every @media print rule into a temporary stylesheet so the receipt is measured
+  // with its PRINT sizes (fonts, padding, widths), not its screen sizes.
+  function printRulesText() {
+    let out = '';
+    for (const sh of document.styleSheets) {
+      let rules; try { rules = sh.cssRules; } catch (e) { continue; }
+      for (const r of rules || []) {
+        if (r.type === 4 && /print/.test(r.media.mediaText)) {
+          for (const c of r.cssRules) if (c.type !== 6 && !/^@page/.test(c.cssText)) out += c.cssText + '\n';
+        }
+      }
+    }
+    return out;
+  }
+  window.addEventListener('beforeprint', () => {
+    const tmp = document.createElement('style'); tmp.id = 'safi-roll-measure'; tmp.textContent = printRulesText();
+    document.head.appendChild(tmp);
+    let css = '';
+    const sheet = document.querySelector('.safi-jcsheet--roll');
+    const rec = document.querySelector('.safi-receipt-wrap #safi-print-area, #safi-print-area.safi-receipt');
+    if (sheet) {
+      // Only the job card and delivery note print; the tear line is hidden (the page break is the cut).
+      const parts = [...sheet.querySelectorAll('.safi-jc, .safi-dn')];
+      parts.forEach((el, i) => { el.style.page = 'roll' + i; css += `@page roll${i}{size:80mm ${measure(el, '', '')}mm;margin:0}`; });
+    } else if (rec && !document.querySelector('.safi-jcsheet:not(.safi-jcsheet--roll)')) {
+      css = `@page{size:80mm ${measure(rec, '', '')}mm;margin:0}`;
+    }
+    let st = document.getElementById('safi-roll-fit');
+    if (!st) { st = document.createElement('style'); st.id = 'safi-roll-fit'; document.head.appendChild(st); }
+    st.textContent = css;
+    tmp.remove();
+  });
+  window.addEventListener('afterprint', () => { const st = document.getElementById('safi-roll-fit'); if (st) st.textContent = ''; });
+})();
+
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "direction": "navy",
   "density": "regular",
@@ -111,6 +183,8 @@ function App() {
 
   // expose setTweak globally so Management Settings screen can call it
   useAppEffect(() => { window.__safiSetTweak = setTweak; }, [setTweak]);
+  // Test hook: open an order's receipt (used for print-length checks).
+  useAppEffect(() => { window.__safiOpenReceipt = (id) => { setActiveOrderId(id); setView('receipt'); }; }, []);
 
   // Apply direction + density to root
   useAppEffect(() => {

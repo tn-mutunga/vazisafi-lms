@@ -14,7 +14,7 @@ function expBuild(D, kind, from, to) {
   const phone = (c) => c.phone ? `${c.prefix || '+254'} ${c.phone}` : '';
   const svc = (id) => (D.services.find(s => s.id === id) || {}).name || id;
   const staff = (id) => id === 'management' ? 'Management' : ((D.staff || []).find(s => s.id === id) || {}).name || id || '';
-  const dm = (s) => { const v = String(s || ''); return v.length >= 10 ? `${v.slice(8, 10)}-${v.slice(5, 7)}-${v.slice(0, 4)}${v.length >= 16 ? ' ' + v.slice(11, 16) : ''}` : v; };
+  const dm = (s) => { const v = String(s || ''); return v.length >= 10 ? `${v.slice(8, 10)}-${v.slice(5, 7)}-${v.slice(2, 4)}${v.length >= 16 ? ' ' + v.slice(11, 16) : ''}` : v; };
   const K = (n) => Math.round(n || 0);
   if (kind === 'orders') {
     const list = D.orders.filter(o => inR(o.in)).sort((a, b) => String(a.in).localeCompare(String(b.in)));
@@ -71,7 +71,7 @@ function expPDF(b, title, sub, shop) {
     <div class="xp-sum">${b.summary.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
     <table><thead><tr>${b.head.map((h, i) => `<th${b.money.includes(i) ? ' class="n"' : ''}>${esc(h)}</th>`).join('')}</tr></thead>
     <tbody>${b.rows.map(r => `<tr>${r.map((c, i) => `<td${b.money.includes(i) ? ' class="n"' : ''}>${esc(b.money.includes(i) && c !== '' && !isNaN(c) ? Number(c).toLocaleString() : c)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${b.head.length}">Nothing in this period.</td></tr>`}</tbody></table>
-    <p class="xp-ft">Generated ${esc(new Date().toLocaleString('en-KE'))}</p>`;
+    <p class="xp-ft">Generated ${esc(dmyT(new Date()))}</p>`;
   document.body.appendChild(el);
   const prevTitle = document.title;
   document.title = title;

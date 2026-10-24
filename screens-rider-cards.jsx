@@ -32,7 +32,7 @@ function JobCard({ order, card, D, shop }) {
           <div className="safi-jc__kind">Job card — stays with the garments</div>
         </div>
         <div className="safi-jc__ids">
-          <div><span>Order no. · client no.</span><b className="safi-mono">{card?.serial ? serialNo(card.serial) : orderNo(order.id)}</b></div>
+          <div><span>Order · Client no.</span><b className="safi-mono">{card?.serial ? serialNo(card.serial) : orderNo(order.id)}</b></div>
           <div><span>Tag no.</span><b className="safi-mono">{order.tag || '—'}</b></div>
         </div>
       </header>
@@ -43,12 +43,12 @@ function JobCard({ order, card, D, shop }) {
           <b>{c?.name || 'Walk-in customer'}</b>
         </div>
         <div className="safi-jc__f"><span>Client no. today</span><b className="safi-mono">{clientNo(order)}</b></div>
-        <div className="safi-jc__f"><span>Phone</span><b className="safi-mono">{c ? `${c.prefix || ''} ${c.phone}` : '—'}</b></div>
+        <div className="safi-jc__f"><span>Phone</span><b className="safi-mono">{c ? (window.SAFI_PHONE ? SAFI_PHONE(c.prefix || '+254', c.phone) : c.phone) : '—'}</b></div>
       </div>
       <div className="safi-jc__row">
-        <div className="safi-jc__f"><span>Taken in</span><b>{order.in}</b></div>
+        <div className="safi-jc__f"><span>Taken in</span><b>{(() => { const v = String(order.in || ''); return v.length >= 16 ? `${v.slice(8, 10)}-${v.slice(5, 7)}-${v.slice(2, 4)} ${v.slice(11, 16)}` : v; })()}</b></div>
         <div className="safi-jc__f safi-jc__f--fill"><span>Due back</span><i/></div>
-        <div className="safi-jc__f"><span>Attendant</span><b>{(D.staff.find(s => s.id === order.cashier) || {}).name || '—'}</b></div>
+        <div className="safi-jc__f"><span>Attendant</span><b>{(D.staff.find(s => s.id === (order.cashier || D.currentStaffId)) || D.staff[0])?.name || '—'}</b></div>
         <div className="safi-jc__f"><span>Total</span><b className="safi-mono">KES {Math.round(order.total).toLocaleString('en-KE')}</b></div>
       </div>
 
@@ -78,7 +78,7 @@ function JobCard({ order, card, D, shop }) {
 
       <footer className="safi-jc__ft">
         <span>{rider ? `For delivery by ${rider.name}.` : 'For collection at the shop.'}</span>
-        <span>Printed {nowStamp()}</span>
+        <span>Printed {(() => { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`; })()}</span>
       </footer>
     </section>
   );
@@ -114,7 +114,7 @@ function DeliveryNote({ order, card, D, shop }) {
 
       <div className="safi-dn__cust">
         <div className="safi-dn__cust-name">{c?.name || 'Walk-in customer'}</div>
-        <div className="safi-mono">{c ? `${c.prefix || ''} ${c.phone}` : ''}</div>
+        <div className="safi-mono">{c ? (window.SAFI_PHONE ? SAFI_PHONE(c.prefix || '+254', c.phone) : c.phone) : ''}</div>
         <div>{d?.address || c?.residence || '—'}{d?.area ? ` · ${d.area}` : ''}</div>
         {d?.slotStart && <div className="safi-dn__slot">Slot {d.slotStart} – {d.slotEnd}</div>}
       </div>
@@ -151,7 +151,7 @@ function DeliveryNote({ order, card, D, shop }) {
       <footer className="safi-dn__ft">
         <span>Surrender this note to the office on return. Rider payment is made against returned notes only.
         {D.settings?.ownerPhone ? ` Queries: ${D.settings.ownerPhone}.` : ''}</span>
-        <span>Printed {nowStamp()}</span>
+        <span>Printed {(() => { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`; })()}</span>
       </footer>
     </section>
   );
@@ -166,8 +166,8 @@ function JobCardSheet({ orderId, setView, shop, lang }) {
   const card = window.SAFI_STORE.getCardForOrder(order.id)
     || window.SAFI_STORE.issueDeliveryCard(order.id);
   // Paper size is per laptop: the shop's thermal printer uses the 80mm roll.
-  const [paper, setPaper] = useStateDC(() => localStorage.getItem('safi_jc_paper') || '80');
-  const pick = (p) => { setPaper(p); localStorage.setItem('safi_jc_paper', p); };
+  const [paper, setPaper] = useStateDC('80') /* always opens on the 80mm roll; A4 only for this one print */;
+  const pick = (p) => setPaper(p);
   // Job card: up to 5 prints. Delivery note: once only (it is the rider's cash record).
   const jcUsed = window.SAFI_STORE.printCount('jobcard', order.id);
   const dnDone = window.SAFI_STORE.printCount('delivery', order.id) >= window.SAFI_STORE.printsAllowed('delivery', order.id);

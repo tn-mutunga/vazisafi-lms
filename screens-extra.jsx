@@ -480,7 +480,7 @@ function DispatchScreen({ lang, money, setView }) {
               return c ? <div><div className="safi-cell-strong">{c.name}</div><div className="safi-cell-sub">{c.prefix} {c.phone}</div></div> : <span className="safi-cell-sub">Walk-in</span>;
             }},
             { label: 'Address', render: r => <div><div>{r.address}</div>{r.area && <div className="safi-cell-sub">{r.area}</div>}</div> },
-            { label: 'Slot', render: r => (r.slotDate || r.slotStart) ? <div><span className="safi-mono">{r.slotDate ? r.slotDate.slice(5) + ' ' : ''}{r.slotStart}{r.slotEnd ? ' – ' + r.slotEnd : ''}</span>{r.slotDateGuessed && <div className="safi-cell-sub" title="Filled in from the order. Edit to confirm.">date estimated · check</div>}</div> : <span className="safi-cell-sub">—</span> },
+            { label: 'Slot', render: r => (r.slotDate || r.slotStart) ? <div><span className="safi-mono">{r.slotDate ? dmy(r.slotDate) + ' ' : ''}{r.slotStart}{r.slotEnd ? ' – ' + r.slotEnd : ''}</span>{r.slotDateGuessed && <div className="safi-cell-sub" title="Filled in from the order. Edit to confirm.">date estimated · check</div>}</div> : <span className="safi-cell-sub">—</span> },
             { label: 'Rider', render: r => {
               const s = D.staff.find(x => x.id === r.rider);
               return s ? <span className="safi-cell-cust"><Icon name="rider" size={14}/> &nbsp;<b>{s.name}</b></span> : <span className="safi-cell-sub">Unassigned</span>;
@@ -580,7 +580,7 @@ function MessagesScreen({ lang, role }) {
       }>
         <Table
           cols={[
-            { label: 'Sent', render: r => <span className="safi-cell-sub">{r.date.slice(5, 16)}</span> },
+            { label: 'Sent', render: r => <span className="safi-cell-sub">{dmy(r.date)}</span> },
             { label: 'To', render: r => <div><div className="safi-cell-strong">{r.name}</div><div className="safi-cell-sub safi-mono">{r.to}</div></div> },
             { label: 'Stage', render: r => <span className={`safi-tag safi-tag--blue`}>{r.stage}</span> },
             { label: 'Order', render: r => r.orderId ? <span className="safi-mono">{orderNo(r.orderId)}</span> : <span className="safi-cell-sub">—</span> },
@@ -691,7 +691,7 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
       }>
         <Table
           cols={[
-            { label: 'Requested', render: r => <span className="safi-cell-sub">{r.requestedAt.slice(5, 16)}</span> },
+            { label: 'Requested', render: r => <span className="safi-cell-sub">{dmy(r.requestedAt)}</span> },
             { label: 'Action', render: r => <b>{actionLabel[r.action] || r.action}</b> },
             { label: 'Order', render: r => (
               <button className="safi-mono safi-rowlink" onClick={() => { setActiveOrderId(r.target); setView('order-detail'); }}>{orderNo(r.target)}</button>
@@ -704,7 +704,7 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
             { label: 'Status', render: r => <span className={`safi-pill safi-pill--${r.status === 'approved' ? 'green' : r.status === 'rejected' ? 'red' : 'amber'}`}><span className="safi-pill__dot"/>{r.status}</span> },
             { label: '', render: r => r.status === 'pending'
               ? <button className="safi-rowlink" onClick={() => setDecideOn(r)}>Decide →</button>
-              : <span className="safi-cell-sub">{r.decidedAt.slice(5, 16)}</span>
+              : <span className="safi-cell-sub">{dmy(r.decidedAt)}</span>
             },
           ]}
           rows={rows}
@@ -733,7 +733,7 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
                 <h4 className="safi-section-h">Current order — {orderNo(orig.id)}</h4>
                 <div className="safi-approval-meta">
                   <div><span>Customer</span><b>{cust?.name || orderNo(orig.id)}</b></div>
-                  <div><span>Placed</span><b>{orig.in.slice(5, 16)}</b></div>
+                  <div><span>Placed</span><b>{dmy(orig.in)}</b></div>
                   <div><span>Status</span><b>{orig.status}</b></div>
                   <div><span>Current total</span><b className="safi-mono">{money(orig.total)}</b></div>
                   <div><span>Paid</span><b className="safi-mono">{money(orig.paid)}</b></div>

@@ -1,5 +1,15 @@
-VAZI SAFI LMS v2.4.5
-- FIX: "Switch attendant" (and other windows opened from the sidebar) appeared behind the dashboard.
-  All pop-up windows now open on top of everything.
-- "Teller" replaced with "Attendant" on screen (e.g. Orders: "Attendant: Lydia").
-(Also includes everything in 2.4.3 and 2.4.4.)
+VAZI SAFI LMS v2.4.6
+PRINTING (80mm roll)
+- Each receipt, job card and delivery note prints exactly as long as its content (+ ~6mm to tear). No blank paper.
+- Job card and delivery note print as two separate exact-length pages; no blank page between them.
+- Printed receipt matches the screen: black tier label, grey "How to pay" box, black "Balance due" box (white text).
+- Small print no longer splits words; address line fits.
+DASHBOARD
+- W → D → R → C counts wrap at an arrow on narrow windows instead of overflowing.
+(Also includes everything in 2.4.5.)
+
+PRINTING (80mm roll)
+- Receipt, job card and delivery note: the page ends just after the last line (no blank tail). An older measuring step that forced ~360mm pages is switched off.
+- Job card opens on 80mm by default on every laptop.
+NEW ORDER
+- The customer you pick (or add with + New customer) stays first in the list, highlighted, until the order is saved.
