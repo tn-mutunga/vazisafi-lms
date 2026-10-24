@@ -17,7 +17,8 @@ function useStore() {
 // ─── Modal ────────────────────────────────────────────────────────────────
 const Modal = ({ open, onClose, title, children, footer, width = 480 }) => {
   if (!open) return null;
-  return (
+  // Rendered at the top of the page so no panel (e.g. the sidebar) can hide it.
+  return ReactDOM.createPortal((
     <div className="safi-modal" onClick={onClose}>
       <div className="safi-modal__sheet" style={{ width }} onClick={e => e.stopPropagation()}
         onKeyDown={e => {
@@ -36,7 +37,7 @@ const Modal = ({ open, onClose, title, children, footer, width = 480 }) => {
         {footer && <footer className="safi-modal__ft">{footer}</footer>}
       </div>
     </div>
-  );
+  ), document.body);
 };
 
 // ─── Phone input with country prefix ──────────────────────────────────────

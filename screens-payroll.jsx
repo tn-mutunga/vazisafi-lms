@@ -199,7 +199,7 @@ function PayrollScreen({ money }) {
         <div className="safi-form">
           <label>Full name<input className="safi-input" autoFocus value={newS.name} onChange={e => setNewS({ ...newS, name: e.target.value })} placeholder="e.g. Lydia Wanjiru"/></label>
           <label>Role<input className="safi-input" value={newS.role} onChange={e => setNewS({ ...newS, role: e.target.value })} placeholder="e.g. Washer, Rider, Front Desk"/></label>
-          <p className="safi-hint" style={{ margin: 0 }}>They also appear in Management → Staff and can be chosen as teller.</p>
+          <p className="safi-hint" style={{ margin: 0 }}>They also appear in Management → Staff and can be chosen as attendant.</p>
         </div>
       </Modal>
 

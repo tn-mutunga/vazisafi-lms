@@ -1,7 +1,5 @@
-VAZI SAFI LMS v2.4.4
-FRONT DESK DASHBOARD
-- Revenue Today: orders and amount vs yesterday, each with its own up/down arrow.
-- Stage card: "Washing → Drying → Ready → Collected", counts W-3 → D-0 → R-1 → C-0 in stage colours, purple arrows.
-- "Reminders deck" heading over the six reminder cards; cash-bag icon on Delivered/Collected, phone icon on Pick-ups.
-- Clients by service is now a pop-up card under Recent orders (Today / 7 days / Month / Year).
-(Also includes everything in 2.4.3.)
+VAZI SAFI LMS v2.4.5
+- FIX: "Switch attendant" (and other windows opened from the sidebar) appeared behind the dashboard.
+  All pop-up windows now open on top of everything.
+- "Teller" replaced with "Attendant" on screen (e.g. Orders: "Attendant: Lydia").
+(Also includes everything in 2.4.3 and 2.4.4.)
