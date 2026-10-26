@@ -49,6 +49,13 @@ function lkNow() { const d = new Date(); return d.getHours() * 60 + d.getMinutes
 function lkLockMinutes(st) { const [h, m] = String(st.lockTime || '20:30').split(':').map(Number); return (h || 0) * 60 + (m || 0); }
 
 window.safiLock = (why) => { localStorage.setItem(LOCK_KEY, JSON.stringify({ locked: true, why: why || '', at: SAFI_TIME.stamp() })); localStorage.removeItem(SESSION_KEY); window.dispatchEvent(new Event('safi-lock')); };
+window.safiSignOut = () => {
+  localStorage.removeItem(SESSION_KEY);
+  const on = !!((window.SAFI_STORE.get().settings || {}).lockEnabled);
+  window.dispatchEvent(new Event('safi-signout'));
+  if (on) window.safiLock('Signed out');
+  else { try { toast('Signed out of Management', 'success'); } catch (e) {} }
+};
 window.safiSession = () => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)) || null; } catch (e) { return null; } };
 
 function LockScreen({ onUnlock }) {
@@ -71,10 +78,24 @@ function LockScreen({ onUnlock }) {
   useEffectLk(() => {
     if (!enabled) return;
     const t = setInterval(() => {
-      if (locked) return;
+      if (locked) {
+        // Unlock all screens (from Management): undo a remote lock, restore who was signed in.
+        let ls = {}; try { ls = JSON.parse(localStorage.getItem(LOCK_KEY)) || {}; } catch (e) {}
+        const un = st.unlockAllAt || '';
+        if (un && ls.why === 'Locked from Management' && (!ls.at || ls.at <= un)) {
+          let prev = null; try { prev = JSON.parse(localStorage.getItem('safi_session_prev')); } catch (e) {}
+          localStorage.setItem(LOCK_KEY, JSON.stringify({ locked: false }));
+          if (prev) localStorage.setItem(SESSION_KEY, JSON.stringify(prev));
+          setLocked(false);
+        }
+        return;
+      }
       const s = window.safiSession();
+      // Attendant on duty must be the attendant signed in here; if it changed (e.g. from another laptop), lock for a fresh sign-in.
+      const duty = (window.SAFI_STORE.get().settings || {}).currentStaffId || '';
+      if (s && s.kind === 'attendant' && s.staffId && duty && duty !== s.staffId) { localStorage.removeItem(SESSION_KEY); window.safiLock('Switch attendant'); return; }
       const all = st.lockAllAt || '';
-      if (all && (!s || !s.at || s.at < all) && localStorage.getItem('safi_lockall_seen') !== all) { localStorage.setItem('safi_lockall_seen', all); window.safiLock('Locked from Management'); return; }
+      if (all && (!s || !s.at || s.at < all) && localStorage.getItem('safi_lockall_seen') !== all) { localStorage.setItem('safi_lockall_seen', all); if (s) localStorage.setItem('safi_session_prev', JSON.stringify(s)); window.safiLock('Locked from Management'); return; }
       if (s && s.kind === 'management') return; // Management stays signed in until Sign out
       const lockAt = lkLockMinutes(st);
       const today = SAFI_TIME.day();
@@ -86,7 +107,7 @@ function LockScreen({ onUnlock }) {
       if (idle > 0 && Date.now() - lastAct.current > idle * 60e3) window.safiLock('No activity for ' + idle + ' min');
     }, 20000);
     return () => clearInterval(t);
-  }, [enabled, locked, st.lockTime, st.idleLockMin, st.lockAllAt]);
+  }, [enabled, locked, st.lockTime, st.idleLockMin, st.lockAllAt, st.unlockAllAt, st.currentStaffId]);
 
   useEffectLk(() => {
     const m = () => { const s = document.querySelector('.safi-side'); setLeft(s ? Math.round(s.getBoundingClientRect().right) : 264); };
@@ -106,15 +127,18 @@ function LockScreen({ onUnlock }) {
     <>
       <div className="safi-lock-block" style={{ width: left }}/>
       <div className="safi-lock" style={{ left }}>
-        <SignInCard D={D} onDone={unlock}/>
+        <SignInCard D={D} onDone={unlock} why={(() => { try { return (JSON.parse(localStorage.getItem(LOCK_KEY)) || {}).why || ''; } catch (e) { return ''; } })()}/>
       </div>
     </>
   );
 }
 
-function SignInCard({ D, onDone }) {
+function SignInCard({ D, onDone, why }) {
   const [mode, setMode] = useStateLk('in'); // in | first | change
-  const [u, setU] = useStateLk(() => localStorage.getItem('safi_last_user') || '');
+  // Usernames are never remembered. Staff get suggestions as they type; Management gets none.
+  try { localStorage.removeItem('safi_last_user'); } catch (e) {}
+  const [u, setU] = useStateLk('');
+  const [mu, setMu] = useStateLk('');
   const [p, setP] = useStateLk('');
   const [err, setErr] = useStateLk('');
   const [busy, setBusy] = useStateLk(false);
@@ -127,6 +151,18 @@ function SignInCard({ D, onDone }) {
   const staff = (D.staff || []).filter(s => s.active !== false && !/manager|director/i.test(s.role || ''));
   const mgmt = [{ id: 'mgmt-tim', name: 'Timothy Mutunga' }, { id: 'mgmt-lyn', name: 'Lyn Okaka' }];
 
+  async function mgmtIn() {
+    setErr('');
+    const realPin = String(window.__safiOwnerPin || window.SAFI_OWNER_PIN || st.ownerPin || '');
+    const a = mu.trim() ? lkFind(mu.trim()) : null;
+    if (a && a.kind === 'management') {
+      const ok = (a.hash && await lkHash(a.salt, p) === a.hash) || (a.tempHash && Date.now() < (a.tempExp || 0) && await lkHash(a.tempSalt, p) === a.tempHash);
+      if (ok && a.tempHash && !a.hash) { setPending(a); setNu(a.username); setMode('change'); return; }
+      if (ok) { if (a.kind !== 'management') { try { const L = JSON.parse(localStorage.getItem('safi_used_staff_users') || '[]').filter(x => x !== a.username); localStorage.setItem('safi_used_staff_users', JSON.stringify([a.username, ...L].slice(0, 30))); } catch (e) {} } onDone(a); return; }
+    }
+    if (realPin && String(p).trim() === realPin) { onDone(a && a.kind === 'management' ? a : { username: 'management', kind: 'management', staffId: '', name: 'Management' }); return; }
+    setErr(mu.trim() && !a ? 'No Management account with that username.' : a && a.kind !== 'management' ? 'That is a staff account. Use Staff sign in.' : 'Wrong password or passcode.'); setP('');
+  }
   async function signIn() {
     setErr('');
     // Management PIN always unlocks (with or without a username).
@@ -134,7 +170,7 @@ function SignInCard({ D, onDone }) {
     if (realPin && String(p).trim() === realPin) {
       const a0 = lkFind(u);
       const acct = a0 && a0.kind === 'management' ? a0 : { username: (a0 && a0.kind === 'management' && a0.username) || 'management', kind: 'management', staffId: '', name: 'Management' };
-      if (!a0 || a0.kind === 'management') { if (a0) localStorage.setItem('safi_last_user', a0.username); onDone(acct); return; }
+      if (!a0 || a0.kind === 'management') { onDone(acct); return; }
     }
     const a = lkFind(u);
     if (!a) { setErr('No account with that username.'); return; }
@@ -144,7 +180,7 @@ function SignInCard({ D, onDone }) {
     const temp = !ok && a.tempHash && Date.now() < (a.tempExp || 0) && (await lkHash(a.tempSalt, p.toUpperCase())) === a.tempHash;
     setBusy(false);
     if (ok && a.kind !== 'management' && !a.approved) { setErr('Waiting for Management to approve your account.'); return; }
-    if (ok) { localStorage.setItem('safi_last_user', a.username); onDone(a); return; }
+    if (ok) { onDone(a); return; }
     if (temp) { setPending(a); setNu(a.username); setMode('change'); setP(''); return; }
     setErr(!a.hash && !a.tempHash ? 'No password set yet. Tap Get a code.' : a.tempHash && Date.now() >= (a.tempExp || 0) && !a.hash ? 'That code has expired. Request a new one.' : p.length > 8 && !a.tempHash ? 'Passwords are 4–8 characters. Check what you typed.' : 'Wrong password or code.');
   }
@@ -158,14 +194,13 @@ function SignInCard({ D, onDone }) {
     const a = { ...acc[pending.username], username: nu, salt, hash: await lkHash(salt, np) };
     delete a.tempHash; delete a.tempSalt; delete a.tempCode; delete a.tempExp;
     delete acc[pending.username]; acc[nu] = a; lkSaveAccounts(acc);
-    localStorage.setItem('safi_last_user', a.username);
     if (a.kind !== 'management' && !a.approved) { toast('Password saved. Management will approve your account.', 'success'); setMode('in'); setP(''); setInfo('Password saved. You can sign in once Management approves your account.'); return; }
     toast('Password saved', 'success'); onDone(a);
   }
   async function requestCode() {
     setErr(''); setInfo('');
     const isM = who.startsWith('mgmt-');
-    if (!who) { setErr('Choose who you are.'); return; }
+    if (!who) { setErr('Select your name.'); return; }
     if (em && !/^\S+@\S+\.\S+$/.test(em)) { setErr('That email does not look right.'); return; }
     if (!USER_RE.test(fu)) { setErr('Username: 3–20 letters, numbers or _'); return; }
     const clash = lkFind(fu);
@@ -187,14 +222,33 @@ function SignInCard({ D, onDone }) {
     <div className="safi-lock__card">
       <div className="safi-lock__ico"><Icon name="lock" size={22}/></div>
       {mode === 'in' && (<>
-        <h2>Sign in to continue</h2>
+        {why === 'Signed out' && <div className="safi-callout" style={{ marginBottom: 10 }}><Icon name="check" size={14}/><span>You are signed out.</span></div>}
+        <h2>Staff sign in</h2>
         {info && <div className="safi-callout" style={{ marginBottom: 10 }}><Icon name="sms" size={14}/><span>{info}</span></div>}
         <div className="safi-form">
-          <label>Username<input className="safi-input" autoFocus={!u} value={u} onChange={e => setU(e.target.value)} onKeyDown={onKey(signIn)} autoComplete="username"/></label>
-          <label>Password / Passcode<input className="safi-input safi-mono" type="password" autoFocus={!!u} value={p} onChange={e => setP(e.target.value)} onKeyDown={onKey(signIn)} autoComplete="off"/></label>
+          <label>Username
+            <div className="safi-usugg">
+              <input className="safi-input" autoFocus value={u} onChange={e => setU(e.target.value)} onKeyDown={onKey(signIn)} autoComplete="off" name="safi-staff-u"/>
+              {(() => { const q = u.trim().toLowerCase(); if (!q) return null; let used = []; try { used = JSON.parse(localStorage.getItem('safi_used_staff_users') || '[]'); } catch (e) {} const acc = lkAccounts(); const list = used.map(n => acc[n] || Object.values(acc).find(x => x.username === n)).filter(a => a && a.kind !== 'management' && !a.disabled && a.username.toLowerCase().startsWith(q) && a.username.toLowerCase() !== q); return list.length ? <div className="safi-usugg__list">{list.map(a => <button key={a.username} type="button" onMouseDown={e => { e.preventDefault(); setU(a.username); }}>{a.username}</button>)}</div> : null; })()}
+            </div>
+          </label>
+          <label>Password / Passcode<input className="safi-input safi-mono" type="password" value={p} onChange={e => setP(e.target.value)} onKeyDown={onKey(signIn)} autoComplete="off"/></label>
           {err && <p className="safi-pin__err">{err}</p>}
           <Button kind="primary" icon="check" disabled={busy} onClick={signIn}>{busy ? 'Checking…' : 'Sign in'}</Button>
           <button className="safi-rowlink" onClick={() => { setMode('first'); setErr(''); setInfo(''); }}>First time, or forgot your password? Get a code</button>
+        </div>
+        <div className="safi-lock-mgmt">
+          <Button kind="ghost" full icon="lock" onClick={() => { setMode('mgmt'); setErr(''); setP(''); }}>Management sign in</Button>
+        </div>
+      </>)}
+      {mode === 'mgmt' && (<>
+        <h2>Management sign in</h2>
+        <div className="safi-form">
+          <label>Username<input className="safi-input" autoFocus value={mu} onChange={e => setMu(e.target.value)} onKeyDown={onKey(mgmtIn)} autoComplete="off" name="safi-m-u" spellCheck={false}/></label>
+          <label>Password / Passcode<input className="safi-input safi-mono" type="password" value={p} onChange={e => setP(e.target.value)} onKeyDown={onKey(mgmtIn)} autoComplete="off"/></label>
+          {err && <p className="safi-pin__err">{err}</p>}
+          <Button kind="primary" icon="check" onClick={mgmtIn}>Sign in as Management</Button>
+          <button className="safi-rowlink" onClick={() => { setMode('in'); setErr(''); setP(''); }}>‹ Back to staff sign in</button>
         </div>
       </>)}
       {mode === 'change' && pending && (<>
@@ -212,11 +266,10 @@ function SignInCard({ D, onDone }) {
         <h2>Get a sign-in code</h2>
         <p className="safi-cell-sub">Management gets a 6-character code for you. Use it once to sign in, then set your own password.</p>
         <div className="safi-form">
-          <label>Who are you?
+          <label>Select your name
             <select className="safi-input" value={who} onChange={e => setWho(e.target.value)}>
               <option value="">— Choose —</option>
-              <optgroup label="Attendants">{staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>
-              <optgroup label="Management">{mgmt.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</optgroup>
+              {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </label>
           <label>Email <span className="safi-cell-sub">(optional)</span><input className="safi-input" type="email" value={em} onChange={e => setEm(e.target.value)}/></label>
@@ -232,6 +285,61 @@ function SignInCard({ D, onDone }) {
 }
 
 // Management → Settings card.
+function SignOutButton({ ses }) {
+  const [ask, setAsk] = useStateLk(false);
+  const [pw, setPw] = useStateLk('');
+  const [err, setErr] = useStateLk('');
+  const isM = ses && ses.kind === 'management';
+  async function confirm() {
+    setErr('');
+    const st = window.SAFI_STORE.get().settings || {};
+    const real = String(window.__safiOwnerPin || window.SAFI_OWNER_PIN || st.ownerPin || '');
+    let ok = real && pw.trim() === real;
+    if (!ok && ses && ses.username) { const a = lkFind(ses.username); if (a && a.hash) ok = (await lkHash(a.salt, pw)) === a.hash; }
+    if (!ok) { setErr('Wrong password / passcode'); setPw(''); return; }
+    setAsk(false); setPw(''); window.safiSignOut();
+  }
+  if (!isM) return <button className="safi-lockbtn" onClick={() => window.safiSignOut()}><Icon name="arrow-l" size={16}/>Signed out</button>;
+  if (!ask) return <button className="safi-lockbtn is-navy" onClick={() => { setAsk(true); setErr(''); }}><Icon name="check" size={16}/>Signed in</button>;
+  return (
+    <span className="safi-signout-ask">
+      <input className="safi-input safi-mono" type="password" autoFocus placeholder="Password / Passcode" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirm(); if (e.key === 'Escape') setAsk(false); }}/>
+      <button className="safi-lockbtn is-navy" onClick={confirm}><Icon name="arrow-l" size={16}/>Sign out</button>
+      <button className="safi-rowlink" onClick={() => setAsk(false)}>Cancel</button>
+      {err && <span className="safi-pin__err" style={{ margin: 0 }}>{err}</span>}
+    </span>
+  );
+}
+
+function MgmtAccountSetup() {
+  const [who, setWho] = useStateLk('mgmt-tim');
+  const [un, setUn] = useStateLk('');
+  const [msg, setMsg] = useStateLk('');
+  const people = [{ id: 'mgmt-tim', name: 'Timothy Mutunga' }, { id: 'mgmt-lyn', name: 'Lyn Okaka' }];
+  async function make() {
+    setMsg('');
+    const u = un.trim();
+    if (!USER_RE.test(u)) { setMsg('Username: 3–20 letters, numbers or _'); return; }
+    const clash = lkFind(u);
+    if (clash && clash.staffId !== who) { setMsg('That username is taken.'); return; }
+    const p = people.find(x => x.id === who);
+    const r = await lkIssueCode({ username: u, email: '', kind: 'management', staffId: who, name: p.name });
+    setMsg(`Code for ${u}: ${r.code}. Use Management sign in with this username and code, then set your password.`);
+    setUn('');
+  }
+  return (
+    <>
+      <h4 className="safi-section-h">Management accounts</h4>
+      <div className="safi-mgmt-setup">
+        <select className="safi-input" value={who} onChange={e => setWho(e.target.value)}>{people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        <input className="safi-input" placeholder="Username, e.g. tim_vs" value={un} onChange={e => setUn(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') make(); }}/>
+        <Button kind="secondary" icon="check" onClick={make}>Create / reset</Button>
+      </div>
+      {msg && <p className="safi-hint" style={{ marginTop: 8 }}><b>{msg}</b></p>}
+    </>
+  );
+}
+
 function StaffSignInCard() {
   const D = useStore();
   const st = D.settings || {};
@@ -260,8 +368,15 @@ function StaffSignInCard() {
           <label>Lock after no activity (minutes, 0 = never)<input type="number" min="0" className="safi-input safi-mono" value={st.idleLockMin == null ? 60 : st.idleLockMin} onChange={e => set('idleLockMin', Math.max(0, Number(e.target.value) || 0))}/></label>
         </div>
         <p className="safi-hint">The screen also locks when a shift is closed.</p>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><Button kind="primary" icon="lock" onClick={() => { const at = SAFI_TIME.stamp(); set('lockAllAt', at); setTimeout(() => { try { window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && window.SAFI_CLOUD.syncNow().catch(() => {}); } catch (e) {} }, 300); window.safiLock('Locked by Management'); }}>Lock all screens</Button><Button kind="ghost" icon="staff" onClick={() => { if (!st.lockEnabled) set('lockEnabled', true); window.__safiGoFrontDesk && window.__safiGoFrontDesk(); setTimeout(() => window.safiLock('Preview'), 150); }}>Preview Front Desk lock</Button><Button kind="ghost" icon="arrow-l" onClick={() => window.safiLock('Signed out')}>Sign out</Button></div>
+        {(() => { const allOn = !!st.lockAllAt && !(st.unlockAllAt && st.unlockAllAt >= st.lockAllAt); const ses = window.safiSession(); return (
+        <div className="safi-lockbtns">
+          <button className={`safi-lockbtn${allOn ? ' is-on' : ''}`} onClick={() => { const at = SAFI_TIME.stamp(); if (allOn) { set('unlockAllAt', at); toast('Other laptops unlock at their next sync', 'success'); } else { localStorage.setItem('safi_lockall_seen', at); set('lockAllAt', at); toast('Other laptops lock at their next sync', 'success'); } setTimeout(() => { try { window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && window.SAFI_CLOUD.syncNow().catch(() => {}); } catch (e) {} }, 300); }}><Icon name="lock" size={16}/>{allOn ? 'Screens locked · Unlock all' : 'Lock all screens'}</button>
+          <button className="safi-lockbtn" onClick={() => { if (!st.lockEnabled) set('lockEnabled', true); window.__safiGoFrontDesk && window.__safiGoFrontDesk(); setTimeout(() => window.safiLock('Preview'), 150); }}><Icon name="staff" size={16}/>Preview Front Desk lock</button>
+          <SignOutButton ses={ses}/>
+        </div>); })()}
         <p className="safi-hint">Management stays signed in (no daily or idle lock) until you press Sign out.</p>
+
+        <MgmtAccountSetup/>
 
         <h4 className="safi-section-h">Signings · accounts and codes</h4>
         <p className="safi-hint">When someone taps "Get a code", it appears here. Send them the username and the code (valid 24 hours). Once they set their own password the status shows Active.</p>

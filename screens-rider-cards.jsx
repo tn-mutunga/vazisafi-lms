@@ -47,7 +47,7 @@ function JobCard({ order, card, D, shop }) {
       </div>
       <div className="safi-jc__row">
         <div className="safi-jc__f"><span>Taken in</span><b>{(() => { const v = String(order.in || ''); return v.length >= 16 ? `${v.slice(8, 10)}-${v.slice(5, 7)}-${v.slice(2, 4)} ${v.slice(11, 16)}` : v; })()}</b></div>
-        <div className="safi-jc__f safi-jc__f--fill"><span>Due back</span><i/></div>
+        <div className="safi-jc__f"><span>Due back</span><b>{(() => { let v = String(order.due || ''); if (!v && order.in) { const d = new Date(String(order.in).replace(' ', 'T')); d.setHours(d.getHours() + 24); v = SAFI_TIME.stamp(d); } return v.length >= 16 ? `${v.slice(8, 10)}-${v.slice(5, 7)}-${v.slice(2, 4)} ${v.slice(11, 16)}` : (v || '—'); })()}</b></div>
         <div className="safi-jc__f"><span>Attendant</span><b>{(D.staff.find(s => s.id === (order.cashier || D.currentStaffId)) || D.staff[0])?.name || '—'}</b></div>
         <div className="safi-jc__f"><span>Total</span><b className="safi-mono">KES {Math.round(order.total).toLocaleString('en-KE')}</b></div>
       </div>

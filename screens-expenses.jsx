@@ -205,6 +205,17 @@ function ExpensesScreen({ lang, money, role }) {
     { const cat = D.expenseCategories.find(c => c.id === form.category); if (isMgmtOnlyCat(cat) && !isManagement) { toast('General purchases can only be logged by Management', 'error'); return; } if (isMgmtOnlyCat(cat)) form.costGroup = 'special'; }
     if (form.method !== 'cash' && String(form.txn || '').trim().length < 5) { setTxnErr(true); toast('Transaction code needs at least 5 characters (ideally the last 5)', 'error'); return; }
     if (isOutsourced(form.category) && !splitIds(form.linkedOrder).length) { toast('Outsourced dry cleaning needs at least one linked order', 'error'); return; }
+    // Possible double entry: same name (any case), same amount and same txn code as an existing expense.
+    {
+      const norm = (v) => String(v || '').trim().toLowerCase();
+      const dup = (D.expenses || []).find(e => e.id !== editId && norm(e.label) === norm(form.label) && Number(e.amount) === Number(parseFloat(form.amount)) && norm(e.txn) === norm(form.txn));
+      if (dup && !form.__dupOk) {
+        const who = dup.paidBy === 'management' ? 'Management' : ((D.staff.find(s => s.id === dup.paidBy) || {}).name || 'someone');
+        const d = String(dup.date || ''); const when = d.length >= 16 ? `${d.slice(8, 10)}-${d.slice(5, 7)} ${d.slice(11, 16)}` : d;
+        const sep = window.confirm(`This looks like an expense already logged:\n\n"${dup.label}" · KES ${Number(dup.amount).toLocaleString()} · code ${dup.txn || '—'}\nLogged by ${who}, ${when}\n\nAre these two separate expenses?\n\nOK = Yes, save both\nCancel = No, keep only the first one`);
+        if (!sep) { toast('Not saved: the first record was kept', 'success'); setShowAdd(false); setEditId(null); setForm({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'bank', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' }); return; }
+      }
+    }
     if (editId) {
       window.SAFI_STORE.updateExpense(editId, { ...form, amount: parseFloat(form.amount) });
       setExpenseGroup(D, editId, form.costGroup || 'operational');

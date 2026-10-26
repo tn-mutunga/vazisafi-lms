@@ -323,7 +323,13 @@ window.SAFI_STORE = (() => {
   };
 
   // The teller on duty is a synced setting; never read the old per-laptop copy directly.
-  const curStaff = () => (state.settings && state.settings.currentStaffId) || state.currentStaffId || '';
+  // Directors / managers are never the attendant on duty.
+  const isMgmtRole = (st) => !!st && /director|manager|owner/i.test(st.role || '');
+  const curStaff = () => {
+    const id = (state.settings && state.settings.currentStaffId) || state.currentStaffId || '';
+    const st = (state.staff || []).find(x => x.id === id);
+    return st && !isMgmtRole(st) ? id : '';
+  };
 
   const STAGES = ['intake', 'washing', 'drying', 'ironing', 'ready', 'collected'];
   const DC_STAGES = ['intake', 'drycleaning', 'ready', 'collected'];
@@ -579,6 +585,7 @@ window.SAFI_STORE = (() => {
     // ── Active attendant ───────────────────────────────────
     // Saved in settings so it syncs: set Lydia at the shop and every laptop shows Lydia.
     setCurrentStaff(id) {
+      { const st = (state.staff || []).find(x => x.id === id); if (st && /director|manager|owner/i.test(st.role || '')) return; }
       // Duty log: who became the attendant and when (synced), so each day shows its shifts.
       const prevLog = ((state.settings || {}).dutyLog) || [];
       const last = prevLog[prevLog.length - 1];
@@ -596,8 +603,8 @@ window.SAFI_STORE = (() => {
       return true;
     },
     getCurrentStaff() {
-      const id = (state.settings && state.settings.currentStaffId) || state.currentStaffId || state.staff[0]?.id;
-      return state.staff.find(s => s.id === id) || state.staff[0] || { name: 'Attendant', role: '—' };
+      const id = curStaff();
+      return (state.staff || []).find(x => x.id === id) || { id: '', name: 'No attendant set', role: 'tap to choose', shift: '' };
     },
 
     // ── Staff ──────────────────────────────────────────────

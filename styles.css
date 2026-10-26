@@ -3394,3 +3394,9 @@ button { font-family: inherit; }
 .safi-lock__card{width:400px;max-width:92%;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 60px rgba(11,16,32,.25);padding:26px 26px 22px}
 .safi-lock__card h2{font-family:var(--ff-display);font-size:20px;margin:6px 0 4px}
 .safi-lock__ico{width:44px;height:44px;border-radius:12px;background:var(--brand-soft);color:var(--brand);display:flex;align-items:center;justify-content:center}
+.safi-lock-mgmt{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)}
+.safi-lockbtns{display:flex;gap:8px;flex-wrap:wrap}.safi-lockbtn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-weight:600;cursor:pointer}.safi-lockbtn:hover{border-color:var(--ink-3)}.safi-lockbtn.is-on{background:#e8772e;border-color:#e8772e;color:#fff}.safi-lockbtn.is-navy{background:#1e2a5a;border-color:#1e2a5a;color:#fff}
+.safi-mgmt-setup{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center}
+.safi-usugg{position:relative}.safi-usugg__list{position:absolute;left:0;right:0;top:100%;margin-top:4px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(15,20,40,.12);z-index:5;overflow:hidden}.safi-usugg__list button{display:block;width:100%;text-align:left;padding:9px 12px;border:0;background:none;font:inherit;cursor:pointer}.safi-usugg__list button:hover{background:var(--paper)}
+.safi-side__signout{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(232,119,46,.18);color:#fff;font:inherit;font-weight:600;cursor:pointer;width:100%}.safi-side__signout:hover{background:#e8772e}
+.safi-signout-ask{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}.safi-signout-ask .safi-input{width:190px}

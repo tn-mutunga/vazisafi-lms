@@ -139,8 +139,8 @@ const IconPicker = ({ value, onChange }) => {
 
 // ─── Toast (non-blocking confirmation) ────────────────────────────────────
 const toastListeners = new Set();
-function toast(msg, kind = 'success') {
-  toastListeners.forEach(fn => fn({ msg, kind, id: Date.now() }));
+function toast(msg, kind = 'success', ms) {
+  toastListeners.forEach(fn => fn({ msg, kind, ms, id: Date.now() }));
 }
 // Owner-PIN confirmation for anything destructive. safiPinConfirm({ title, body, confirmLabel, onConfirm })
 let pinConfirmOpen = null;
@@ -178,7 +178,7 @@ function ToastHost() {
   useEffect(() => {
     const fn = (t) => {
       setItems(prev => [...prev, t]);
-      setTimeout(() => setItems(prev => prev.filter(x => x.id !== t.id)), 3000);
+      setTimeout(() => setItems(prev => prev.filter(x => x.id !== t.id)), t.ms || 3000);
     };
     toastListeners.add(fn);
     return () => toastListeners.delete(fn);
@@ -416,18 +416,20 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
         <span className="safi-side__avatar">{current.name.split(' ').map(s => s[0]).slice(0, 2).join('')}</span>
         <div className="safi-side__userinfo">
           <div className="safi-side__username">{current.name}</div>
-          <div className="safi-side__userrole">{current.role} · tap to switch</div>
+          <div className="safi-side__userrole">{current.id ? `${current.role} · tap to switch` : 'Tap to choose who is on duty'}</div>
         </div>
         <span className="safi-side__bell" title="Switch attendant"><Icon name="arrow" size={14}/></span>
       </button>
+      {(() => { const on = !!((store.settings || {}).lockEnabled); const ses = window.safiSession && window.safiSession(); if (!on || !ses || ses.kind === 'management') return null; return (
+        <button className="safi-side__signout" onClick={() => { localStorage.removeItem('safi_session_v1'); window.safiLock && window.safiLock('Signed out'); }}><Icon name="lock" size={14}/>Sign out{ses.name ? ` · ${String(ses.name).split(' ')[0]}` : ''}</button>); })()}
 
       <Modal open={showSwitch} onClose={() => setShowSwitch(false)} title="Switch attendant" width={420}
         footer={<Button kind="ghost" onClick={() => setShowSwitch(false)}>Done</Button>}>
-        <p className="safi-cell-sub" style={{ marginTop: 0 }}>Choose who is at the front desk now. Their name will appear on every receipt.</p>
+        
         <div className="safi-staff-pick">
-          {store.staff.filter(s => s.active).map(s => (
+          {store.staff.filter(s => s.active && !/director|manager|owner/i.test(s.role || '')).map(s => (
             <button key={s.id} className={`safi-staff-pick__item ${current.id === s.id ? 'is-active' : ''}`}
-              onClick={() => { window.SAFI_STORE.setCurrentStaff(s.id); setShowSwitch(false); toast(`Signed in as ${s.name}`); }}>
+              onClick={() => { const on = !!((store.settings || {}).lockEnabled); const ses = window.safiSession && window.safiSession(); setShowSwitch(false); if (on && (!ses || (ses.kind !== 'management' && ses.staffId !== s.id))) { localStorage.removeItem('safi_session_v1'); window.safiLock && window.safiLock('Switch attendant'); toast(`${s.name.split(' ')[0]}: sign in with your own username`, 'success', 7000); return; } window.SAFI_STORE.setCurrentStaff(s.id); toast(`${s.name} is on duty`); }}>
               <span className="safi-cust-pick__avatar safi-cust-pick__avatar--lg">{s.name.split(' ').map(x => x[0]).slice(0, 2).join('')}</span>
               <div>
                 <b>{s.name}</b>
@@ -437,7 +439,7 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
             </button>
           ))}
         </div>
-        <p className="safi-cell-sub" style={{ marginTop: 14, fontSize: 11 }}>Add or edit staff in <b>Owner → Staff</b>.</p>
+        
       </Modal>
     </aside>
   );

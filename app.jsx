@@ -183,6 +183,7 @@ function App() {
   // expose setTweak globally so Management Settings screen can call it
   useAppEffect(() => { window.__safiSetTweak = setTweak; }, [setTweak]);
   useAppEffect(() => { window.__safiGoFrontDesk = () => { setRole('frontdesk'); setView('dashboard'); }; }, []);
+  useAppEffect(() => { const f = () => { setRole('frontdesk'); setView('dashboard'); }; window.addEventListener('safi-signout', f); return () => window.removeEventListener('safi-signout', f); }, []);
   // Test hook: open an order's receipt (used for print-length checks).
   useAppEffect(() => { window.__safiOpenReceipt = (id) => { setActiveOrderId(id); setView('receipt'); }; }, []);
 

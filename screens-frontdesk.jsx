@@ -904,7 +904,12 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
     const log = (((D.settings || {}).dutyLog) || []).slice().sort((x, y) => String(x.at).localeCompare(String(y.at)));
     const before = log.filter(e => String(e.at).slice(0, 10) < dateFilter).pop();
     const day = log.filter(e => String(e.at).slice(0, 10) === dateFilter);
-    const seq = (before ? [{ id: before.id, at: dateFilter + ' 00:00', carried: true }] : []).concat(day);
+    const isAtt = (id) => { const s = D.staff.find(x => x.id === id); return s && !/director|manager|owner/i.test(s.role || ''); };
+    let seq = (before ? [{ id: before.id, at: dateFilter + ' 00:00', carried: true }] : []).concat(day).filter(e => isAtt(e.id));
+    // Collapse repeats of the same person.
+    seq = seq.filter((e, k) => k === 0 || seq[k - 1].id !== e.id);
+    // No log yet (e.g. never switched since updating): show who is on duty now.
+    if (!seq.length && dateFilter === todayStr) { const cur = window.SAFI_STORE.getCurrentStaff(); if (cur && cur.id) seq = [{ id: cur.id, at: dateFilter + ' 00:00', carried: true }]; }
     const nm = (id) => (D.staff.find(x => x.id === id) || {}).name || '—';
     const endOfDay = dateFilter === todayStr ? 'now' : '23:59';
     return seq.map((e, k) => ({ name: nm(e.id), from: e.carried ? 'start of day' : String(e.at).slice(11, 16), to: seq[k + 1] ? String(seq[k + 1].at).slice(11, 16) : endOfDay }));
