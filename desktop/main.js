@@ -260,6 +260,16 @@ ipcMain.handle('lms:config', (_e, patch) => (patch ? writeConfig(patch) : readCo
 ipcMain.handle('lms:updateStatus', () => updateStatus);
 ipcMain.handle('lms:checkUpdate', () => { updateCtl.check(true); return updateStatus; });
 ipcMain.handle('lms:installUpdate', () => { updateCtl.install(); return true; });
+ipcMain.handle('lms:sendMail', async (_e, msg) => {
+  const cfg = readConfig();
+  if (!cfg.gmailUser || !cfg.gmailPass) return { ok: false, reason: 'Gmail not set up on this laptop (Settings → Staff sign-in)' };
+  try {
+    const nodemailer = require('nodemailer');
+    const t = nodemailer.createTransport({ service: 'gmail', auth: { user: cfg.gmailUser, pass: cfg.gmailPass } });
+    await t.sendMail({ from: `Vazi Safi LMS <${cfg.gmailUser}>`, to: msg.to, subject: msg.subject, text: msg.text });
+    return { ok: true };
+  } catch (e) { return { ok: false, reason: e.message }; }
+});
 ipcMain.handle('lms:info', () => ({
   version: app.getVersion(),
   electron: process.versions.electron,

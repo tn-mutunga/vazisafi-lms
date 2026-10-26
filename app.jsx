@@ -143,17 +143,16 @@ function DecisionNotice() {
   useAppEffect(() => { if (seen === null) { const ids = (D.approvals || []).filter(a => a.status !== 'pending').map(a => a.id); localStorage.setItem(KEY, JSON.stringify(ids)); setSeen(ids); } }, [seen]);
   const acks = ((D.settings || {}).approvalAcks) || {};
   // Front desk chime when Management replies.
-  const freshIds = (D.approvals || []).filter(a => a.status !== 'pending' && seen && !seen.includes(a.id) && !acks[a.id]).map(a => a.id).join(',');
+  const freshIds = (D.approvals || []).filter(a => a.status !== 'pending' && seen && !seen.includes(a.id) && !acks[a.id] && !(a.payload && a.payload.ackAt)).map(a => a.id).join(',');
   useAppEffect(() => { if (freshIds && (D.settings || {}).replyChime !== false) safiSound('reply'); }, [freshIds]);
   if (seen === null) return null;
   // Hidden once any laptop pressed OK (acknowledgement is synced).
-  const fresh = (D.approvals || []).filter(a => a.status !== 'pending' && !seen.includes(a.id) && !acks[a.id]);
+  const fresh = (D.approvals || []).filter(a => a.status !== 'pending' && !seen.includes(a.id) && !acks[a.id] && !(a.payload && a.payload.ackAt));
   if (!fresh.length) return null;
   const label = { delete_order: 'Delete order', rewash_order: 'Rewash', edit_order: 'Edit order', refund_order: 'Refund', reprint_receipt: 'Receipt reprint' };
   const dismiss = () => {
     const ids = [...seen, ...fresh.map(a => a.id)]; localStorage.setItem(KEY, JSON.stringify(ids)); setSeen(ids);
-    const next = { ...acks }; const at = SAFI_TIME.stamp(); fresh.forEach(x => { next[x.id] = at; });
-    window.SAFI_STORE.setSetting('approvalAcks', next);
+    window.SAFI_STORE.ackApprovals(fresh.map(x => x.id));
     setTimeout(() => { try { window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && window.SAFI_CLOUD.syncNow().catch(() => {}); } catch (e) {} }, 300);
   };
   return (
@@ -183,6 +182,7 @@ function App() {
 
   // expose setTweak globally so Management Settings screen can call it
   useAppEffect(() => { window.__safiSetTweak = setTweak; }, [setTweak]);
+  useAppEffect(() => { window.__safiGoFrontDesk = () => { setRole('frontdesk'); setView('dashboard'); }; }, []);
   // Test hook: open an order's receipt (used for print-length checks).
   useAppEffect(() => { window.__safiOpenReceipt = (id) => { setActiveOrderId(id); setView('receipt'); }; }, []);
 
@@ -208,6 +208,8 @@ function App() {
   }
 
   function safeSetRole(r) {
+    const ses = window.safiSession && window.safiSession();
+    if (r === 'owner' && role !== 'owner' && (window.SAFI_STORE.get().settings || {}).lockEnabled && ses && ses.kind === 'management') { setRole('owner'); setView('dashboard'); return; }
     if (r === 'owner' && role !== 'owner') tryEnterOwner();
     else { setRole(r); setView('dashboard'); }
   }
@@ -282,6 +284,7 @@ function App() {
   return (
     <div className="safi-app" data-screen-label={`${role}/${view}`}>
       <Sidebar role={role} setRole={safeSetRole} view={view} setView={setView} lang={lang} shop={shop}/>
+      <LockScreen onUnlock={(acc) => { if (acc.kind === 'management') { setRole('owner'); setView('dashboard'); } else { if (acc.staffId) window.SAFI_STORE.setCurrentStaff(acc.staffId); setRole('frontdesk'); setView('dashboard'); } }}/>
       <main className="safi-main"><UpdateBar/>{window.DispatchReminders && <window.DispatchReminders setView={setView}/>}{screen}</main>
       <ToastHost/>
       <PinConfirmHost/>

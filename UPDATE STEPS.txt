@@ -1,15 +1,16 @@
-VAZI SAFI LMS v2.4.6
-PRINTING (80mm roll)
-- Each receipt, job card and delivery note prints exactly as long as its content (+ ~6mm to tear). No blank paper.
-- Job card and delivery note print as two separate exact-length pages; no blank page between them.
-- Printed receipt matches the screen: black tier label, grey "How to pay" box, black "Balance due" box (white text).
-- Small print no longer splits words; address line fits.
-DASHBOARD
-- W → D → R → C counts wrap at an arrow on narrow windows instead of overflowing.
-(Also includes everything in 2.4.5.)
-
-PRINTING (80mm roll)
-- Receipt, job card and delivery note: the page ends just after the last line (no blank tail). An older measuring step that forced ~360mm pages is switched off.
-- Job card opens on 80mm by default on every laptop.
-NEW ORDER
-- The customer you pick (or add with + New customer) stays first in the list, highlighted, until the order is saved.
+VAZI SAFI LMS v2.4.7
+PRINTING
+- Receipt: client name bold (same weight as attendant), header Receipt # + Date, Client # + Attendant;
+  page length fits the content (no long blank tail); logo prints in black & white cleanly.
+- Job card & delivery note: 80mm roll is the default on every laptop; no blank gap between them;
+  attendant name shown, same as the receipt.
+STAFF SIGN-IN (off until you switch it on: Management → Settings → Staff sign-in & screen lock)
+- Blurs the working area until someone signs in. Locks daily (default 20:30), after 60 min idle,
+  and when a shift is closed. Management stays signed in until Sign out.
+- First time: "Get a code" → code appears in Settings → Signings → Management passes it on.
+  Person sets own username + 4–8 character password/passcode → Management approves.
+- Disable / Enable attendants; Delete needs the Management PIN. Management PIN always unlocks.
+- Lock all screens (every laptop locks at next sync); Preview Front Desk lock.
+- Username remembered, never the password.
+OTHER
+- Dates dd-mm, Attendant wording, stage counts fit at 85% zoom.

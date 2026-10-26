@@ -3368,3 +3368,29 @@ button { font-family: inherit; }
 .safi-jc__ids>div:first-child{grid-column:1/-1}.safi-jc__ids span{white-space:nowrap}
 @media print{.safi-jcsheet--roll .safi-jc,.safi-jcsheet--roll .safi-dn{break-after:page}.safi-jcsheet--roll .safi-dn:last-child,.safi-jcsheet--roll>:last-child{break-after:auto}}
 @media print{.safi-jcsheet--roll,.safi-jcsheet--roll#safi-print-area{padding:0 1.5mm!important}.safi-jcsheet--roll .safi-tear{display:none!important}}
+
+
+/* v2.4.7 thermal print tune (print only; screen unchanged).
+   The roll has no grey: anything light prints white. So in print the logo goes
+   dark greyscale, and the delivery note's small grey labels go black. */
+@media print{
+  .safi-receipt__logo img,.safi-receipt__logo image-slot{filter:grayscale(1) brightness(.7) contrast(1.8)!important}
+  .safi-dn,.safi-dn *,.safi-jc,.safi-jc *{color:#000!important}
+  .safi-dn span,.safi-dn label,.safi-dn small{font-weight:600}
+  .safi-dn i,.safi-dn hr,.safi-dn [class*="line"]{border-color:#000!important}
+}
+
+/* v2.4.7: delivery note text matched to the job card (it read smaller). */
+.safi-dn__kind{font-size:10.5px!important;opacity:1!important}
+.safi-dn__serial span,.safi-dn__grid span,.safi-dn__fill-t,.safi-dn__fill-grid label{font-size:10px!important;opacity:1!important;letter-spacing:.06em!important}
+.safi-dn__grid b{font-size:13px!important}
+.safi-dn__cust-name{font-size:15px!important}
+.safi-dn__slot,.safi-dn__payto{font-size:11.5px!important;opacity:1!important}
+.safi-dn__due span{font-size:11px!important}
+.safi-dn__ft{font-size:10.5px!important;opacity:1!important}
+.safi-duty{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 14px;margin:0 0 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--ink-2)}.safi-duty>b{color:var(--ink)}.safi-duty__s{background:var(--paper);border-radius:999px;padding:3px 10px;font-family:var(--ff-mono);font-size:12px}.safi-duty__s b{font-family:var(--ff-body);color:var(--brand)}
+.safi-lock-block{position:fixed;top:0;bottom:0;left:0;z-index:900;background:rgba(10,8,30,.25)}
+.safi-lock{position:fixed;top:0;right:0;bottom:0;z-index:901;display:flex;align-items:center;justify-content:center;background:rgba(245,246,250,.55);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.safi-lock__card{width:400px;max-width:92%;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 60px rgba(11,16,32,.25);padding:26px 26px 22px}
+.safi-lock__card h2{font-family:var(--ff-display);font-size:20px;margin:6px 0 4px}
+.safi-lock__ico{width:44px;height:44px;border-radius:12px;background:var(--brand-soft);color:var(--brand);display:flex;align-items:center;justify-content:center}

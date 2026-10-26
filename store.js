@@ -579,7 +579,11 @@ window.SAFI_STORE = (() => {
     // ── Active attendant ───────────────────────────────────
     // Saved in settings so it syncs: set Lydia at the shop and every laptop shows Lydia.
     setCurrentStaff(id) {
-      state.currentStaffId = id; state.settings = { ...(state.settings || {}), currentStaffId: id }; save();
+      // Duty log: who became the attendant and when (synced), so each day shows its shifts.
+      const prevLog = ((state.settings || {}).dutyLog) || [];
+      const last = prevLog[prevLog.length - 1];
+      const dutyLog = (last && last.id === id) ? prevLog : [...prevLog, { id, at: SAFI_TIME.stamp() }].slice(-600);
+      state.currentStaffId = id; state.settings = { ...(state.settings || {}), currentStaffId: id, dutyLog }; save();
       // Send it to the cloud now, not at the next 5-minute sync.
       setTimeout(() => { try { window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && window.SAFI_CLOUD.syncNow().catch(() => {}); } catch (e) {} }, 300);
     },
@@ -819,6 +823,13 @@ window.SAFI_STORE = (() => {
       // Send it to the cloud straight away so Management sees it within seconds.
       setTimeout(() => window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && window.SAFI_CLOUD.syncNow().catch(() => {}), 300);
       return a;
+    },
+    // Front Desk pressed "OK, got it". Stored on the approval row itself (payload.ackAt) so it
+    // syncs per request; the old shared settings map could be overwritten by another laptop.
+    ackApprovals(ids) {
+      const at = SAFI_TIME.stamp();
+      state.approvals = (state.approvals || []).map(x => ids.includes(x.id) ? { ...x, payload: { ...(x.payload || {}), ackAt: at } } : x);
+      save();
     },
     decideApproval(id, decision, note) {
       const now = new Date();

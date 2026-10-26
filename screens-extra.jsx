@@ -252,6 +252,8 @@ function SettingsScreen({ lang, shop, setShop }) {
 
       <MachineTimersCard/>
 
+      {window.StaffSignInCard && <window.StaffSignInCard/>}
+
       <SoundsCard/>
 
       <Card title="Operations">

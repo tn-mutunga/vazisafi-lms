@@ -898,6 +898,17 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
 
   const todayStr = SAFI_TIME.day();
   const yesterdayStr = SAFI_TIME.day(new Date(Date.now() - 86400e3));
+  // Attendant shifts for the chosen day, from the synced duty log.
+  const dutyShifts = (() => {
+    if (!dateFilter) return [];
+    const log = (((D.settings || {}).dutyLog) || []).slice().sort((x, y) => String(x.at).localeCompare(String(y.at)));
+    const before = log.filter(e => String(e.at).slice(0, 10) < dateFilter).pop();
+    const day = log.filter(e => String(e.at).slice(0, 10) === dateFilter);
+    const seq = (before ? [{ id: before.id, at: dateFilter + ' 00:00', carried: true }] : []).concat(day);
+    const nm = (id) => (D.staff.find(x => x.id === id) || {}).name || '—';
+    const endOfDay = dateFilter === todayStr ? 'now' : '23:59';
+    return seq.map((e, k) => ({ name: nm(e.id), from: e.carried ? 'start of day' : String(e.at).slice(11, 16), to: seq[k + 1] ? String(seq[k + 1].at).slice(11, 16) : endOfDay }));
+  })();
 
   return (
     <>
@@ -909,6 +920,14 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
           <Button kind="primary" icon="plus" onClick={() => setView('new-order')}>{t('new_order', lang)}</Button>
         </>}
       />
+
+      {dutyShifts.length > 0 && (
+        <div className="safi-duty">
+          <Icon name="staff" size={15}/>
+          <b>Attendant on duty</b>
+          {dutyShifts.map((d, k) => <span key={k} className="safi-duty__s"><b>{d.name}</b> {d.from} – {d.to}</span>)}
+        </div>
+      )}
 
       <div className="safi-status-strip">
         <button className={`safi-status-strip__btn ${filter === 'active' ? 'is-active' : ''}`} onClick={() => setFilter('active')}>
@@ -1795,7 +1814,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
             <div><span>Date</span><b>{(() => { const v = String(o.in || ''); return v.length >= 16 ? `${v.slice(8, 10)}-${v.slice(5, 7)}-${v.slice(2, 4)} ${v.slice(11, 16)}` : v; })()}</b></div>
             {o.queueNo && <div><span>Client #</span><b className="safi-mono">{String(o.queueNo).padStart(2, '0')}</b></div>}
             {o.tag && <div><span>Tag #</span><b className="safi-mono">{o.tag}</b></div>}
-            <div><span>Attendant</span><b>{(D.staff.find(s => s.id === (o.cashier || D.currentStaffId)) || D.staff[0])?.name || '—'}</b></div>
+            <div><span>Attendant</span><b>{(D.staff.find(s => s.id === (o.cashier || ((D.settings || {}).currentStaffId) || D.currentStaffId)) || window.SAFI_STORE.getCurrentStaff())?.name || '—'}</b></div>
           </div>
 
           <div className="safi-receipt__rule"/>
@@ -2812,6 +2831,7 @@ function ShiftModal({ open, onClose, money }) {
           <Button kind="primary" icon="check" disabled={counted === ''} onClick={() => {
             window.SAFI_STORE.closeShift({ declaredCash: Number(counted) || 0, note });
             toast('Shift closed', 'success');
+            if ((window.SAFI_STORE.get().settings || {}).lockEnabled && window.safiLock) setTimeout(() => window.safiLock('Shift closed'), 600);
             onClose();
           }}>Close shift</Button>
         </>}>

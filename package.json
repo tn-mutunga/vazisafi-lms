@@ -1,6 +1,6 @@
 {
   "name": "vazisafi-lms",
-  "version": "2.4.6",
+  "version": "2.4.7",
   "description": "VaziSafi Laundry Management System — desktop POS shell",
   "productName": "VaziSafi LMS",
   "main": "desktop/main.js",
@@ -22,7 +22,8 @@
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.3.9",
+    "nodemailer": "^6.9.14"
   },
   "build": {
     "appId": "co.ke.vazisafi.lms",
