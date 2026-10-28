@@ -53,24 +53,39 @@ const { useState: useAppState, useEffect: useAppEffect } = React;
     }
     return out;
   }
-  window.addEventListener('beforeprint', () => {
+  // Returns the roll length in mm (0 = not a roll print) and applies the matching @page.
+  function fit() {
     const tmp = document.createElement('style'); tmp.id = 'safi-roll-measure'; tmp.textContent = printRulesText();
     document.head.appendChild(tmp);
-    let css = '';
+    let h = 0;
     const sheet = document.querySelector('.safi-jcsheet--roll');
     const rec = document.querySelector('.safi-receipt-wrap #safi-print-area, #safi-print-area.safi-receipt');
     if (sheet) {
-      // Only the job card and delivery note print; the tear line is hidden (the page break is the cut).
+      // Job card + delivery note print as ONE strip, one after the other, no gap between them.
       const parts = [...sheet.querySelectorAll('.safi-jc, .safi-dn')];
-      parts.forEach((el, i) => { el.style.page = 'roll' + i; css += `@page roll${i}{size:80mm ${measure(el, '', '')}mm;margin:0}`; });
+      h = parts.reduce((s, el) => s + measure(el, '', ''), 0) - Math.max(0, parts.length - 1) * 6;
     } else if (rec && !document.querySelector('.safi-jcsheet:not(.safi-jcsheet--roll)')) {
-      css = `@page{size:80mm ${measure(rec, '', '')}mm;margin:0}`;
+      h = measure(rec, '', '');
     }
     let st = document.getElementById('safi-roll-fit');
     if (!st) { st = document.createElement('style'); st.id = 'safi-roll-fit'; document.head.appendChild(st); }
-    st.textContent = css;
+    st.textContent = h ? `@page{size:80mm ${h}mm;margin:0}.safi-jcsheet--roll .safi-jc,.safi-jcsheet--roll .safi-dn{break-before:auto!important;break-after:auto!important;page-break-before:auto!important;page-break-after:auto!important;page:auto!important}` : '';
     tmp.remove();
-  });
+    return h;
+  }
+  window.__safiRollFit = fit;
+  window.addEventListener('beforeprint', fit);
+  // Desktop app: printer drivers ignore the page length set in CSS and feed a full page,
+  // leaving metres of blank paper. Send the exact length to the printer instead.
+  if (window.lms && window.lms.printPage && !window.__safiPrintPatched) {
+    window.__safiPrintPatched = true;
+    const nativePrint = window.print.bind(window);
+    window.print = () => {
+      const h = fit();
+      if (!h) return nativePrint();
+      window.lms.printPage({ heightMm: h }).then(r => { if (!r || !r.ok) { if (r && r.reason && !/cancel/i.test(r.reason)) nativePrint(); } }).catch(() => nativePrint());
+    };
+  }
   window.addEventListener('afterprint', () => { const st = document.getElementById('safi-roll-fit'); if (st) st.textContent = ''; });
 })();
 
@@ -182,6 +197,7 @@ function App() {
 
   // expose setTweak globally so Management Settings screen can call it
   useAppEffect(() => { window.__safiSetTweak = setTweak; }, [setTweak]);
+  useAppEffect(() => { window.__safiSetView = setView; }, []);
   useAppEffect(() => { window.__safiGoFrontDesk = () => { setRole('frontdesk'); setView('dashboard'); }; }, []);
   useAppEffect(() => { const f = () => { setRole('frontdesk'); setView('dashboard'); }; window.addEventListener('safi-signout', f); return () => window.removeEventListener('safi-signout', f); }, []);
   // Test hook: open an order's receipt (used for print-length checks).
@@ -284,9 +300,11 @@ function App() {
 
   return (
     <div className="safi-app" data-screen-label={`${role}/${view}`}>
-      <Sidebar role={role} setRole={safeSetRole} view={view} setView={setView} lang={lang} shop={shop}/>
+      <Sidebar role={role} setRole={safeSetRole} view={view} setView={(v) => { window.__safiFromDeck = false; setView(v); }} lang={lang} shop={shop}/>
       <LockScreen onUnlock={(acc) => { if (acc.kind === 'management') { setRole('owner'); setView('dashboard'); } else { if (acc.staffId) window.SAFI_STORE.setCurrentStaff(acc.staffId); setRole('frontdesk'); setView('dashboard'); } }}/>
-      <main className="safi-main"><UpdateBar/>{window.DispatchReminders && <window.DispatchReminders setView={setView}/>}{screen}</main>
+      <main className="safi-main"><UpdateBar/>{window.DispatchReminders && <window.DispatchReminders setView={setView}/>}{view !== 'dashboard' && !['order-detail', 'receipt', 'jobcard'].includes(view) && (
+        <button className="safi-backbar" onClick={() => { if (window.__safiFromDeck) window.__safiScrollTo = 'reminders'; window.__safiFromDeck = false; window.__safiPreset = null; setView('dashboard'); try { const m = document.querySelector('.safi-main'); if (m && !window.__safiScrollTo) m.scrollTop = 0; } catch (e) {} }}><Icon name="arrow-l" size={16}/> Back</button>
+      )}{screen}</main>
       <ToastHost/>
       <PinConfirmHost/>
       {role === 'frontdesk' && <DecisionNotice/>}

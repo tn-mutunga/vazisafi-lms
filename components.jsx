@@ -232,10 +232,10 @@ const Icon = ({ name, size = 18, stroke = 'currentColor' }) => {
     case 'chevron-down': return (<svg {...props}><polyline points="6 9 12 15 18 9"/></svg>);
     case 'washpiece':  return (<svg {...props} viewBox="0 0 32 24"><rect x="1" y="3" width="11" height="18" rx="1.5"/><circle cx="6.5" cy="13" r="3.2"/><path d="M3.5 6h2"/><path d="M16 6l2.5-2h2l1 1.4 1-1.4h2L27 6l-1.6 2.2-1.2-.6V12h-5.6V7.6l-1.2.6z"/><path d="M19 14h7l.6 8h-2.6l-1.5-5.5-1.5 5.5h-2.6z"/></svg>);
     case 'shirt':      return (<svg {...props}><path d="M20 4h-4l-2 2-2 2-2-2-2-2H4L2 8l3 3v10h14V11l3-3z"/></svg>);
-    case 'iron':       return (<svg {...props}><path d="M3 17h18l-2-7a4 4 0 0 0-4-3H9.5L7 9v3"/><path d="M3 17v2h18v-2"/></svg>);
+    case 'iron':       return (<svg {...props}><path d="M3 19h17.5a.5.5 0 0 0 .5-.6c-.6-3.6-3-6.4-7.3-6.4H8.5C5.4 12 3 15.2 3 19z"/><path d="M9 12V9.5A1.5 1.5 0 0 1 10.5 8h7A1.5 1.5 0 0 1 19 9.5V12"/><path d="M6 6c0-1 1-1 1-2s-1-1-1-2M10 5.5c0-1 1-1 1-2"/></svg>);
     case 'wash':       return (<svg {...props}><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="14" r="4"/><circle cx="8" cy="7" r="0.5" fill={stroke}/></svg>);
-    case 'shoe':       return (<svg {...props}><path d="M2 17h20l-3-4-3-1-2-3-3 1-5 2-4 1z"/></svg>);
-    case 'duvet':      return (<svg {...props}><rect x="3" y="6" width="18" height="12" rx="1"/><path d="M3 10h18M9 6v12M15 6v12"/></svg>);
+    case 'shoe':       return (<svg {...props}><path d="M2.5 16V12.5l3.6-3.1 2.2 1.7 1.8-1.3c1.3 1.9 3.5 3 6.2 3.4l2.2.5c.9.2 1.5 1 1.5 1.9V16z"/><path d="M2.5 16h19v1.6a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8z"/><path d="M7.6 12.6l.9-.9M9.9 13.4l.9-.9M12.2 14.1l.8-.9"/><path d="M18 2.8s-2.1 2.4-2.1 3.8a2.1 2.1 0 0 0 4.2 0C20.1 5.2 18 2.8 18 2.8z"/></svg>);
+    case 'duvet':      return (<svg {...props}><path d="M3 19V7M21 19v-4"/><path d="M3 15h18M3 19h18"/><rect x="4.5" y="9.5" width="5" height="3" rx="1.2"/><path d="M10 15v-3.5c0-.8.7-1.5 1.5-1.5H19c1.1 0 2 .9 2 2v3"/></svg>);
     case 'curtain':    return (<svg {...props}><path d="M3 3h18M5 3v18s2-2 4-2 4 2 4 2V3M14 3v18s2-2 4-2 1 2 1 2V3"/></svg>);
     case 'hanger':     return (<svg {...props}><path d="M12 2v3M12 5a3 3 0 1 0 3 3M3 20l9-7 9 7H3z"/></svg>);
     case 'sock':       return (<svg {...props}><path d="M9 3h6v8l-4 4-3 3a3 3 0 0 0 0 4 3 3 0 0 0 4 0l8-8V3"/></svg>);

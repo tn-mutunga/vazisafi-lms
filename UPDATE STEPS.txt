@@ -1,27 +1,14 @@
-VAZI SAFI LMS v2.4.8
-PRINTING
-- Receipt: client name bold (same weight as attendant), header Receipt # + Date, Client # + Attendant;
-  page length fits the content (no long blank tail); logo prints in black & white cleanly.
-- Job card & delivery note: 80mm roll is the default on every laptop; no blank gap between them;
-  attendant name shown, same as the receipt.
-STAFF SIGN-IN (off until you switch it on: Management → Settings → Staff sign-in & screen lock)
-- Blurs the working area until someone signs in. Locks daily (default 20:30), after 60 min idle,
-  and when a shift is closed. Management stays signed in until Sign out.
-- First time: "Get a code" → code appears in Settings → Signings → Management passes it on.
-  Person sets own username + 4–8 character password/passcode → Management approves.
-- Disable / Enable attendants; Delete needs the Management PIN. Management PIN always unlocks.
-- Lock all screens (every laptop locks at next sync); Preview Front Desk lock.
-- Username remembered, never the password.
-OTHER
-- Dates dd-mm, Attendant wording, stage counts fit at 85% zoom.
-SIGN-IN (latest)
-- Lock screen: Staff sign in + separate Management sign in (username + password/passcode; PIN also works).
-- Directors never appear as attendant; attendant list = staff only.
-- Usernames never pre-filled; staff get suggestions of usernames used on that laptop.
-- Staff Sign out button in sidebar (locks the app). Picking another attendant locks for a fresh sign-in.
-- Management accounts set up in Settings → Management accounts. Approve / Disable staff; Delete needs PIN.
-- Lock all screens ↔ Unlock all (orange). Signed in (navy) → enter password to Sign out.
-MORE
-- Attendant on duty timeline: shows the attendant even before the first switch of the day; directors left out.
-- Job card: Due back prints the real due date (24 hrs after drop-off if none set).
-- Possible double expense: same name + amount + txn code asks "Are these two separate expenses?" (No keeps the first).
+VAZI SAFI LMS v2.4.9
+PRINTING (desktop app)
+- Paper stops right after the last line: the exact length is sent to the printer.
+- Job card + delivery note print as one strip, no gap between them.
+- Hardware → Choose receipt printer… once on the shop laptop = no print dialog.
+FRONT DESK
+- Reminders deck cards open the matching filtered list (Back returns to the deck).
+- Back button on every page. Recent orders: last 50, scrollable.
+- Clients by service: Laundry / Dry Cleaning / Shoes. New shoe, iron and duvet icons.
+PAYROLL
+- Show inactive staff on by default. Salary paid by Bank (default) or M-Pesa.
+- Mark paid stays in Payroll only (not Expenses); log salaries as one bulk expense.
+EXPENSES
+- Duplicate check (same name + amount + code) asks before saving.

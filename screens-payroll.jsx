@@ -28,9 +28,9 @@ function PayrollScreen({ money }) {
   const D = useStore();
   const P = (D.settings || {}).payroll || { meta: {}, months: {} };
   const [ym, setYm] = useStatePy(SAFI_TIME.day().slice(0, 7));
-  const [showAll, setShowAll] = useStatePy(false);
+  const [showAll, setShowAll] = useStatePy(true);
   const [payFor, setPayFor] = useStatePy(null);
-  const [payM, setPayM] = useStatePy('mpesa');
+  const [payM, setPayM] = useStatePy('bank');
   const [payTxn, setPayTxn] = useStatePy('');
   const [addOpen, setAddOpen] = useStatePy(false);
   const [newS, setNewS] = useStatePy({ name: '', role: 'Front Desk' });
@@ -103,10 +103,9 @@ function PayrollScreen({ money }) {
   function markPaid() {
     const r = payFor; if (!r) return;
     if (payM !== 'cash' && String(payTxn).trim().length < 5) { toast('Code needs at least 5 characters', 'error'); return; }
-    const cat = (D.expenseCategories || []).find(c => /salar|wage/i.test(c.name));
-    window.SAFI_STORE.addExpense({ category: cat ? cat.id : '', label: `Salary ${label} · ${r.s.name} (${r.m.empNo})`, amount: r.net, method: payM, txn: payTxn.trim().toUpperCase(), paidBy: 'management', notes: `Payroll: ${r.worked} days worked, ${r.absent} absent` });
+    // Recorded in Payroll only, not in Expenses (so staff don't see individual pay).
     setRow(r.s, { paidAt: SAFI_TIME.stamp(), method: payM, txn: payTxn.trim().toUpperCase(), paidNet: r.net });
-    toast(`${r.s.name} marked paid · KES ${num(r.net)} logged under ${cat ? cat.name : 'Expenses'}`);
+    toast(`${r.s.name} marked paid · KES ${num(r.net)} · ${payTxn.trim().toUpperCase()}`);
     setPayFor(null); setPayTxn('');
   }
 
@@ -178,8 +177,8 @@ function PayrollScreen({ money }) {
                   <td className="safi-mono safi-py__net" title={r.err || formulaSrc}>{formula.err || r.err ? <span style={{ color: 'var(--red)' }}>error</span> : num(r.net)}</td>
                   <td><input className="safi-input safi-py__in" style={{ width: 140 }} key={'n' + r.s.id + ym + (r.r.note || '')} defaultValue={r.r.note || ''} placeholder="e.g. advance on 12th" onBlur={e => e.target.value !== (r.r.note || '') && setRow(r.s, { note: e.target.value })}/></td>
                   <td>{r.r.paidAt
-                    ? <span className="safi-pill safi-pill--green" title={`${r.r.method === 'bank' ? 'Bank' : r.r.method === 'cash' ? 'Cash' : 'M-Pesa'} ${r.r.txn || ''}`}><Icon name="check" size={10}/> Paid {pyDm(r.r.paidAt)}</span>
-                    : <Button kind="ghost" size="sm" disabled={!r.m.pay} onClick={() => { setPayM('mpesa'); setPayTxn(''); setPayFor(r); }}>Mark paid</Button>}</td>
+                    ? <span className="safi-paidcell"><span className="safi-pill safi-pill--green"><Icon name="check" size={10}/> Paid {pyDm(r.r.paidAt)}</span><span className="safi-paidcell__code safi-mono">{r.r.method === 'bank' ? 'Bank' : r.r.method === 'cash' ? 'Cash' : 'M-Pesa'} · {r.r.txn || '—'}</span></span>
+                    : <Button kind="ghost" size="sm" disabled={!r.m.pay} onClick={() => { setPayM('bank'); setPayTxn(''); setPayFor(r); }}>Mark paid</Button>}</td>
                 </tr>
               ))}
               {!rows.length && <tr><td colSpan="14" className="safi-cell-sub" style={{ padding: 20 }}>No staff yet. Add staff in Management → Staff.</td></tr>}
@@ -191,7 +190,7 @@ function PayrollScreen({ money }) {
             </tr></tfoot>}
           </table>
         </div>
-        <p className="safi-hint" style={{ margin: '10px 16px 14px' }}>Daily rate = monthly pay ÷ 30. Off days are markers only and don't change pay. Off days, pay and employee numbers carry over month to month; absent days, bonus, advance and deductions are per month. "Mark paid" also logs the net pay as a Salaries & wages expense.</p>
+        <p className="safi-hint" style={{ margin: '10px 16px 14px' }}>Daily rate = monthly pay ÷ 30. Off days are markers only and don't change pay. Off days, pay and employee numbers carry over month to month; absent days, bonus, advance and deductions are per month. "Mark paid" records the payment and its code here only. It is not added to Expenses; log the month's salaries there as one bulk payment (e.g. code BULKPAY).</p>
       </Card>
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add staff to payroll" width={420}
@@ -228,9 +227,9 @@ function PayrollScreen({ money }) {
         {payFor && <div className="safi-form">
           <div className="safi-callout"><Icon name="wallet" size={14}/><span>Net pay <b className="safi-mono">KES {num(payFor.net)}</b> · {payFor.worked} days worked, {payFor.absent} absent</span></div>
           <label>Paid by
-            <div className="safi-seg safi-seg--full">{[['mpesa', 'M-Pesa'], ['bank', 'Bank'], ['cash', 'Cash']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${payM === k ? 'is-active' : ''}`} onClick={() => setPayM(k)}>{l}</button>)}</div>
+            <div className="safi-seg safi-seg--full">{[['bank', 'Bank'], ['mpesa', 'M-Pesa']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${payM === k ? 'is-active' : ''}`} onClick={() => setPayM(k)}>{l}</button>)}</div>
           </label>
-          {payM !== 'cash' && <label>Transaction code (min. 5)<input className="safi-input safi-mono" value={payTxn} onChange={e => setPayTxn(e.target.value.toUpperCase())} placeholder="Last 5, e.g. KL2M9"/></label>}
+          {<label>Transaction code (min. 5)<input className="safi-input safi-mono" value={payTxn} onChange={e => setPayTxn(e.target.value.toUpperCase())} placeholder="Last 5, e.g. KL2M9"/></label>}
         </div>}
       </Modal>
     </>

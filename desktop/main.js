@@ -254,6 +254,20 @@ function kickCashDrawer() {
 
 ipcMain.handle('lms:printers', () => listPrinters());
 ipcMain.handle('lms:printReceipt', (_e, html) => printReceipt(String(html || '')));
+// Print the current page on the 80mm roll with an exact page length, so the printer
+// stops (and cuts) right after the last line. Silent if a receipt printer is chosen
+// (Hardware → Choose receipt printer…), otherwise the print dialog opens.
+ipcMain.handle('lms:printPage', (e, opts) => new Promise((resolve) => {
+  const h = Math.max(40, Math.min(3000, Number(opts && opts.heightMm) || 200));
+  const deviceName = readConfig().receiptPrinter || '';
+  try {
+    e.sender.print({
+      silent: !!deviceName, deviceName, printBackground: true,
+      margins: { marginType: 'none' },
+      pageSize: { width: 80000, height: Math.round(h * 1000) },
+    }, (ok, reason) => resolve({ ok, reason }));
+  } catch (err) { resolve({ ok: false, reason: String(err && err.message || err) }); }
+}));
 ipcMain.handle('lms:printTest', () => printTestReceipt());
 ipcMain.handle('lms:openDrawer', () => kickCashDrawer());
 ipcMain.handle('lms:config', (_e, patch) => (patch ? writeConfig(patch) : readConfig()));

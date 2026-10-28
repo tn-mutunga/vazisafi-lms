@@ -101,10 +101,10 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
             <span className="safi-recent-open__txt"><b>{t('recent_orders', lang)}</b></span>
             <span className="safi-recent-open__go">View ›</span>
           </button>
-          <Modal open={showRecent} onClose={() => setShowRecent(false)} title={`${t('recent_orders', lang)} · last 20`} width={1100}
+          <Modal open={showRecent} onClose={() => setShowRecent(false)} title={`${t('recent_orders', lang)} · last ${Math.min(50, D.orders.length)}`} width={1100}
             footer={<><Button kind="ghost" onClick={() => setShowRecent(false)}>Close</Button><Button kind="primary" onClick={() => { setShowRecent(false); setView('orders'); }}>All orders →</Button></>}>
-            <div className="safi-recent-list is-open safi-recent-list--wide">
-              {[...D.orders].sort((a, b) => String(b.in).localeCompare(String(a.in))).slice(0, 20).map(o => {
+            <div className="safi-recent-list is-open safi-recent-list--wide safi-recent-list--scroll">
+              {[...D.orders].sort((a, b) => String(b.in).localeCompare(String(a.in))).slice(0, 50).map(o => {
                 const c = D.customers.find(x => x.id === o.customer);
                 return (
                   <button key={o.id} className="safi-recent-row" onClick={() => { setShowRecent(false); setActiveOrderId(o.id); setView('order-detail'); }}>
@@ -161,6 +161,11 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
 // ─── Collection reminders (Front Desk dashboard, top row) ─────────────────
 // Nudges the attendant to hand over ready laundry, collect the balance and mark it Collected.
 function CollectionReminders({ D, money, setView, collectedOrdersToday, collectedToday }) {
+  React.useEffect(() => {
+    if (window.__safiScrollTo !== 'reminders') return;
+    window.__safiScrollTo = null;
+    setTimeout(() => { const el = document.getElementById('safi-reminders-deck'); const box = document.querySelector('.safi-main'); if (el) { const top = el.getBoundingClientRect().top - 16; if (box && box.scrollHeight > box.clientHeight) box.scrollBy({ top, behavior: 'smooth' }); else window.scrollBy({ top, behavior: 'smooth' }); } }, 120);
+  }, []);
   const now = Date.now();
   const parse = (s) => new Date(String(s || '').replace(' ', 'T')).getTime();
   const open = D.orders.filter(o => o.status !== 'collected');
@@ -175,19 +180,19 @@ function CollectionReminders({ D, money, setView, collectedOrdersToday, collecte
   const drops = dueToday.filter(d => d.type !== 'pickup');
   const sum = (arr) => arr.reduce((s, o) => s + bal(o), 0);
   const tiles = [
-    { k: 'done', ico: 'income', label: 'Delivered / Collected today', n: collectedOrdersToday.length, sub: money(collectedToday), go: 'orders', good: true },
-    { k: 'paid', ico: 'package', label: 'Ready & paid · hand over', n: readyPaid.length, sub: 'Mark Collected when it leaves', go: 'orders' },
-    { k: 'old', ico: 'clock', label: '24 hrs+ old orders · not delivered/collected', n: old24.length, sub: `${money(sum(old24))} unpaid`, go: 'orders' },
-    { k: 'unpaid', ico: 'wallet', label: 'Ready · balance due', n: readyUnpaid.length, sub: `${money(sum(readyUnpaid))} to collect`, go: 'orders' },
+    { k: 'done', ico: 'income', label: 'Delivered / Collected today', n: collectedOrdersToday.length, sub: money(collectedToday), go: 'payments', preset: { kind: 'collectedToday', ids: collectedOrdersToday.map(o => o.id), label: 'Payments for orders delivered / collected today' }, good: true },
+    { k: 'paid', ico: 'package', label: 'Ready & paid · hand over', n: readyPaid.length, sub: 'Mark Collected when it leaves', go: 'orders', preset: { kind: 'readyPaid', label: 'Ready & paid · hand over' } },
+    { k: 'old', ico: 'clock', label: '24 hrs+ old orders · not delivered/collected', n: old24.length, sub: `${money(sum(old24))} unpaid`, go: 'orders', preset: { kind: 'old24', label: '24 hrs+ old · not delivered/collected' } },
+    { k: 'unpaid', ico: 'wallet', label: 'Ready · balance due', n: readyUnpaid.length, sub: `${money(sum(readyUnpaid))} to collect`, go: 'orders', preset: { kind: 'readyDue', label: 'Ready · balance due' } },
     { k: 'pick', ico: 'phone', label: 'Pick-ups due today', n: pickups.length, sub: pickups.length ? 'Not yet collected from client' : 'None scheduled', go: 'dispatch' },
     { k: 'drop', ico: 'truck', label: 'Deliveries due today', n: drops.length, sub: drops.length ? 'Not yet completed' : 'None scheduled', go: 'dispatch' },
   ];
   return (
-    <div className="safi-remind-wrap">
+    <div className="safi-remind-wrap" id="safi-reminders-deck">
     <h3 className="safi-remind-title">Reminders deck</h3>
     <div className="safi-remind">
       {tiles.map(x => (
-        <button key={x.k} className={`safi-remind__t safi-remind__t--${x.k}${!x.good && x.n > 0 ? ' is-hot' : ''}`} onClick={() => setView(x.go)} title="Open">
+        <button key={x.k} className={`safi-remind__t safi-remind__t--${x.k}${!x.good && x.n > 0 ? ' is-hot' : ''}`} onClick={() => { window.__safiPreset = x.preset || null; window.__safiFromDeck = true; setView(x.go); }} title="Open">
           <span className="safi-remind__ico"><Icon name={x.ico} size={16}/></span>
           <span className="safi-remind__lbl">{x.label}</span>
           <b className="safi-remind__n">{x.n}</b>
@@ -862,10 +867,19 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
   const D = useStore();
   const [filter, setFilter] = useStateFD('all'); // default: every order for the chosen day, collected included
   const [q, setQ] = useStateFD('');
-  const [dateFilter, setDateFilter] = useStateFD(SAFI_TIME.day()); // default: today; empty = any date
+  const [preset, setPreset] = useStateFD(() => { const p = window.__safiPreset; window.__safiPreset = null; return p && p.kind !== 'collectedToday' ? p : null; });
+  const [dateFilter, setDateFilter] = useStateFD(() => preset ? '' : SAFI_TIME.day()); // default: today; empty = any date
 
   const [payFilter, setPayFilter] = useStateFD('any');
+  const nowMs = Date.now();
   const filtered = D.orders.filter(o => {
+    // Reminders-deck shortcut
+    if (preset) {
+      const b = (o.total || 0) - (o.paid || 0);
+      if (preset.kind === 'readyPaid' && !(o.status === 'ready' && b <= 0)) return false;
+      if (preset.kind === 'readyDue' && !(o.status === 'ready' && b > 0)) return false;
+      if (preset.kind === 'old24' && !(o.status !== 'collected' && nowMs - new Date(String(o.in || '').replace(' ', 'T')).getTime() >= 24 * 3600e3)) return false;
+    }
     // Status filter
     if (filter === 'active') { if (o.status === 'collected') return false; }
     else if (filter !== 'all' && o.status !== filter) return false;
@@ -948,6 +962,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
         ))}
       </div>
 
+      {preset && <div className="safi-preset"><Icon name="tag" size={14}/><span>Showing: <b>{preset.label}</b> · {filtered.length} order{filtered.length === 1 ? '' : 's'} · {money(filtered.reduce((s, o) => s + Math.max(0, (o.total || 0) - (o.paid || 0)), 0))} unpaid</span><button className="safi-rowlink" onClick={() => { setPreset(null); setDateFilter(SAFI_TIME.day()); }}>Show all orders</button></div>}
       <Card pad={false}>
         <div className="safi-toolbar safi-toolbar--pay">
           <span className="safi-cell-sub">Show</span>
@@ -2480,7 +2495,8 @@ function PaymentsScreen({ lang, money, role }) {
   const [tab, setTab] = useStateFD('all');
   const [form, setForm] = useStateFD({ order: '', method: 'mpesa', amount: '', txn: '', date: SAFI_TIME.day() });
 
-  const rows = D.payments.filter(p => tab === 'all' || p.method === tab).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const [preset, setPreset] = useStateFD(() => { const p = window.__safiPreset; window.__safiPreset = null; return p && p.kind === 'collectedToday' ? p : null; });
+  const rows = D.payments.filter(p => (tab === 'all' || p.method === tab) && (!preset || (preset.ids || []).includes(p.order))).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const [pinFor, setPinFor] = useStateFD(null);
   const [vPin, setVPin] = useStateFD('');
 
@@ -2518,6 +2534,7 @@ function PaymentsScreen({ lang, money, role }) {
           {isManagement && <StatementReconcile/>}
         </>}
       />
+      {preset && <div className="safi-preset"><Icon name="income" size={14}/><span>Showing: <b>{preset.label}</b> · {(preset.ids || []).length} order{(preset.ids || []).length === 1 ? '' : 's'} · {rows.length} payment{rows.length === 1 ? '' : 's'} · {money(rows.reduce((s, p) => s + (p.amount || 0), 0))}</span><button className="safi-rowlink" onClick={() => setPreset(null)}>Show all payments</button></div>}
 
       <div className="safi-grid safi-grid--4">
         {totalsByMethod.map(({ m, total, count }) => (

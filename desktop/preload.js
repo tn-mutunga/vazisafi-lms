@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('lms', {
   info: () => ipcRenderer.invoke('lms:info'),
   printers: () => ipcRenderer.invoke('lms:printers'),
   printReceipt: (html) => ipcRenderer.invoke('lms:printReceipt', html),
+  printPage: (opts) => ipcRenderer.invoke('lms:printPage', opts),
   printTest: () => ipcRenderer.invoke('lms:printTest'),
   openDrawer: () => ipcRenderer.invoke('lms:openDrawer'),
   sendMail: (msg) => ipcRenderer.invoke('lms:sendMail', msg),
