@@ -75,15 +75,36 @@ const { useState: useAppState, useEffect: useAppEffect } = React;
   }
   window.__safiRollFit = fit;
   window.addEventListener('beforeprint', fit);
-  // Desktop app: printer drivers ignore the page length set in CSS and feed a full page,
-  // leaving metres of blank paper. Send the exact length to the printer instead.
-  if (window.lms && window.lms.printPage && !window.__safiPrintPatched) {
+  // Desktop app: print only the receipt / job card, from its own small window, exactly
+  // like the hardware test receipt. The roll then stops right after the last line.
+  if (window.lms && window.lms.printHtml && !window.__safiPrintPatched) {
     window.__safiPrintPatched = true;
     const nativePrint = window.print.bind(window);
+    const collectCss = () => [...document.styleSheets].map(s => { try { return [...s.cssRules].map(r => r.cssText).join('\n'); } catch (e) { return ''; } }).join('\n');
+    const cloneFor = (el) => {
+      const c = el.cloneNode(true);
+      // <image-slot> keeps its picture in a shadow root that doesn't copy: swap in a plain <img>.
+      const src = [...el.querySelectorAll('image-slot')];
+      [...c.querySelectorAll('image-slot')].forEach((s, k) => {
+        const o = src[k]; const img = document.createElement('img');
+        const inner = o && o.shadowRoot && o.shadowRoot.querySelector('img');
+        img.src = (inner && inner.src) || s.getAttribute('src') || '';
+        img.setAttribute('style', (s.getAttribute('style') || '') + ';display:block;object-fit:contain;margin:0 auto');
+        s.replaceWith(img);
+      });
+      return c.outerHTML;
+    };
     window.print = () => {
-      const h = fit();
-      if (!h) return nativePrint();
-      window.lms.printPage({ heightMm: h }).then(r => { if (!r || !r.ok) { if (r && r.reason && !/cancel/i.test(r.reason)) nativePrint(); } }).catch(() => nativePrint());
+      const sheet = document.querySelector('.safi-jcsheet--roll');
+      const rec = document.querySelector('.safi-receipt-wrap #safi-print-area, #safi-print-area.safi-receipt');
+      let body = '';
+      if (sheet) body = cloneFor(sheet);
+      else if (rec && !document.querySelector('.safi-jcsheet:not(.safi-jcsheet--roll)')) body = '<div class="safi-receipt-wrap">' + cloneFor(rec) + '</div>';
+      if (!body) return nativePrint();
+      const attrs = [...document.documentElement.attributes].map(x => `${x.name}="${String(x.value).replace(/"/g, '&quot;')}"`).join(' ');
+      const css = collectCss() + '\n@page{size:80mm auto;margin:0}html,body{margin:0!important;padding:0!important;background:#fff!important;height:auto!important;min-height:0!important;overflow:visible!important}';
+      const doc = `<!doctype html><html ${attrs}><head><meta charset="utf-8"><style>${css}</style></head><body>${body}</body></html>`;
+      window.lms.printHtml(doc).then(r => { if (!r || !r.ok) { if (!r || !/cancel/i.test(String(r.reason || ''))) nativePrint(); } }).catch(() => nativePrint());
     };
   }
   window.addEventListener('afterprint', () => { const st = document.getElementById('safi-roll-fit'); if (st) st.textContent = ''; });

@@ -2613,7 +2613,19 @@ function PaymentsScreen({ lang, money, role }) {
         />
       </Card>
 
-      {(() => {
+      {preset ? (() => {
+        const sum = (m) => rows.filter(r => !m || r.method === m).reduce((s, r) => s + (r.amount || 0), 0);
+        const cnt = (m) => rows.filter(r => !m || r.method === m).length;
+        return (
+          <Card title="Collected today" action={<span className="safi-cell-sub">Payments on orders delivered / collected today</span>}>
+            <div className="safi-diffsum">
+              <div className="safi-diffsum__t is-up"><span>Total collected</span><b className="safi-mono">{money(sum())}</b><span className="safi-cell-sub">{cnt()} payment{cnt() === 1 ? '' : 's'}</span></div>
+              <div className="safi-diffsum__t"><span>Bank</span><b className="safi-mono">{money(sum('bank'))}</b><span className="safi-cell-sub">{cnt('bank')} payment{cnt('bank') === 1 ? '' : 's'}</span></div>
+              <div className="safi-diffsum__t"><span>M-Pesa</span><b className="safi-mono">{money(sum('mpesa'))}</b><span className="safi-cell-sub">{cnt('mpesa')} payment{cnt('mpesa') === 1 ? '' : 's'}</span></div>
+            </div>
+          </Card>
+        );
+      })() : (() => {
         const diffs = rows.filter(r => r.verified && r.stmtAmount != null).map(r => ({ r, d: Math.round(r.stmtAmount - r.amount) }));
         const short = diffs.filter(x => x.d < 0), over = diffs.filter(x => x.d > 0), exact = diffs.filter(x => x.d === 0);
         const sumS = short.reduce((s, x) => s + x.d, 0), sumO = over.reduce((s, x) => s + x.d, 0);

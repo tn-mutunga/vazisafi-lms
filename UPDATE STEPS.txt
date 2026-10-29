@@ -1,14 +1,8 @@
-VAZI SAFI LMS v2.4.9
+VAZI SAFI LMS v2.5.0
 PRINTING (desktop app)
-- Paper stops right after the last line: the exact length is sent to the printer.
-- Job card + delivery note print as one strip, no gap between them.
-- Hardware → Choose receipt printer… once on the shop laptop = no print dialog.
-FRONT DESK
-- Reminders deck cards open the matching filtered list (Back returns to the deck).
-- Back button on every page. Recent orders: last 50, scrollable.
-- Clients by service: Laundry / Dry Cleaning / Shoes. New shoe, iron and duvet icons.
-PAYROLL
-- Show inactive staff on by default. Salary paid by Bank (default) or M-Pesa.
-- Mark paid stays in Payroll only (not Expenses); log salaries as one bulk expense.
-EXPENSES
-- Duplicate check (same name + amount + code) asks before saving.
+- Receipts and job cards now print the same way as the hardware test receipt, so the roll
+  stops right after the last line. Needs Hardware -> Choose receipt printer... once.
+PAYMENTS & AUDIT
+- Opened from "Delivered / Collected today": shows Total collected, Bank and M-Pesa for today.
+MANAGEMENT DASHBOARD
+- Period summary opens on Month.

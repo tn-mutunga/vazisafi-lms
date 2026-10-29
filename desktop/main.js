@@ -268,6 +268,25 @@ ipcMain.handle('lms:printPage', (e, opts) => new Promise((resolve) => {
     }, (ok, reason) => resolve({ ok, reason }));
   } catch (err) { resolve({ ok: false, reason: String(err && err.message || err) }); }
 }));
+// Receipt / job card: same route as the test receipt (own hidden window, page length
+// = content), which the thermal driver stops right after the last line.
+ipcMain.handle('lms:printHtml', (_e, html) => new Promise((resolve) => {
+  const deviceName = readConfig().receiptPrinter || '';
+  if (!deviceName) { resolve({ ok: false, reason: 'no receipt printer chosen' }); return; }
+  const sheet = new BrowserWindow({ show: false, width: 340, height: 800, webPreferences: { offscreen: true } });
+  const fs = require('fs'); const os = require('os'); const p = require('path');
+  const file = p.join(os.tmpdir(), 'vazi-print-' + Date.now() + '.html');
+  try { fs.writeFileSync(file, String(html || '')); } catch (err) { resolve({ ok: false, reason: String(err) }); return; }
+  sheet.loadFile(file);
+  sheet.webContents.once('did-finish-load', () => {
+    setTimeout(() => {
+      sheet.webContents.print(
+        { silent: true, printBackground: true, deviceName, margins: { marginType: 'none' } },
+        (ok, reason) => { sheet.destroy(); try { fs.unlinkSync(file); } catch (e) {} resolve({ ok, reason }); }
+      );
+    }, 400);
+  });
+}));
 ipcMain.handle('lms:printTest', () => printTestReceipt());
 ipcMain.handle('lms:openDrawer', () => kickCashDrawer());
 ipcMain.handle('lms:config', (_e, patch) => (patch ? writeConfig(patch) : readConfig()));

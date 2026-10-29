@@ -5,7 +5,7 @@ const { useState: useStateX, useRef: useRefX, useEffect: useEffectX } = React;
 // ─── Period Summary (used on Management Dashboard) ────────────────────────
 function PeriodSummary({ money }) {
   const D = useStore();
-  const [period, setPeriod] = useStateX('today');
+  const [period, setPeriod] = useStateX('month');
 
   // Returns date strings { from, to } inclusive
   function rangeFor(p) {
