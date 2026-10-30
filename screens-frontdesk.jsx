@@ -69,7 +69,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
         <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" deltaKind="none" delta={<><span className={ordDiff < 0 ? 'safi-delta-dn' : 'safi-delta-up'}>{ordDiff < 0 ? '↓' : '↑'} {ordDiff > 0 ? '+' : ordDiff < 0 ? '−' : '±'}{Math.abs(ordDiff)} orders</span>{' · '}<span className={revDiff < 0 ? 'safi-delta-dn' : 'safi-delta-up'}>{revDiff < 0 ? '↓' : '↑'} {revDiff > 0 ? '+' : revDiff < 0 ? '−' : '±'}{money(Math.abs(revDiff))}</span><span className="safi-cell-sub"> vs yesterday</span></>}
           sparkline={<div className="safi-streams">{streams.map(x => <span key={x.k} className={`safi-streams__i safi-streams__i--${x.k}`}><i/>{x.l} <b className="safi-mono">{money(x.v)}</b></span>)}</div>}/>
         <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} orders ready now`}/>
-        <StatCard label="Washing → Drying → Ready → Collected" value={<span className="safi-stagecount"><span className="is-w">W-{washing}</span> → <span className="is-d">D-{D.orders.filter(o => o.status === 'drying').length}</span> → <span className="is-r">R-{D.orders.filter(o => o.status === 'ready').length}</span> → <span className="is-c">C-{collectedOrdersToday.length}</span></span>} icon="wash" delta="Today's Orders Stats"/>
+        <StatCard label="Washing → Drying → Ready → Collected" value={<span className="safi-stagecount"><span className="is-w">W-{washing}</span> → {D.orders.some(o => o.status === 'holding') && <><span className="is-h">H-{D.orders.filter(o => o.status === 'holding').length}</span> → </>}<span className="is-d">D-{D.orders.filter(o => o.status === 'drying').length}</span> → {D.orders.some(o => o.status === 'finalhold') && <><span className="is-fh">FH-{D.orders.filter(o => o.status === 'finalhold').length}</span> → </>}<span className="is-r">R-{D.orders.filter(o => o.status === 'ready').length}</span> → <span className="is-c">C-{collectedOrdersToday.length}</span></span>} icon="wash" delta="Today's Orders Stats"/>
       </div>
 
 
@@ -302,7 +302,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
       const tpl = (D.smsTemplates || {}).intake
         || 'Vazi Safi: order {id} received, {items} item(s), total {total}. Tag {tag}. Pay ONLY to {payto}. Queries {owner}.';
       const body = tpl
-        .replace(/\{name\}/g, customer.name.split(' ')[0])
+        .replace(/\{name\}/g, firstName(customer.name))
         .replace(/\{id\}/g, orderNo(order.id))
         .replace(/\{tag\}/g, order.tag || '—')
         .replace(/\{items\}/g, String(items.reduce((n, it) => n + (it.qty || 0), 0)))
@@ -731,7 +731,7 @@ function NewOrderPreview({ items, subtotal, discount, discountPct, total, deposi
       <div className="safi-receipt" style={{ width: '100%', boxShadow: 'none', padding: 12 }}>
         <div className="safi-receipt__rule" style={{ marginTop: 0 }}/>
         <div className="safi-receipt__cust">
-          <span className="safi-receipt__cname">{String(customer?.name || 'Walk-in customer').trim().split(/\s+/)[0]}</span><br/>
+          <span className="safi-receipt__cname">{firstName(customer?.name || 'Walk-in customer')}</span><br/>
           {customer?.phone || ''}
           {customer && <div><span className="safi-receipt__tag">{customer.group} tier</span></div>}
         </div>
@@ -848,7 +848,7 @@ function StageTrail({ order }) {
   useStore();
   const times = window.SAFI_STORE.stageTimes(order.id);
   const at = times[order.status];
-  const timed = order.status === 'washing' || order.status === 'drying' || order.status === 'holding';
+  const timed = order.status === 'washing' || order.status === 'drying' || order.status === 'holding' || order.status === 'finalhold';
   const [, tick] = useStateFD(0);
   useEffectFD(() => { if (!timed || !at) return; const t = setInterval(() => tick(n => n + 1), 1000); return () => clearInterval(t); }, [timed, at]);
   const mins = at ? (Date.now() - new Date(at)) / 60000 : 0;
@@ -903,7 +903,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
 
   // Counts follow the chosen day (Today / Yesterday / a date); Any date = everything.
   const dateOrders = dateFilter ? D.orders.filter(o => String(o.in).startsWith(dateFilter)) : D.orders;
-  const statusCounts = ['intake', 'washing', 'holding', 'drying', 'ironing', 'drycleaning', 'ready', 'collected'].map(s => ({ s, n: dateOrders.filter(o => o.status === s).length }));
+  const statusCounts = ['intake', 'washing', 'holding', 'drying', 'finalhold', 'ironing', 'drycleaning', 'ready', 'collected'].map(s => ({ s, n: dateOrders.filter(o => o.status === s).length }));
   const activeCount = dateOrders.filter(o => o.status !== 'collected').length;
   const tierOf = (o) => (D.customers.find(c => c.id === o.customer) || {}).group || 'normal';
   const tierN = (g) => dateOrders.filter(o => tierOf(o) === g).length;
@@ -1034,7 +1034,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
   if (!o) return <div style={{ padding: 40 }}><h2>No order selected.</h2><Button onClick={() => setView('orders')}>Back to orders</Button></div>;
   const c = D.customers.find(x => x.id === o.customer);
   const stages = window.SAFI_STORE.stagesFor(o);
-  const curIdx = o.status === 'holding' ? stages.indexOf('washing') : stages.indexOf(o.status);
+  const curIdx = o.status === 'holding' ? stages.indexOf('washing') : o.status === 'finalhold' ? stages.indexOf('drying') : stages.indexOf(o.status);
   const parent = o.rewashOf ? D.orders.find(x => x.id === o.rewashOf) : null;
   const rewashChild = o.rewashedBy ? D.orders.find(x => x.id === o.rewashedBy) : null;
 
@@ -1051,7 +1051,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
     if (c && c.phone && (((D.settings && D.settings.smsStages) || {}).collected !== false)) {
       const tpl = (D.smsTemplates || {}).collected || 'Hi {name}, your order {id} has been collected. Asante, karibu tena!';
       const body = tpl
-        .replace(/\{name\}/g, c.name.split(' ')[0])
+        .replace(/\{name\}/g, firstName(c.name))
         .replace(/\{id\}/g, orderNo(o.id))
         .replace(/\{balance\}/g, `KES ${Math.round(o.total - o.paid).toLocaleString('en-KE')}`)
         .replace(/\{due\}/g, '')
@@ -1077,13 +1077,14 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
           <Button kind="ghost" icon="alert" onClick={() => setView('issues')}>Issue</Button>
           <Button kind="ghost" icon="print" onClick={() => setView('receipt')}>{t('print', lang)}</Button>
           {o.status === 'washing' && <Button kind="ghost" icon="clock" onClick={() => { window.SAFI_STORE.holdOrder(o.id); toast('Moved to Holding (waiting for a dryer)'); }}>Hold (dryers busy)</Button>}
+          {o.status === 'drying' && <span className="safi-fhbtn"><Button kind="ghost" icon="clock" onClick={() => { window.SAFI_STORE.finalHoldOrder(o.id); toast('Moved to Final hold (air drying, unfolded)'); }}>Final hold (air drying, unfolded etc)</Button></span>}
           {curIdx >= 0 && curIdx < stages.length - 1 && stages[curIdx + 1] !== 'collected' && <Button kind="primary" icon="arrow" onClick={() => { setShowAdvance(true); }}>Advance → {stages[curIdx + 1]}</Button>}
           <Button kind="ghost" onClick={() => setShowDelete(true)} icon="alert"><span style={{ color: 'var(--red)' }}>Delete</span></Button>
         </>}
       />
 
       <Card>
-        <div className={`safi-stepper${(o.status === 'holding' || window.SAFI_STORE.stageTimes(o.id).holding) ? ' has-hold' : ''}`}>
+        <div className={`safi-stepper${(o.status === 'holding' || o.status === 'finalhold' || window.SAFI_STORE.stageTimes(o.id).holding || window.SAFI_STORE.stageTimes(o.id).finalhold) ? ' has-hold' : ''}`}>
           {stages.map((s, i) => (
             <div key={s} className={`safi-stepper__node ${i < curIdx ? 'is-done' : i === curIdx ? 'is-cur' : ''} ${(s === 'collected' && o.status === 'ready') ? 'is-clickable' : ''}`}
                  onClick={() => { if (s === 'collected' && o.status === 'ready') markCollected(); }}
@@ -1092,12 +1093,17 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
                 {i < curIdx ? <Icon name="check" size={14} stroke="#fff"/> : <span>{i + 1}</span>}
               </div>
               <div className="safi-stepper__lbl">{t(s, lang)}</div>
-              {(() => { const tm = window.SAFI_STORE.stageTimes(o.id); const at = tm[s]; if (!at) return null; const nx = (s === 'washing' && tm.holding) ? tm.holding : stages.slice(i + 1).map(x => tm[x]).find(Boolean); const dur = (s === 'washing' || s === 'drying') ? durTxt((nx ? new Date(nx) : (s === o.status ? new Date() : null)) - new Date(at)) : null; const total = (s === 'ready' && tm.washing) ? durTxt(new Date(at) - new Date(tm.washing)) : null; return <div className="safi-stepper__at"><span className="safi-mono">{hmOf(at)}</span>{dur && (nx || s === o.status) ? <span>{nx ? dur : `${dur} so far`}</span> : null}{total ? <span className="safi-stepper__total" title="Order duration: start of washing to Ready"><Icon name="clockface" size={16}/>{total}</span> : null}</div>; })()}
+              {(() => { const tm = window.SAFI_STORE.stageTimes(o.id); const at = tm[s]; if (!at) return null; const nx = (s === 'washing' && tm.holding) ? tm.holding : (s === 'drying' && tm.finalhold) ? tm.finalhold : stages.slice(i + 1).map(x => tm[x]).find(Boolean); const dur = (s === 'washing' || s === 'drying') ? durTxt((nx ? new Date(nx) : (s === o.status ? new Date() : null)) - new Date(at)) : null; const total = (s === 'ready' && tm.washing) ? durTxt(new Date(at) - new Date(tm.washing)) : null; return <div className="safi-stepper__at"><span className="safi-mono">{hmOf(at)}</span>{dur && (nx || s === o.status) ? <span>{nx ? dur : `${dur} so far`}</span> : null}{total ? <span className="safi-stepper__total" title="Order duration: start of washing to Ready"><Icon name="clockface" size={16}/>{total}</span> : null}</div>; })()}
               {i < stages.length - 1 && <div className={`safi-stepper__line ${i < curIdx ? 'is-done' : ''}`}/>}
               {s === 'washing' && (() => { const tm = window.SAFI_STORE.stageTimes(o.id); if (!tm.holding && o.status !== 'holding') return null; const cur = o.status === 'holding'; const end = tm.drying ? new Date(tm.drying) : (cur ? new Date() : null); return (
                 <div className={`safi-stepper__hold${cur ? ' is-cur' : ''}`} title="Holding: washed, waiting for a free dryer">
                   <span className="safi-stepper__holddot">H</span>
                   <span><b>Holding</b> <span className="safi-mono">{tm.holding ? hmOf(tm.holding) : ''}</span>{tm.holding && end ? <span> · {durTxt(end - new Date(tm.holding))}{cur ? ' so far' : ''}</span> : null}</span>
+                </div>); })()}
+              {s === 'drying' && (() => { const tm = window.SAFI_STORE.stageTimes(o.id); if (!tm.finalhold && o.status !== 'finalhold') return null; const cur = o.status === 'finalhold'; const after = stages.slice(i + 1).map(x => tm[x]).find(Boolean); const end = after ? new Date(after) : (cur ? new Date() : null); return (
+                <div className={`safi-stepper__hold safi-stepper__hold--fh${cur ? ' is-cur' : ''}`} title="Final hold: air-drying, unfolded, still on the rack">
+                  <span className="safi-stepper__holddot">FH</span>
+                  <span><b>Final hold</b> <span className="safi-mono">{tm.finalhold ? hmOf(tm.finalhold) : ''}</span>{tm.finalhold && end ? <span> · {durTxt(end - new Date(tm.finalhold))}{cur ? ' so far' : ''}</span> : null}</span>
                 </div>); })()}
             </div>
           ))}
@@ -1473,7 +1479,7 @@ function AdvanceModal({ open, onClose, order, customer, stages, curIdx }) {
     const tpl = templates[key] || '';
     if (!customer) return tpl;
     return tpl
-      .replace(/\{name\}/g, customer.name.split(' ')[0])
+      .replace(/\{name\}/g, firstName(customer.name))
       .replace(/\{id\}/g, orderNo(order.id))
       .replace(/\{balance\}/g, `KES ${Math.round(order.total - order.paid).toLocaleString('en-KE')}`)
       .replace(/\{due\}/g, dmy(order.due || ''))
@@ -1840,7 +1846,7 @@ function Receipt({ orderId, setView, lang, money, shop }) {
           <div className="safi-receipt__rule"/>
 
           <div className="safi-receipt__cust">
-            <span className="safi-receipt__cname">{String(c?.name || 'Walk-in customer').trim().split(/\s+/)[0]}</span><br/>
+            <span className="safi-receipt__cname">{firstName(c?.name || 'Walk-in customer')}</span><br/>
             {c?.phone || ''}<br/>
             {c && <span className="safi-receipt__tag">{c.group} tier</span>}
           </div>
@@ -2537,7 +2543,8 @@ function PaymentsScreen({ lang, money, role }) {
       {preset && <div className="safi-preset"><Icon name="income" size={14}/><span>Showing: <b>{preset.label}</b> · {(preset.ids || []).length} order{(preset.ids || []).length === 1 ? '' : 's'} · {rows.length} payment{rows.length === 1 ? '' : 's'} · {money(rows.reduce((s, p) => s + (p.amount || 0), 0))}</span><button className="safi-rowlink" onClick={() => setPreset(null)}>Show all payments</button></div>}
 
       <div className="safi-grid safi-grid--4">
-        {totalsByMethod.map(({ m, total, count }) => (
+        {/* M-Pesa / bank totals: Management only, so the till doesn't show total takings. */}
+        {isManagement && totalsByMethod.map(({ m, total, count }) => (
           <div key={m} className={`safi-stat safi-stat--method safi-stat--${m}`}>
             <div className="safi-stat__top">
               <div className="safi-stat__label">{m === 'mpesa' ? 'M-Pesa' : m === 'cash' ? 'Cash' : 'Bank transfer'}</div>

@@ -291,6 +291,7 @@ const StatusBadge = ({ status, mark }) => {
     washing:   { c: 'blue',   label: 'Washing' },
     holding:   { c: 'teal',   label: 'Holding' },
     drying:    { c: 'brown',  label: 'Drying' },
+    finalhold: { c: 'fh',     label: 'Final hold' },
     ironing:   { c: 'violet', label: 'Ironing' },
     drycleaning: { c: 'violet', label: 'Dry cleaning' },
     ready:     { c: 'green',  label: 'Ready' },
@@ -413,10 +414,10 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
       </nav>
 
       <button className="safi-side__user" onClick={() => setShowSwitch(true)}>
-        <span className="safi-side__avatar">{current.name.split(' ').map(s => s[0]).slice(0, 2).join('')}</span>
+        <span className="safi-side__avatar">{current.id ? current.name.split(' ').map(s => s[0]).slice(0, 2).join('') : <Icon name="staff" size={21}/>}</span>
         <div className="safi-side__userinfo">
-          <div className="safi-side__username">{current.name}</div>
-          <div className="safi-side__userrole">{current.id ? `${current.role} · tap to switch` : 'Tap to choose who is on duty'}</div>
+          <div className="safi-side__username">{current.id ? current.name : (() => { const h = new Date().getHours(); return h < 12 ? <>Good morning! <span className="safi-greet-ico">☀️</span></> : h < 17 ? <>Good afternoon! <span className="safi-greet-ico">🌤️</span></> : <>Good evening! <span className="safi-greet-ico">🌙</span></>; })()}</div>
+          <div className="safi-side__userrole">{current.id ? `${current.role} · tap to switch` : 'Tap to sign in'}</div>
         </div>
         <span className="safi-side__bell" title="Switch attendant"><Icon name="arrow" size={14}/></span>
       </button>

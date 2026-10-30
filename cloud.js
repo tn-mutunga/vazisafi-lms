@@ -271,6 +271,17 @@
   // Fetch other laptops' changes even when nobody is typing here.
   // Every 10 minutes (plus on open, on wake, when the internet returns and on close).
   setInterval(() => schedule(0), 300000);
+  // Fast sync (every 8 s) while staff accounts are being set up: a code was requested,
+  // someone is waiting for approval, a sign-in screen is open, or an account just changed.
+  setInterval(() => {
+    try {
+      const st = (window.SAFI_STORE.get().settings) || {};
+      const acc = st.staffAccounts || {};
+      const pending = Object.values(acc).some(a => a && !a.deleted && (a.tempHash || (a.kind !== 'management' && a.hash && !a.approved)));
+      const lockOpen = !!document.querySelector('.safi-lockscreen, .safi-lock');
+      if (pending || lockOpen || (window.__safiFastSyncUntil || 0) > Date.now()) schedule(0);
+    } catch (e) {}
+  }, 8000);
   // Teller on duty: check the cloud every 30 seconds (one tiny request) so a change made
   // on any laptop shows at the shop within half a minute.
   setInterval(async () => {

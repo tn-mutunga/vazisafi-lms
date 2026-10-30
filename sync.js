@@ -283,6 +283,18 @@
   function saveBase(b) { try { localStorage.setItem(BASE_KEY(), JSON.stringify(b)); } catch (e) {} }
   const newBase = () => ({ setup: true, h: {}, cur: {} });
   const tick = (b, table, rows) => { for (const r of rows) if (r.updated_at && (!b.cur[table] || r.updated_at > b.cur[table])) b.cur[table] = r.updated_at; };
+  // Sign-in accounts are merged one person at a time (newest change wins per username),
+  // so two laptops editing accounts never wipe each other's codes, passwords or deletions.
+  function mergeAccounts(local, cloud) {
+    const a = (local && typeof local === 'object') ? local : {}, b = (cloud && typeof cloud === 'object') ? cloud : {};
+    const out = {};
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      const x = a[k], y = b[k];
+      out[k] = !x ? y : !y ? x : ((Number(y.u) || 0) > (Number(x.u) || 0) ? y : x);
+    }
+    return out;
+  }
+  window.SAFI_MERGE_ACCOUNTS = mergeAccounts;
   const EXTRA = {
     settings:      { list: st => Object.entries(st.settings || {}).map(([key, value]) => ({ branch_id: BRANCH, key, value })), id: r => r.key, conflict: 'branch_id,key' },
     sms_templates: { list: st => Object.entries(st.smsTemplates || {}).map(([key, body]) => ({ branch_id: BRANCH, key, body })), id: r => r.key, conflict: 'branch_id,key' },
@@ -451,7 +463,7 @@
         const k = x.id(row);
         const local = localNow.get(k);
         if (local && hb[k] !== H(local)) continue;
-        if (table === 'settings') { next.settings = { ...(next.settings || {}), [k]: row.value }; hb[k] = H({ branch_id: BRANCH, key: k, value: row.value }); }
+        if (table === 'settings') { const v = k === 'staffAccounts' ? mergeAccounts((next.settings || {}).staffAccounts, row.value) : row.value; next.settings = { ...(next.settings || {}), [k]: v }; hb[k] = H({ branch_id: BRANCH, key: k, value: row.value }); }
         if (table === 'sms_templates') { next.smsTemplates = { ...(next.smsTemplates || {}), [k]: row.body }; hb[k] = H({ branch_id: BRANCH, key: k, body: row.body }); }
         if (table === 'void_tags') {
           const v = { tag: row.tag, reason: row.reason, staff: row.staff_id, at: row.at };
@@ -711,7 +723,7 @@
 
       const settings = await selectAll('settings');
       next.settings = { ...(next.settings || {}) };
-      for (const r of settings.filter(r => r.branch_id === BRANCH)) next.settings[r.key] = r.value;
+      for (const r of settings.filter(r => r.branch_id === BRANCH)) next.settings[r.key] = r.key === 'staffAccounts' ? mergeAccounts(next.settings.staffAccounts, r.value) : r.value;
 
       const templates = await selectAll('sms_templates');
       next.smsTemplates = { ...(next.smsTemplates || {}) };

@@ -402,7 +402,7 @@ function DispatchScreen({ lang, money, setView }) {
         const tpl = (D.smsTemplates || {}).delivery || 'Hi {name}, our rider {rider} is on the way with your order {id}.';
         const order = d.orderId ? D.orders.find(o => o.id === d.orderId) : null;
         const body = tpl
-          .replace(/\{name\}/g, cust.name.split(' ')[0])
+          .replace(/\{name\}/g, firstName(cust.name))
           .replace(/\{id\}/g, d.orderId || '—')
           .replace(/\{rider\}/g, rider?.name || 'our rider')
           .replace(/\{balance\}/g, order ? `KES ${Math.round(order.total - order.paid).toLocaleString('en-KE')}` : '—')

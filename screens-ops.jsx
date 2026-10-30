@@ -128,7 +128,7 @@ function sendWinback(D, rows, days) {
   for (const { c } of rows) {
     window.SAFI_STORE.logMessage({
       to: `${c.prefix || ''} ${c.phone}`.trim(), name: c.name,
-      body: tpl.replace(/\{name\}/g, c.name.split(' ')[0]).replace(/\{days\}/g, days),
+      body: tpl.replace(/\{name\}/g, firstName(c.name)).replace(/\{days\}/g, days),
       orderId: '', stage: 'winback', method: 'sms', customerId: c.id,
     });
   }

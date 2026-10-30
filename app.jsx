@@ -218,6 +218,37 @@ function App() {
 
   // expose setTweak globally so Management Settings screen can call it
   useAppEffect(() => { window.__safiSetTweak = setTweak; }, [setTweak]);
+  // Every day at 06:00 the attendant on duty is cleared (and a signed-in staff member is
+  // signed out), so whoever reports in the morning signs in fresh. Anything chosen or
+  // signed in AFTER today's 06:00 is left alone, so a laptop opening late (before its
+  // first cloud pull) can never wipe the attendant the shop set this morning.
+  useAppEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      if (now.getHours() < 6) return;
+      const today = SAFI_TIME.day();
+      const cutoff = today + ' 06:00';
+      const st = window.SAFI_STORE.get().settings || {};
+      const log = st.dutyLog || [];
+      const last = log[log.length - 1];
+      const dutySetToday = last && String(last.at || '') >= cutoff;
+      if (st.dutyResetDay !== today && !dutySetToday && (st.currentStaffId || '')) {
+        window.SAFI_STORE.setSetting('dutyResetDay', today);
+        window.SAFI_STORE.setCurrentStaff('');
+      }
+      try {
+        const ses = window.safiSession && window.safiSession();
+        if (ses && ses.kind !== 'management' && String(ses.at || '') < cutoff) {
+          localStorage.removeItem('safi_session_v1');
+          if (st.lockEnabled && window.safiLock) window.safiLock('Sign in to start');
+        }
+      } catch (e) {}
+    };
+    // First check after the opening sync has had time to pull today's attendant.
+    const first = setTimeout(tick, 90000);
+    const t = setInterval(tick, 60000);
+    return () => { clearTimeout(first); clearInterval(t); };
+  }, []);
   useAppEffect(() => { window.__safiSetView = setView; }, []);
   useAppEffect(() => { window.__safiGoFrontDesk = () => { setRole('frontdesk'); setView('dashboard'); }; }, []);
   useAppEffect(() => { const f = () => { setRole('frontdesk'); setView('dashboard'); }; window.addEventListener('safi-signout', f); return () => window.removeEventListener('safi-signout', f); }, []);

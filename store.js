@@ -12,6 +12,8 @@ window.SAFI_PHONE = (prefix, phone) => {
 };
 // Order numbers carry a 2-letter laptop code internally (SF-2446-EG) so two tills can
 // never clash. People only ever see SF-2446.
+// First name for messages: "T Mutunga" → "T Mutunga" (single letter keeps the next word), "Mutunga T" → "Mutunga".
+window.firstName = (name) => { const p = String(name || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return ''; return p.length > 1 && p[0].replace(/\./g, '').length === 1 ? p[0] + ' ' + p[1] : p[0]; };
 window.orderNo = (id) => String(id || '').replace(/-[A-Z]{2}$/, '');
 // One date style on every computer: dd-mm HH:MM (or dd-mm-yy). Input "YYYY-MM-DD[ HH:MM]".
 window.dmy = (v, o = {}) => {
@@ -326,7 +328,8 @@ window.SAFI_STORE = (() => {
   // Directors / managers are never the attendant on duty.
   const isMgmtRole = (st) => !!st && /director|manager|owner/i.test(st.role || '');
   const curStaff = () => {
-    const id = (state.settings && state.settings.currentStaffId) || state.currentStaffId || '';
+    // The synced setting wins, including '' (nobody on duty, e.g. after the 06:00 reset).
+    const id = (state.settings && 'currentStaffId' in state.settings) ? (state.settings.currentStaffId || '') : (state.currentStaffId || '');
     const st = (state.staff || []).find(x => x.id === id);
     return st && !isMgmtRole(st) ? id : '';
   };
@@ -604,7 +607,7 @@ window.SAFI_STORE = (() => {
     },
     getCurrentStaff() {
       const id = curStaff();
-      return (state.staff || []).find(x => x.id === id) || { id: '', name: 'No attendant set', role: 'tap to choose', shift: '' };
+      return (state.staff || []).find(x => x.id === id) || { id: '', name: 'Staff sign in', role: 'tap to choose', shift: '' };
     },
 
     // ── Staff ──────────────────────────────────────────────
@@ -623,6 +626,26 @@ window.SAFI_STORE = (() => {
       return gone.length;
     },
     // Empty one section. Audit log is never cleared.
+    // Clear only records dated within [from, to] (YYYY-MM-DD, inclusive). Reason goes to the audit log.
+    clearSectionRange(key, from, to, reason) {
+      const dateOf = { orders: r => r.in, payments: r => r.date, expenses: r => r.date, dispatch: r => r.slotDate || r.created, messages: r => r.date, issues: r => r.date, approvals: r => r.requestedAt, shifts: r => r.openedAt, customers: r => r.joined, inventory: r => r.date, packages: r => r.created };
+      const get = dateOf[key] || (r => r.date);
+      const inR = (r) => { const d = String(get(r) || '').slice(0, 10); return d && d >= from && d <= to; };
+      const gone = (state[key] || []).filter(inR);
+      const ids = new Set(gone.map(r => r.id));
+      state[key] = (state[key] || []).filter(r => !inR(r));
+      if (key === 'orders') {
+        state.payments = (state.payments || []).filter(p => !ids.has(p.order));
+        state.releases = (state.releases || []).filter(r => !ids.has(r.orderId || r.order));
+        state.deliveryCards = (state.deliveryCards || []).filter(r => !ids.has(r.orderId || r.order));
+        const per = {}; for (const o of state.orders) if (o.customer) { per[o.customer] = per[o.customer] || { n: 0, s: 0 }; per[o.customer].n++; per[o.customer].s += o.total || 0; }
+        state.customers = state.customers.map(c => ({ ...c, orders: (per[c.id] || {}).n || 0, spend: (per[c.id] || {}).s || 0 }));
+      }
+      if (key === 'dispatch') state.deliveryCards = (state.deliveryCards || []).filter(r => !ids.has(r.dispatchId));
+      audit('data.clear', key, `${gone.length} row(s) cleared ${from} to ${to} · reason: ${reason || '—'}`);
+      save();
+      return gone.length;
+    },
     clearSection(key) {
       const linked = { orders: ['orders', 'payments', 'releases', 'deliveryCards'], dispatch: ['dispatch', 'deliveryCards'] };
       const keys = linked[key] || [key];
@@ -739,7 +762,7 @@ window.SAFI_STORE = (() => {
         if (o.id !== id) return o;
         const ST = stagesFor(o);
         // Holding sits between Washing and Drying and is not in the stage list.
-        const idx = o.status === 'holding' ? ST.indexOf('washing') : ST.indexOf(o.status);
+        const idx = o.status === 'holding' ? ST.indexOf('washing') : o.status === 'finalhold' ? ST.indexOf('drying') : ST.indexOf(o.status);
         const next = ST[Math.min(idx + 1, ST.length - 1)];
         if (next === 'collected' && (o.total || 0) - (o.paid || 0) > 0) return o; // balance first
         if (next !== o.status) stageMark(id, next);
@@ -753,6 +776,14 @@ window.SAFI_STORE = (() => {
       if (!o || o.status !== 'washing') return;
       state.orders = state.orders.map(x => x.id === id ? { ...x, status: 'holding' } : x);
       stageMark(id, 'holding');
+      save();
+    },
+    // Final hold: dried but left on the rack (air-drying, unfolded…). Drying → Final hold → next stage.
+    finalHoldOrder(id) {
+      const o = state.orders.find(x => x.id === id);
+      if (!o || o.status !== 'drying') return;
+      state.orders = state.orders.map(x => x.id === id ? { ...x, status: 'finalhold' } : x);
+      stageMark(id, 'finalhold');
       save();
     },
     // When each order entered each stage (from the synced audit log, so all laptops agree).

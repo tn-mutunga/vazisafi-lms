@@ -885,6 +885,74 @@ function MonthExport({ D }) {
   );
 }
 
+function ClearSectionCard({ D }) {
+  const today = SAFI_TIME.day();
+  const first = today.slice(0, 8) + '01';
+  const [from, setFrom] = useStateOw(first);
+  const [to, setTo] = useStateOw(today);
+  const [job, setJob] = useStateOw(null); // { k, label, note, n }
+  const [step, setStep] = useStateOw(0);
+  const [reason, setReason] = useStateOw('');
+  const [pin, setPin] = useStateOw('');
+  const [err, setErr] = useStateOw('');
+  const [backed, setBacked] = useStateOw(false);
+  const dateOf = { orders: r => r.in, payments: r => r.date, expenses: r => r.date, dispatch: r => r.slotDate || r.created, messages: r => r.date, issues: r => r.date, approvals: r => r.requestedAt, shifts: r => r.openedAt, customers: r => r.joined, inventory: r => r.date, packages: r => r.created };
+  const countIn = (k) => (D[k] || []).filter(r => { const d = String((dateOf[k] || (x => x.date))(r) || '').slice(0, 10); return d && d >= from && d <= to; }).length;
+  const realPin = () => String(window.__safiOwnerPin || window.SAFI_OWNER_PIN || (D.settings || {}).ownerPin || '');
+  const dm = (v) => v ? `${v.slice(8, 10)}-${v.slice(5, 7)}-${v.slice(2, 4)}` : '';
+  function open(k, label, note) { setJob({ k, label, note, n: countIn(k) }); setStep(1); setReason(''); setPin(''); setErr(''); setBacked(false); }
+  function next() {
+    setErr('');
+    if (step === 1) { if (reason.trim().length < 5) { setErr('Write a short reason (at least 5 characters).'); return; } if (!backed) { setErr('Tick that you have downloaded a backup first.'); return; } setStep(2); return; }
+    if (pin.trim() !== realPin()) { setErr('Wrong Management PIN.'); setPin(''); return; }
+    if (step === 2) { setPin(''); setStep(3); return; }
+    const n = window.SAFI_STORE.clearSectionRange(job.k, from, to, reason.trim());
+    toast(`${job.label}: ${n} record${n === 1 ? '' : 's'} cleared (${dm(from)} to ${dm(to)})`, 'success');
+    setJob(null); setStep(0);
+  }
+  const rows = [
+    ['customers', 'Customers', 'By join date · past orders stay, they just lose the customer link'],
+    ['orders', 'Orders', 'By intake date · also clears their payments, handovers and delivery cards'],
+    ['payments', 'Payments', ''], ['expenses', 'Expenses', ''],
+    ['dispatch', 'Pickups & deliveries', 'Also clears their delivery cards'],
+    ['messages', 'SMS log', ''], ['inventory', 'Inventory', ''], ['issues', 'Issues', ''],
+    ['approvals', 'Approvals', ''], ['shifts', 'Shifts', ''], ['packages', 'Packages', ''],
+  ];
+  return (
+    <Card title="Clear a section" action={<span className="safi-cell-sub">Management PIN twice · reason required · the audit log is never cleared</span>}>
+      <div className="safi-callout" style={{ marginTop: 0, background: '#fff7e8', color: '#8a4b00', borderLeft: '3px solid #ff7a00' }}>
+        <Icon name="alert" size={14}/>
+        <span><b>Download first.</b> Before clearing, use <b>Download backup (.json)</b> above, or <b>Export reports</b> for the same period. Cleared records can only come back from a backup.</span>
+      </div>
+      <div className="safi-clear-range">
+        <label>From<input type="date" className="safi-input" value={from} max={to} onChange={e => setFrom(e.target.value)}/></label>
+        <label>To<input type="date" className="safi-input" value={to} min={from} max={today} onChange={e => setTo(e.target.value)}/></label>
+        <span className="safi-cell-sub">Only records dated in this period are cleared ({dm(from)} to {dm(to)}).</span>
+      </div>
+      <div className="safi-clear-list">
+        {rows.map(([k, label, note]) => { const n = countIn(k); return (
+          <div key={k} className="safi-clear-row">
+            <div><b>{label}</b>{note && <div className="safi-cell-sub">{note}</div>}</div>
+            <span className="safi-mono safi-cell-sub">{n} in period · {(D[k] || []).length} total</span>
+            <Button kind="ghost" disabled={!n} onClick={() => open(k, label, note)}>Clear</Button>
+          </div>); })}
+      </div>
+      <Modal open={!!job} onClose={() => setJob(null)} title={job ? `Clear ${job.label.toLowerCase()} · ${dm(from)} to ${dm(to)}` : ''} width={480}
+        footer={<><Button kind="ghost" onClick={() => setJob(null)}>Cancel</Button><Button kind="primary" icon={step === 3 ? 'alert' : 'check'} onClick={next}>{step === 1 ? 'Continue' : step === 2 ? 'Confirm PIN (1 of 2)' : `Clear ${job ? job.n : ''} record${job && job.n === 1 ? '' : 's'}`}</Button></>}>
+        {job && <div className="safi-form">
+          <p style={{ margin: 0 }}><b>{job.n}</b> record{job.n === 1 ? '' : 's'} dated {dm(from)} to {dm(to)} will be deleted{job.note ? `. ${job.note}` : ''}. This cannot be undone.</p>
+          {step === 1 && <>
+            <label>Reason for clearing<textarea className="safi-textarea" autoFocus value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Test orders from setup week, already backed up"/></label>
+            <label className="safi-toggle"><input type="checkbox" checked={backed} onChange={e => setBacked(e.target.checked)}/><span/><b>I have downloaded a backup / export of this data</b></label>
+          </>}
+          {step >= 2 && <label>{step === 2 ? 'Management PIN' : 'Enter the Management PIN again to confirm'}<input className="safi-input safi-mono" type="password" autoFocus key={step} value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && next()}/></label>}
+          {err && <p className="safi-pin__err" style={{ margin: 0 }}>{err}</p>}
+        </div>}
+      </Modal>
+    </Card>
+  );
+}
+
 function DataScreen({ lang }) {
   const D = useStore();
   const fileRef = useRefOw(null);
@@ -943,38 +1011,7 @@ function DataScreen({ lang }) {
         <Button kind="primary" icon="users" onClick={() => setConfirm('golive')}>Clear demo data & start fresh</Button>
       </Card>
 
-      <Card title="Clear a section" action={<span className="safi-cell-sub">Owner PIN required · the audit log is never cleared</span>}>
-        <p className="safi-cell-sub" style={{ marginTop: 0 }}>Empties one list on this laptop and, when sync is on, in the cloud and on the other laptops. Download a backup first.</p>
-        <div className="safi-clear-list">
-          {[
-            ['customers', 'Customers', 'Past orders stay; they just lose the customer link'],
-            ['orders', 'Orders', 'Also clears payments, handovers and delivery cards'],
-            ['payments', 'Payments', ''],
-            ['expenses', 'Expenses', ''],
-            ['dispatch', 'Pickups & deliveries', 'Also clears delivery cards'],
-            ['messages', 'SMS log', ''],
-            ['inventory', 'Inventory', ''],
-            ['issues', 'Issues', ''],
-            ['approvals', 'Approvals', ''],
-            ['shifts', 'Shifts', ''],
-            ['packages', 'Packages', ''],
-          ].map(([k, label, note]) => {
-            const n = (D[k] || []).length;
-            return (
-              <div key={k} className="safi-clear-row">
-                <div><b>{label}</b>{note && <div className="safi-cell-sub">{note}</div>}</div>
-                <span className="safi-mono safi-cell-sub">{n}</span>
-                <Button kind="ghost" disabled={!n} onClick={() => window.safiPinConfirm({
-                  title: `Clear all ${label.toLowerCase()}?`,
-                  body: `${n} record${n === 1 ? '' : 's'} will be deleted. ${note ? note + '. ' : ''}This cannot be undone.`,
-                  confirmLabel: 'Clear',
-                  onConfirm: () => { window.SAFI_STORE.clearSection(k); toast(`${label} cleared`, 'success'); },
-                })}>Clear</Button>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
+      <ClearSectionCard D={D}/>
 
       <Card title="Danger zone" className="safi-danger">
         <p className="safi-cell-sub" style={{ marginTop: 0 }}>These actions cannot be undone — back up first.</p>

@@ -1,8 +1,11 @@
-VAZI SAFI LMS v2.5.0
-PRINTING (desktop app)
-- Receipts and job cards now print the same way as the hardware test receipt, so the roll
-  stops right after the last line. Needs Hardware -> Choose receipt printer... once.
-PAYMENTS & AUDIT
-- Opened from "Delivered / Collected today": shows Total collected, Bank and M-Pesa for today.
-MANAGEMENT DASHBOARD
-- Period summary opens on Month.
+VAZI SAFI LMS v2.5.1
+ORDERS
+- Final hold (air drying, unfolded etc): orange button during Drying; FH bubble with start time and time so far;
+  own filter; kept out of Ready counts and reminders until advanced.
+- Stage card: W → H → D → FH → R → C (H and FH only shown when orders are in them).
+- Customer first names: "T Mutunga" keeps the initial + surname; "Mutunga T" shows "Mutunga" (receipt + SMS).
+FRONT DESK
+- 6:00 am daily reset: attendant cleared, "Good morning — tap to sign in" until someone signs in.
+- M-Pesa / Bank totals hidden from Front Desk.
+DATA & BACKUP
+- Clear a section: choose a date period, reason required, backup tick, Management PIN twice; audit log records it.

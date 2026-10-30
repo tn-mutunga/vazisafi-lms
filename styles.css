@@ -3405,3 +3405,14 @@ button { font-family: inherit; }
 .safi-backbar{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-weight:600;font-size:13px;cursor:pointer}.safi-backbar:hover{background:var(--paper);border-color:var(--brand)}
 .safi-recent-list--scroll{max-height:62vh;overflow-y:scroll;padding-right:10px;scrollbar-width:auto;scrollbar-color:#7c3aed #eef0f5}.safi-recent-list--scroll::-webkit-scrollbar{width:10px}.safi-recent-list--scroll::-webkit-scrollbar-track{background:#eef0f5;border-radius:10px}.safi-recent-list--scroll::-webkit-scrollbar-thumb{background:#7c3aed;border-radius:10px}
 .safi-svcday--streams{grid-template-columns:repeat(3,minmax(0,1fr))!important}.safi-svcday__ico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin-bottom:6px}.safi-svcday__c--laundry{border-color:#bae6fd}.safi-svcday__c--laundry .safi-svcday__ico{background:#e0f2fe;color:#0284c7}.safi-svcday__c--laundry .safi-svcday__n{color:#0369a1}.safi-svcday__c--drycleaning{border-color:#ddd0f7}.safi-svcday__c--drycleaning .safi-svcday__ico{background:#f3eefe;color:#7c3aed}.safi-svcday__c--drycleaning .safi-svcday__n{color:#5C2D91}.safi-svcday__c--shoes{border-color:#fed7aa}.safi-svcday__c--shoes .safi-svcday__ico{background:#fff1e6;color:#ea580c}.safi-svcday__c--shoes .safi-svcday__n{color:#c2410c}
+.safi-greet-ico{font-size:1.3em;line-height:1;vertical-align:-0.12em;margin-left:2px}
+.safi-greet-ico{filter:saturate(1.6) brightness(1.15) drop-shadow(0 0 4px rgba(255,200,40,.9)) drop-shadow(0 0 9px rgba(255,170,0,.55))}
+.safi-greet-ico{filter:saturate(1.8) brightness(1.25) drop-shadow(0 0 4px rgba(255,214,0,.95)) drop-shadow(0 0 10px rgba(255,190,0,.6))}
+/* Final hold: bright orange */
+.safi-pill--fh{background:#ff7a00;color:#fff}.safi-pill--fh .safi-pill__dot{background:#ffe0bf}
+.safi-stepper__hold--fh .safi-stepper__holddot{background:#ff7a00!important;font-size:9.5px;letter-spacing:.02em}
+.safi-stepper__hold--fh.is-cur{border-color:#ff7a00!important;box-shadow:0 0 0 3px #ffe7cc!important}
+.safi-fhbtn .safi-btn{border-color:#ffc58a;color:#c2410c}.safi-fhbtn .safi-btn:hover{background:#fff4e8}
+.safi-stagecount .is-fh{color:#ff7a00;white-space:nowrap}
+.safi-stagecount .is-h{color:#dc143c;white-space:nowrap}
+.safi-clear-range{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0 4px}.safi-clear-range label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-3);font-weight:600}.safi-clear-range .safi-input{width:170px}

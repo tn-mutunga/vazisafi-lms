@@ -14,9 +14,15 @@ async function lkHash(salt, pw) {
 }
 const lkSalt = () => [...crypto.getRandomValues(new Uint8Array(8))].map(b => b.toString(16).padStart(2, '0')).join('');
 const lkCode = () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; return [...crypto.getRandomValues(new Uint8Array(6))].map(b => A[b % A.length]).join(''); };
-const lkAccounts = () => ({ ...(((window.SAFI_STORE.get().settings) || {}).staffAccounts || {}) });
+const lkAllAccounts = () => ({ ...(((window.SAFI_STORE.get().settings) || {}).staffAccounts || {}) });
+const lkAccounts = () => { const all = lkAllAccounts(); const o = {}; for (const k in all) if (all[k] && !all[k].deleted) o[k] = all[k]; return o; };
 const lkSaveAccounts = (acc) => {
-  window.SAFI_STORE.setSetting('staffAccounts', acc);
+  // Stamp every changed account (and mark removed ones) so the per-person merge keeps the newest.
+  const prev = lkAllAccounts(); const now = Date.now(); const next = { ...prev };
+  for (const k of Object.keys(acc)) if (JSON.stringify(acc[k]) !== JSON.stringify(prev[k])) next[k] = { ...acc[k], u: now };
+  for (const k of Object.keys(prev)) if (!(k in acc) && prev[k] && !prev[k].deleted) next[k] = { username: k, deleted: true, u: now };
+  window.SAFI_STORE.setSetting('staffAccounts', next);
+  window.__safiFastSyncUntil = Date.now() + 10 * 60e3;
   setTimeout(() => { try { window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && window.SAFI_CLOUD.syncNow().catch(() => {}); } catch (e) {} }, 300);
 };
 const lkFind = (name) => { const acc = lkAccounts(); const k = Object.keys(acc).find(u => u.toLowerCase() === String(name || '').trim().toLowerCase()); return k ? acc[k] : null; };
@@ -163,7 +169,7 @@ function SignInCard({ D, onDone, why }) {
     if (realPin && String(p).trim() === realPin) { onDone(a && a.kind === 'management' ? a : { username: 'management', kind: 'management', staffId: '', name: 'Management' }); return; }
     setErr(mu.trim() && !a ? 'No Management account with that username.' : a && a.kind !== 'management' ? 'That is a staff account. Use Staff sign in.' : 'Wrong password or passcode.'); setP('');
   }
-  async function signIn() {
+  async function signIn(retried) {
     setErr('');
     // Management PIN always unlocks (with or without a username).
     const realPin = String(window.__safiOwnerPin || window.SAFI_OWNER_PIN || st.ownerPin || '');
@@ -182,6 +188,7 @@ function SignInCard({ D, onDone, why }) {
     if (ok && a.kind !== 'management' && !a.approved) { setErr('Waiting for Management to approve your account.'); return; }
     if (ok) { onDone(a); return; }
     if (temp) { setPending(a); setNu(a.username); setMode('change'); setP(''); return; }
+    if (retried !== true) { setErr('Checking…'); try { window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && await window.SAFI_CLOUD.syncNow(); } catch (e) {} return signIn(true); }
     setErr(!a.hash && !a.tempHash ? 'No password set yet. Tap Get a code.' : a.tempHash && Date.now() >= (a.tempExp || 0) && !a.hash ? 'That code has expired. Request a new one.' : p.length > 8 && !a.tempHash ? 'Passwords are 4–8 characters. Check what you typed.' : 'Wrong password or code.');
   }
   async function savePw() {
@@ -343,19 +350,19 @@ function MgmtAccountSetup() {
 function StaffSignInCard() {
   const D = useStore();
   const st = D.settings || {};
-  const acc = st.staffAccounts || {};
+  const acc = (() => { const all = st.staffAccounts || {}; const o = {}; for (const k in all) if (all[k] && !all[k].deleted) o[k] = all[k]; return o; })();
   const set = (k, v) => window.SAFI_STORE.setSetting(k, v);
   const rows = Object.values(acc).sort((a, b) => String(a.name).localeCompare(String(b.name)));
   async function reset(a) {
     const r = await lkIssueCode({ username: a.username, email: a.email, kind: a.kind, staffId: a.staffId, name: a.name });
     toast(`New code for ${a.username}: ${r.code}`, 'success');
   }
-  function patchAcc(a, patch) { const n = { ...acc, [a.username]: { ...acc[a.username], ...patch } }; set('staffAccounts', n); toast(patch.approved ? `${a.username} approved` : patch.disabled ? `${a.username} disabled` : `${a.username} enabled`, 'success'); }
+  function patchAcc(a, patch) { const n = { ...acc, [a.username]: { ...acc[a.username], ...patch } }; lkSaveAccounts(n); toast(patch.approved ? `${a.username} approved` : patch.disabled ? `${a.username} disabled` : `${a.username} enabled`, 'success'); }
   function remove(a) {
     const pin = prompt(`Delete the account ${a.username}? Enter the Management PIN to confirm.`);
     if (pin == null) return;
     const real = String(window.__safiOwnerPin || window.SAFI_OWNER_PIN || st.ownerPin || '');
-    if (!real || pin.trim() !== real) { toast('Wrong Management PIN', 'error'); return; } const n = { ...acc }; delete n[a.username]; set('staffAccounts', n); }
+    if (!real || pin.trim() !== real) { toast('Wrong Management PIN', 'error'); return; } const n = { ...acc }; delete n[a.username]; lkSaveAccounts(n); }
   return (
     <Card title="Staff sign-in & screen lock" action={<span className="safi-cell-sub">Blurs the working area until someone signs in</span>}>
       <div className="safi-form" style={{ maxWidth: 760 }}>
