@@ -978,6 +978,10 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
           <div className="safi-toolbar__filters">
             <button className={`safi-chip ${dateFilter === todayStr ? 'is-active' : ''}`} onClick={() => setDateFilter(todayStr)}>Today</button>
             <button className={`safi-chip ${dateFilter === yesterdayStr ? 'is-active' : ''}`} onClick={() => setDateFilter(yesterdayStr)}>Yesterday</button>
+            {(() => { const d = new Date(); const thisM = SAFI_TIME.day().slice(0, 7); const x = new Date(d.getFullYear(), d.getMonth() - 1, 1); const lastM = `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; return <>
+              <button className={`safi-chip ${dateFilter === thisM ? 'is-active' : ''}`} onClick={() => setDateFilter(thisM)}>{monthTag(0)}</button>
+              <button className={`safi-chip ${dateFilter === lastM ? 'is-active' : ''}`} onClick={() => setDateFilter(lastM)}>{monthTag(-1)}</button>
+            </>; })()}
             <button className={`safi-chip ${!dateFilter ? 'is-active' : ''}`} onClick={() => setDateFilter('')}>Any date</button>
             <label className="safi-input safi-input--inline safi-datepick" title="Pick a date">
               <span className="safi-mono">{dateFilter ? dateFilter.split('-').reverse().join('-') : 'dd-mm-yyyy'}</span>
@@ -1029,6 +1033,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
   const [showRewash, setShowRewash] = useStateFD(false);
   const [showDelete, setShowDelete] = useStateFD(false);
   const [showAdvance, setShowAdvance] = useStateFD(false);
+  const [holdFront, setHoldFront] = useStateFD('fh'); // which overlapping hold bubble is on top
   const [showEdit, setShowEdit] = useStateFD(false);
   const isManagement = role === 'owner';
   if (!o) return <div style={{ padding: 40 }}><h2>No order selected.</h2><Button onClick={() => setView('orders')}>Back to orders</Button></div>;
@@ -1077,14 +1082,14 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
           <Button kind="ghost" icon="alert" onClick={() => setView('issues')}>Issue</Button>
           <Button kind="ghost" icon="print" onClick={() => setView('receipt')}>{t('print', lang)}</Button>
           {o.status === 'washing' && <Button kind="ghost" icon="clock" onClick={() => { window.SAFI_STORE.holdOrder(o.id); toast('Moved to Holding (waiting for a dryer)'); }}>Hold (dryers busy)</Button>}
-          {o.status === 'drying' && <span className="safi-fhbtn"><Button kind="ghost" icon="clock" onClick={() => { window.SAFI_STORE.finalHoldOrder(o.id); toast('Moved to Final hold (air drying, unfolded)'); }}>Final hold (air drying, unfolded etc)</Button></span>}
+          {o.status === 'drying' && <span className="safi-fhbtn"><Button kind="ghost" icon="clock" onClick={() => { window.SAFI_STORE.finalHoldOrder(o.id); toast('Moved to Final Hold (air drying, unfolded)'); }}>Final Hold (air drying, unfolded etc)</Button></span>}
           {curIdx >= 0 && curIdx < stages.length - 1 && stages[curIdx + 1] !== 'collected' && <Button kind="primary" icon="arrow" onClick={() => { setShowAdvance(true); }}>Advance → {stages[curIdx + 1]}</Button>}
           <Button kind="ghost" onClick={() => setShowDelete(true)} icon="alert"><span style={{ color: 'var(--red)' }}>Delete</span></Button>
         </>}
       />
 
       <Card>
-        <div className={`safi-stepper${(o.status === 'holding' || o.status === 'finalhold' || window.SAFI_STORE.stageTimes(o.id).holding || window.SAFI_STORE.stageTimes(o.id).finalhold) ? ' has-hold' : ''}`}>
+        <div className={`safi-stepper${(o.status === 'holding' || o.status === 'finalhold' || window.SAFI_STORE.stageTimes(o.id).holding || window.SAFI_STORE.stageTimes(o.id).finalhold) ? ' has-hold' : ''}${holdFront === 'h' ? ' front-h' : ''}`} onClick={e => { const h = e.target.closest && e.target.closest('.safi-stepper__hold'); if (!h) return; setHoldFront(h.classList.contains('safi-stepper__hold--fh') ? 'fh' : 'h'); }}>
           {stages.map((s, i) => (
             <div key={s} className={`safi-stepper__node ${i < curIdx ? 'is-done' : i === curIdx ? 'is-cur' : ''} ${(s === 'collected' && o.status === 'ready') ? 'is-clickable' : ''}`}
                  onClick={() => { if (s === 'collected' && o.status === 'ready') markCollected(); }}
@@ -1101,9 +1106,9 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
                   <span><b>Holding</b> <span className="safi-mono">{tm.holding ? hmOf(tm.holding) : ''}</span>{tm.holding && end ? <span> · {durTxt(end - new Date(tm.holding))}{cur ? ' so far' : ''}</span> : null}</span>
                 </div>); })()}
               {s === 'drying' && (() => { const tm = window.SAFI_STORE.stageTimes(o.id); if (!tm.finalhold && o.status !== 'finalhold') return null; const cur = o.status === 'finalhold'; const after = stages.slice(i + 1).map(x => tm[x]).find(Boolean); const end = after ? new Date(after) : (cur ? new Date() : null); return (
-                <div className={`safi-stepper__hold safi-stepper__hold--fh${cur ? ' is-cur' : ''}`} title="Final hold: air-drying, unfolded, still on the rack">
+                <div className={`safi-stepper__hold safi-stepper__hold--fh${cur ? ' is-cur' : ''}`} title="Final Hold: air-drying, unfolded, still on the rack">
                   <span className="safi-stepper__holddot">FH</span>
-                  <span><b>Final hold</b> <span className="safi-mono">{tm.finalhold ? hmOf(tm.finalhold) : ''}</span>{tm.finalhold && end ? <span> · {durTxt(end - new Date(tm.finalhold))}{cur ? ' so far' : ''}</span> : null}</span>
+                  <span><b>Final Hold</b> <span className="safi-mono">{tm.finalhold ? hmOf(tm.finalhold) : ''}</span>{tm.finalhold && end ? <span> · {durTxt(end - new Date(tm.finalhold))}{cur ? ' so far' : ''}</span> : null}</span>
                 </div>); })()}
             </div>
           ))}
@@ -1319,7 +1324,12 @@ function OverdueCard({ D, setView, setActiveOrderId, money }) {
   const [newest, setNewest] = useStateFD(true);
   const now = Date.now();
   const ts = (s) => { const t = new Date(String(s || '').replace(' ', 'T')).getTime(); return isNaN(t) ? now : t; };
-  const open = D.orders.filter(o => o.status !== 'collected');
+  // Period by intake date: this month (default), last month, or custom.
+  const [per, setPer] = useStateFD('this');
+  const [pFrom, setPFrom] = useStateFD(SAFI_TIME.day().slice(0, 8) + '01');
+  const [pTo, setPTo] = useStateFD(SAFI_TIME.day());
+  const range = (() => { const d = new Date(); if (per === 'last') { const x = new Date(d.getFullYear(), d.getMonth() - 1, 1); const k = `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; return [k + '-01', k + '-' + String(new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate()).padStart(2, '0')]; } if (per === 'custom') return [pFrom, pTo]; return [SAFI_TIME.day().slice(0, 8) + '01', SAFI_TIME.day()]; })();
+  const open = D.orders.filter(o => o.status !== 'collected' && String(o.in || '').slice(0, 10) >= range[0] && String(o.in || '').slice(0, 10) <= range[1]);
   // Newest first by default so yesterday's late orders are visible straight away; Oldest puts the worst at the top.
   const dir = newest ? -1 : 1;
   const overdue = open.filter(o => o.due && ts(o.due) < now).sort((a, b) => dir * (ts(a.due) - ts(b.due)));
@@ -1354,12 +1364,16 @@ function OverdueCard({ D, setView, setActiveOrderId, money }) {
   return (
     <div id="safi-backlog-list">
     <Card title={tab === 'overdue' ? `Overdue · ${overdue.length}` : `Uncollected · ${uncollected.length}`} action={
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      <div className="safi-seg">{[['last', monthTag(-1)], ['this', monthTag(0)], ['custom', 'Custom']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${per === k ? 'is-active' : ''}`} onClick={() => { setPer(k); setMore(false); }}>{l}</button>)}</div>
+      {per === 'custom' && <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="date" className="safi-input safi-input--inline" value={pFrom} max={pTo} onChange={e => setPFrom(e.target.value)}/><span className="safi-cell-sub">to</span><input type="date" className="safi-input safi-input--inline" value={pTo} min={pFrom} onChange={e => setPTo(e.target.value)}/></span>}
       <div className="safi-tabs">
         <button className={`safi-tabs__btn ${tab === 'overdue' ? 'is-active' : ''}`} onClick={() => { setTab('overdue'); setMore(false); }}>Overdue</button>
         <button className={`safi-tabs__btn ${tab === 'all' ? 'is-active' : ''}`} onClick={() => { setTab('all'); setMore(false); }}>Uncollected{monthEnd ? ' · month end' : ''}</button>
       </div>
+      </div>
     }>
-      {!list.length ? <p className="safi-cell-sub">{tab === 'overdue' ? 'Nothing overdue. 🎉' : 'No uncollected orders.'}</p> : (
+      {!list.length ? <p className="safi-cell-sub">{tab === 'overdue' ? 'Nothing overdue in this period. 🎉' : 'No uncollected orders in this period.'}</p> : (
         <div className={more ? 'safi-overdue-scroll' : ''}>
           <ul className="safi-overdue">
             {shown.map(o => { const d = days(o); return (
@@ -2502,15 +2516,27 @@ function PaymentsScreen({ lang, money, role }) {
   const [form, setForm] = useStateFD({ order: '', method: 'mpesa', amount: '', txn: '', date: SAFI_TIME.day() });
 
   const [preset, setPreset] = useStateFD(() => { const p = window.__safiPreset; window.__safiPreset = null; return p && p.kind === 'collectedToday' ? p : null; });
-  const rows = D.payments.filter(p => (tab === 'all' || p.method === tab) && (!preset || (preset.ids || []).includes(p.order))).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  // Period: current month (default), last month, or a custom range. Search: name, order no. or txn code.
+  const [per, setPer] = useStateFD('this');
+  const [pFrom, setPFrom] = useStateFD(SAFI_TIME.day().slice(0, 8) + '01');
+  const [pTo, setPTo] = useStateFD(SAFI_TIME.day());
+  const [q, setQ] = useStateFD('');
+  const range = (() => { const d = new Date(); const ym = (y, m) => `${y}-${String(m + 1).padStart(2, '0')}`; if (per === 'last') { const x = new Date(d.getFullYear(), d.getMonth() - 1, 1); const k = ym(x.getFullYear(), x.getMonth()); const end = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate(); return [k + '-01', k + '-' + String(end).padStart(2, '0')]; } if (per === 'custom') return [pFrom, pTo]; return [SAFI_TIME.day().slice(0, 8) + '01', SAFI_TIME.day()]; })();
+  const inPer = (p) => { const d = String(p.date || '').slice(0, 10); return preset ? true : (d >= range[0] && d <= range[1]); };
+  const qq = q.trim().toLowerCase();
+  const hit = (p) => { if (!qq) return true; const o = D.orders.find(x => x.id === p.order); const c = o && D.customers.find(x => x.id === o.customer); return [p.customer, c && c.name, orderNo(p.order), p.order, p.txn].some(v => String(v || '').toLowerCase().includes(qq)); };
+  const rows = D.payments.filter(p => (tab === 'all' || p.method === tab) && (!preset || (preset.ids || []).includes(p.order)) && inPer(p) && hit(p)).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const [pinFor, setPinFor] = useStateFD(null);
   const [vPin, setVPin] = useStateFD('');
 
+  // Totals and Unverified follow the chosen period (and search).
+  const perRows = D.payments.filter(p => inPer(p) && hit(p) && (!preset || (preset.ids || []).includes(p.order)));
   const totalsByMethod = ['mpesa', 'bank'].map(m => ({
-    m, total: D.payments.filter(p => p.method === m).reduce((s, p) => s + p.amount, 0),
-    count: D.payments.filter(p => p.method === m).length,
+    m, total: perRows.filter(p => p.method === m).reduce((s, p) => s + p.amount, 0),
+    count: perRows.filter(p => p.method === m).length,
   }));
-  const unverifiedCount = D.payments.filter(p => !p.verified).length;
+  const unverifiedCount = perRows.filter(p => !p.verified).length;
+  const unverifiedAll = D.payments.filter(p => !p.verified).length;
 
   function submit() {
     if (!form.order || !form.amount) { toast('Order # and amount required', 'error'); return; }
@@ -2551,13 +2577,13 @@ function PaymentsScreen({ lang, money, role }) {
               <Icon name={m === 'mpesa' ? 'mpesa' : 'wallet'} size={16}/>
             </div>
             <div className="safi-stat__value">{money(total)}</div>
-            <div className="safi-stat__delta">{count} transactions</div>
+            <div className="safi-stat__delta">{count} transactions · {preset ? 'collected today' : per === 'last' ? 'last month' : per === 'custom' ? 'custom period' : 'this month'}</div>
           </div>
         ))}
         <div className="safi-stat safi-stat--accent">
           <div className="safi-stat__top"><div className="safi-stat__label">Unverified</div><Icon name="alert" size={16}/></div>
           <div className="safi-stat__value">{unverifiedCount}</div>
-          <div className="safi-stat__delta safi-stat__delta--down">{unverifiedCount === 0 ? 'All good' : 'Needs audit'}</div>
+          <div className="safi-stat__delta safi-stat__delta--down">{unverifiedCount === 0 ? 'All good' : 'Needs audit'}{unverifiedAll !== unverifiedCount ? <span className="safi-cell-sub" style={{ color: 'rgba(255,255,255,.7)' }}> · {unverifiedAll} in all months</span> : null}</div>
         </div>
       </div>
 
@@ -2590,10 +2616,15 @@ function PaymentsScreen({ lang, money, role }) {
       </Card>
 
       <Card pad={false} title="Transaction ledger" action={
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div className="safi-cust-pick__search safi-cust-pick__search--inline" style={{ minWidth: 240 }}><Icon name="search" size={15}/><input placeholder="Search name, order no. or txn code" value={q} onChange={e => setQ(e.target.value)}/>{q && <button className="safi-rowlink" onClick={() => setQ('')}>×</button>}</div>
+        {!preset && <div className="safi-seg">{[['last', monthTag(-1)], ['this', monthTag(0)], ['custom', 'Custom']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${per === k ? 'is-active' : ''}`} onClick={() => setPer(k)}>{l}</button>)}</div>}
+        {!preset && per === 'custom' && <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="date" className="safi-input safi-input--inline" value={pFrom} max={pTo} onChange={e => setPFrom(e.target.value)}/><span className="safi-cell-sub">to</span><input type="date" className="safi-input safi-input--inline" value={pTo} min={pFrom} onChange={e => setPTo(e.target.value)}/></span>}
         <div className="safi-tabs">
           {['all', 'mpesa', 'bank'].map(x => (
             <button key={x} className={`safi-tabs__btn ${tab === x ? 'is-active' : ''}`} onClick={() => setTab(x)}>{x === 'all' ? 'All' : x === 'mpesa' ? 'M-Pesa' : x === 'cash' ? 'Cash' : 'Bank'}</button>
           ))}
+        </div>
         </div>
       }>
         <Table
@@ -2616,7 +2647,7 @@ function PaymentsScreen({ lang, money, role }) {
               } },
           ]}
           rows={rows}
-          empty="No payments yet."
+          empty={qq ? `No payments match "${q.trim()}" in this period.` : D.payments.length ? 'No payments in this period.' : 'No payments yet.'}
         />
       </Card>
 

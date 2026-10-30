@@ -1,11 +1,21 @@
-VAZI SAFI LMS v2.5.1
+VAZI SAFI LMS v2.5.2
 ORDERS
-- Final hold (air drying, unfolded etc): orange button during Drying; FH bubble with start time and time so far;
-  own filter; kept out of Ready counts and reminders until advanced.
-- Stage card: W → H → D → FH → R → C (H and FH only shown when orders are in them).
-- Customer first names: "T Mutunga" keeps the initial + surname; "Mutunga T" shows "Mutunga" (receipt + SMS).
+- New stage Final Hold (FH) between Drying and Ready, for clothes left to air-dry overnight. Optional when advancing from Drying.
+- Final Hold badge: pale orange with a sweeping light (same speed as Holding's red). Holding & Final Hold badges never cut off their text.
+- Order page: overlapping Holding / Final Hold bubbles — click one to bring it forward (Final Hold on top by default).
+- Order page header: on narrow windows the title stays on one line and buttons wrap below.
+- Orders page buttons: Today · Yesterday · Oct · Sept · Any date (month names follow the computer's clock).
+- Stage card counts include H and FH only when such orders exist.
 FRONT DESK
-- 6:00 am daily reset: attendant cleared, "Good morning — tap to sign in" until someone signs in.
-- M-Pesa / Bank totals hidden from Front Desk.
-DATA & BACKUP
-- Clear a section: choose a date period, reason required, backup tick, Management PIN twice; audit log records it.
+- Overdue / Uncollected card: Sept / Oct / Custom period (this month by default).
+- Order numbers, KES amounts and "Open →" no longer split across lines in tables and on the Revenue card.
+- Customer names starting with an initial keep the next word (T Mutunga); receipts and SMS.
+MANAGEMENT
+- Revenue vs Expenses chart: hover shows Profit (green) or Loss (red).
+- Reports: "Orders by service band" — Laundry / Dry Cleaning / Shoes counts and values.
+- Payments & Audit: Sept / Oct / Custom period; search by name, order number or TXN code.
+- Clear data: choose a date range, PIN twice and a reason; reminder to download a backup first.
+EXPENSES
+- General purchases (Management only, always Special). Bank is the default payment method.
+SMS
+- Ready message: "...is READY for collection/delivery at Vazi Safi..." (changes on every laptop unless the text was edited).

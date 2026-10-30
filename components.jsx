@@ -291,7 +291,7 @@ const StatusBadge = ({ status, mark }) => {
     washing:   { c: 'blue',   label: 'Washing' },
     holding:   { c: 'teal',   label: 'Holding' },
     drying:    { c: 'brown',  label: 'Drying' },
-    finalhold: { c: 'fh',     label: 'Final hold' },
+    finalhold: { c: 'fh',     label: 'Final Hold' },
     ironing:   { c: 'violet', label: 'Ironing' },
     drycleaning: { c: 'violet', label: 'Dry cleaning' },
     ready:     { c: 'green',  label: 'Ready' },

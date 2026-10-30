@@ -423,6 +423,24 @@ function ReportsScreen({ lang, money }) {
             </tbody>
           </table>
 
+          <h4 className="safi-report__h4">Orders by service band</h4>
+          {(() => {
+            const bands = [['laundry', 'Laundry', '#38bdf8'], ['drycleaning', 'Dry Cleaning', '#8b5cf6'], ['shoes', 'Shoes', '#f97316']];
+            const catOf = (it) => ((D.services.find(s => s.id === it.svc) || {}).category) || 'other';
+            const rowsB = bands.map(([k, l, c]) => {
+              const os = periodOrders.filter(ord => (ord.items || []).some(it => catOf(it) === k));
+              const val = os.reduce((s, ord) => { const g = ord.items.reduce((x, it) => x + (it.price || 0), 0) || 1; return s + Math.round(ord.items.filter(it => catOf(it) === k).reduce((x, it) => x + (it.price || 0), 0) * (ord.total || 0) / g); }, 0);
+              return { k, l, c, n: os.length, val };
+            });
+            const multi = periodOrders.filter(ord => new Set((ord.items || []).map(catOf).filter(x => x !== 'supplies' && x !== 'other')).size > 1).length;
+            return (<>
+              <div className="safi-bands">
+                {rowsB.map(r => <div key={r.k} className="safi-bands__t" style={{ borderTopColor: r.c }}><span>{r.l}</span><b>{r.n}</b><span className="safi-cell-sub">order{r.n === 1 ? '' : 's'} · {money(r.val)}</span></div>)}
+              </div>
+              <p className="safi-cell-sub" style={{ margin: '6px 0 0' }}>{periodOrders.length} orders in this period{multi ? ` · ${multi} had more than one band, so they count in each` : ''}.</p>
+            </>);
+          })()}
+
           <h4 className="safi-report__h4">By service</h4>
           {periodByService.length ? <HBar data={periodByService}/> : <p className="safi-cell-sub">No orders in this period.</p>}
 

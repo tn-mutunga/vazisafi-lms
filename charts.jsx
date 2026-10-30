@@ -55,6 +55,7 @@ function SafiChart({ labels, series, height = 240, fmt, yLabel, highlight, spars
                 <div className={`safi-ch__tip${i > n * 0.66 ? ' is-left' : i < n * 0.2 ? ' is-right' : ''}`}>
                   <b>{lb}</b>
                   {series.map(s => <div key={s.name}><i style={{ background: s.color }}/>{s.name}<span className="safi-mono">{f(s.values[i])}</span></div>)}
+                  {series.length === 2 && /revenue/i.test(series[0].name) && /expens/i.test(series[1].name) && (() => { const d = (series[0].values[i] || 0) - (series[1].values[i] || 0); return <div className="safi-ch__tip-pl"><i style={{ background: d >= 0 ? '#16a34a' : '#dc2626' }}/>{d >= 0 ? 'Profit' : 'Loss'}<span className="safi-mono" style={{ color: d >= 0 ? '#4ade80' : '#f87171' }}>{d < 0 ? '−' : ''}{f(Math.abs(d))}</span></div>; })()}
                 </div>
               )}
             </div>

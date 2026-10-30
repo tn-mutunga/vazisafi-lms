@@ -14,6 +14,8 @@ window.SAFI_PHONE = (prefix, phone) => {
 // never clash. People only ever see SF-2446.
 // First name for messages: "T Mutunga" → "T Mutunga" (single letter keeps the next word), "Mutunga T" → "Mutunga".
 window.firstName = (name) => { const p = String(name || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return ''; return p.length > 1 && p[0].replace(/\./g, '').length === 1 ? p[0] + ' ' + p[1] : p[0]; };
+// Short month name in caps from the computer's clock: 0 = this month, -1 = last month. SEPT kept as 4 letters.
+window.monthTag = (off = 0) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + off); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sept','Oct','Nov','Dec'][d.getMonth()]; };
 window.orderNo = (id) => String(id || '').replace(/-[A-Z]{2}$/, '');
 // One date style on every computer: dd-mm HH:MM (or dd-mm-yy). Input "YYYY-MM-DD[ HH:MM]".
 window.dmy = (v, o = {}) => {
@@ -85,7 +87,7 @@ window.SAFI_STORE = (() => {
       intake: 'Vazi Safi: order {id} received, {items} item(s), total {total}. Tag {tag}. Pay ONLY to {payto}. Queries {owner}.' };
   }
   if (!state.smsTemplates)   state.smsTemplates = {
-    ready:     'Hi {name}, your order {id} is READY for collection at Vazi Safi. Balance: {balance}. Asante!',
+    ready:     'Hi {name}, your order {id} is READY for collection/delivery at Vazi Safi. Balance: {balance}. Asante!',
     washing:   'Hi {name}, your order {id} is being washed. We will text you when ready.',
     ironing:   'Hi {name}, your order {id} is being ironed and will be ready soon.',
     collected: 'Hi {name}, your order {id} has been collected. Asante, karibu tena!',
@@ -94,7 +96,7 @@ window.SAFI_STORE = (() => {
   // Every stage has a default message (added later: drying, dry cleaning).
   state.smsTemplates = {
     washing:   'Hi {name}, your order {id} is being washed. We will text you when ready.',
-    ready:     'Hi {name}, your order {id} is READY for collection at Vazi Safi. Balance: {balance}. Asante!',
+    ready:     'Hi {name}, your order {id} is READY for collection/delivery at Vazi Safi. Balance: {balance}. Asante!',
     collected: 'Hi {name}, your order {id} has been collected. Asante, karibu tena!',
     delivery:  'Hi {name}, our rider {rider} is on the way with your order {id}. Please be available.',
     drying: 'Hi {name}, your order {id} is drying and will be ready soon.',
@@ -289,6 +291,8 @@ window.SAFI_STORE = (() => {
     state.settings = { ...(state.settings || {}), discountsV2: true };
     migrated = true;
   }
+  // v2.5.2: Ready SMS mentions delivery too (only if the shop never edited the text).
+  if (state.smsTemplates && state.smsTemplates.ready === "Hi {name}, your order {id} is READY for collection at Vazi Safi. Balance: {balance}. Asante!") { state.smsTemplates.ready = "Hi {name}, your order {id} is READY for collection/delivery at Vazi Safi. Balance: {balance}. Asante!"; migrated = true; }
   // Persist any migration changes immediately
   if (migrated) {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}

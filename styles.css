@@ -3409,10 +3409,46 @@ button { font-family: inherit; }
 .safi-greet-ico{filter:saturate(1.6) brightness(1.15) drop-shadow(0 0 4px rgba(255,200,40,.9)) drop-shadow(0 0 9px rgba(255,170,0,.55))}
 .safi-greet-ico{filter:saturate(1.8) brightness(1.25) drop-shadow(0 0 4px rgba(255,214,0,.95)) drop-shadow(0 0 10px rgba(255,190,0,.6))}
 /* Final hold: bright orange */
-.safi-pill--fh{background:#ff7a00;color:#fff}.safi-pill--fh .safi-pill__dot{background:#ffe0bf}
 .safi-stepper__hold--fh .safi-stepper__holddot{background:#ff7a00!important;font-size:9.5px;letter-spacing:.02em}
 .safi-stepper__hold--fh.is-cur{border-color:#ff7a00!important;box-shadow:0 0 0 3px #ffe7cc!important}
 .safi-fhbtn .safi-btn{border-color:#ffc58a;color:#c2410c}.safi-fhbtn .safi-btn:hover{background:#fff4e8}
 .safi-stagecount .is-fh{color:#ff7a00;white-space:nowrap}
 .safi-stagecount .is-h{color:#dc143c;white-space:nowrap}
 .safi-clear-range{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0 4px}.safi-clear-range label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-3);font-weight:600}.safi-clear-range .safi-input{width:170px}
+.safi-ch__tip-pl{margin-top:4px;padding-top:6px;border-top:1px solid rgba(255,255,255,.18);font-weight:600}
+/* Final hold: orange sweep like Holding's red */
+.safi-pill--fh{background:#FFEDD5!important;color:#9A3412!important;position:relative;overflow:hidden;isolation:isolate}
+.safi-pill--fh .safi-pill__dot{background:#ff7a00!important}
+.safi-pill--fh::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,transparent 0%,#fdba74 40%,#ff7a00 60%,transparent 100%);transform:translateX(-100%);animation:safiHoldSweep 1.35s cubic-bezier(.4,0,.2,1) infinite}
+.safi-stepper__hold--fh.is-cur{overflow:hidden;isolation:isolate}
+.safi-stepper__hold--fh.is-cur::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,transparent 0%,#ffedd5 40%,#fed7aa 60%,transparent 100%);transform:translateX(-100%);animation:safiHoldSweep 1.35s cubic-bezier(.4,0,.2,1) infinite}
+@media (prefers-reduced-motion:reduce){.safi-pill--fh::before,.safi-stepper__hold--fh.is-cur::before{animation:none}}
+/* Overlapping hold bubbles: Final hold on top; click one to bring it forward */
+.safi-stepper__hold{cursor:pointer;z-index:2}
+.safi-stepper__hold--fh{z-index:3}
+.safi-stepper.front-h .safi-stepper__hold:not(.safi-stepper__hold--fh){z-index:4}
+.safi-stepper.front-h .safi-stepper__hold--fh{z-index:2}
+.safi-bands{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.safi-bands__t{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border:1px solid var(--line);border-top:4px solid;border-radius:10px;background:var(--paper)}.safi-bands__t>span:first-child{font-size:12px;color:var(--ink-3);font-weight:600}.safi-bands__t b{font-family:var(--ff-display);font-size:26px}
+.safi-pill--fh,.safi-pill--teal{white-space:nowrap}
+/* Hold bubbles sit inside different step nodes, so the NODE must be raised for one to come forward */
+.safi-stepper__node{position:relative}
+.safi-stepper__node:has(.safi-stepper__hold--fh){z-index:5}
+.safi-stepper.front-h .safi-stepper__node:has(.safi-stepper__hold:not(.safi-stepper__hold--fh)){z-index:6}
+/* Final hold badge: pale, see-through orange with the light sweeping across (like Holding) */
+.safi-pill.safi-pill--fh{background:rgba(255,122,0,.14)!important;color:#9A3412!important;box-shadow:inset 0 0 0 1px rgba(255,122,0,.25)}
+.safi-pill.safi-pill--fh::before{background:linear-gradient(90deg,transparent 0%,rgba(253,186,116,.85) 40%,rgba(255,122,0,.75) 60%,transparent 100%)!important}
+/* Narrow windows: title block can't be squeezed into a thin column; buttons wrap below instead */
+.safi-top{flex-wrap:wrap}
+.safi-top>div:first-child{flex:1 1 auto;min-width:min(100%,360px)}
+.safi-top__title{white-space:nowrap}
+.safi-top__sub{white-space:normal}
+.safi-top__right{flex-wrap:wrap;justify-content:flex-end}
+/* Holding / Final Hold badges: sweep via background position so the badge needn't clip its own text */
+@keyframes safiHoldBg{0%{background-position:150% 0}70%,100%{background-position:-50% 0}}
+.safi-pill.safi-pill--teal,.safi-pill.safi-pill--fh{overflow:visible!important;flex-shrink:0;min-width:max-content}
+.safi-pill.safi-pill--teal::before,.safi-pill.safi-pill--fh::before{transform:none!important;border-radius:inherit;background-size:200% 100%!important;background-repeat:no-repeat!important;animation:safiHoldBg 1.35s cubic-bezier(.4,0,.2,1) infinite!important}
+@media (prefers-reduced-motion:reduce){.safi-pill.safi-pill--teal::before,.safi-pill.safi-pill--fh::before{animation:none!important}}
+/* Never split order numbers, money or row links */
+.safi-table .safi-mono,.safi-table .safi-rowlink,.safi-streams__i b,.safi-streams__i .safi-mono{white-space:nowrap}
+.safi-streams__i{min-width:0;align-items:baseline}
+.safi-streams{grid-template-columns:repeat(2,minmax(0,1fr))!important}

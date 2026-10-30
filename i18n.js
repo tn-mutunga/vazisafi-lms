@@ -36,7 +36,7 @@ window.SAFI_I18N = {
     washing: 'Washing',
     ironing: 'Ironing',
     drying: 'Drying',
-    finalhold: 'Final hold',
+    finalhold: 'Final Hold',
     holding: 'Holding',
     drycleaning: 'Dry cleaning',
     collected: 'Collected',
