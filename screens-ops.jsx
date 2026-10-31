@@ -305,15 +305,16 @@ function ServiceClientsToday() {
   const orders = D.orders.filter(o => String(o.in || '').slice(0, 10) >= from);
   // Broad streams: Laundry (all wet-cleaned items), Dry Cleaning, Shoes.
   const STREAMS = [['laundry', 'Laundry', 'wash'], ['drycleaning', 'Dry Cleaning', 'dry'], ['shoes', 'Shoes', 'shoe']];
-  const per = {};
+  const per = {}, perO = {};
   for (const o of orders) for (const it of o.items || []) {
     const cat = ((D.services.find(s => s.id === it.svc) || {}).category) || 'other';
     if (!STREAMS.some(x => x[0] === cat)) continue;
     const set = per[cat] = per[cat] || new Set();
     set.add(o.customer || 'walk:' + o.id);
+    const os = perO[cat] = perO[cat] || new Set(); os.add(o.id);
   }
   const all = new Set(orders.map(o => o.customer || 'walk:' + o.id));
-  const rows = STREAMS.map(([k, l, ic]) => ({ k, l, ic, n: per[k] ? per[k].size : 0 }));
+  const rows = STREAMS.map(([k, l, ic]) => ({ k, l, ic, n: per[k] ? per[k].size : 0, no: perO[k] ? perO[k].size : 0 }));
   const sd = window.SAFI_PRICING && window.SAFI_PRICING.studentDayLive();
   const label = { today: 'today', week: 'last 7 days', month: 'last 30 days', year: 'last 12 months' }[period];
   return (
@@ -326,11 +327,11 @@ function ServiceClientsToday() {
       <Modal open={open} onClose={() => setOpen(false)} title={`Clients by service · ${label}`} width={900}
         footer={<Button kind="ghost" onClick={() => setOpen(false)}>Close</Button>}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap' }}>
-          <span className="safi-cell-sub">{all.size} client{all.size === 1 ? '' : 's'}{sd ? ' · Student Thursday is on' : ''}</span>
+          <span className="safi-cell-sub">{all.size} client{all.size === 1 ? '' : 's'} · {orders.length} order{orders.length === 1 ? '' : 's'}{sd ? ' · Student Thursday is on' : ''}</span>
           <div className="safi-seg">{[['today', 'Today'], ['week', '7 days'], ['month', 'Month'], ['year', 'Year']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${period === k ? 'is-active' : ''}`} onClick={() => setPeriod(k)}>{l}</button>)}</div>
         </div>
         <div className="safi-svcday safi-svcday--streams">
-          {rows.map(({ k, l, ic, n }) => <div key={k} className={`safi-svcday__c safi-svcday__c--${k}`}><span className="safi-svcday__ico"><Icon name={ic} size={18}/></span><span className="safi-svcday__n">{n}</span><span className="safi-svcday__l">{l}</span></div>)}
+          {rows.map(({ k, l, ic, n, no }) => <div key={k} className={`safi-svcday__c safi-svcday__c--${k}`}><span className="safi-svcday__ico"><Icon name={ic} size={18}/></span><span className="safi-svcday__n">{n}</span><span className="safi-svcday__l">{l} · client{n === 1 ? '' : 's'}</span><span className="safi-cell-sub">{no} order{no === 1 ? '' : 's'}</span></div>)}
         </div>
       </Modal>
     </>

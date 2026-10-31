@@ -421,10 +421,36 @@
 
   // Download rows that changed in the cloud since last time and merge them in. A row
   // that also changed here (and has not been sent yet) is left alone; it goes up next.
+
+  // A sync takes a copy of this laptop's data, spends a few seconds talking to the cloud,
+  // then writes the copy back. Anything saved on this laptop in those seconds (a new order,
+  // a payment) was in the live data but not in the copy, so writing the copy back erased it.
+  // keepLocal() puts every such change back on top before the copy is written.
+  function keepLocal(snapStr, next) {
+    let snap; try { snap = JSON.parse(snapStr); } catch (e) { return next; }
+    const live = S().get();
+    for (const key of Object.keys(live)) {
+      const L = live[key], P = snap[key], N = next[key];
+      if (!Array.isArray(L) || !Array.isArray(N)) continue;
+      const idOf = (r) => r && (r.id != null ? r.id : r.key);
+      const pMap = new Map((Array.isArray(P) ? P : []).map(r => [idOf(r), JSON.stringify(r)]));
+      const nIdx = new Map(N.map((r, i) => [idOf(r), i]));
+      for (const r of L) {
+        const id = idOf(r); if (id == null) continue;
+        const changedHere = pMap.get(id) !== JSON.stringify(r);
+        if (!changedHere) continue;            // untouched here: the cloud copy wins
+        if (nIdx.has(id)) N[nIdx.get(id)] = r; // edited here during the sync: keep the edit
+        else N.unshift(r);                     // created here during the sync: keep it
+      }
+    }
+    if (live.settings && snap.settings && JSON.stringify(live.settings) !== JSON.stringify(snap.settings)) next.settings = { ...(next.settings || {}), ...live.settings };
+    return next;
+  }
   async function pullChanged(b) {
     const myGen = pullGen;
     const before = JSON.stringify({ h: b.h, cur: b.cur });
-    const next = JSON.parse(S().snapshot());
+    const snap0 = S().snapshot();
+    const next = JSON.parse(snap0);
     let got = 0;
     const pulledOrders = [];
     for (const t of TABLES) {
@@ -526,7 +552,7 @@
     // again — the cause of one laptop sitting N orders behind the cloud.)
     if (myGen !== pullGen) { const o = JSON.parse(before); b.h = o.h; b.cur = o.cur; return 0; }
     saveBase(b);
-    if (got) S().importJSON(JSON.stringify(next));
+    if (got) S().importJSON(JSON.stringify(keepLocal(snap0, next)));
     return got;
   }
 
@@ -546,7 +572,8 @@
     C().setConfig({ lastCloudOrders: ids.length, lastLocalOrders: have.size + missing.length, lastReconcile: new Date().toISOString() });
     if (!missing.length) return 0;
     const t = TABLES.find(x => x.key === 'orders');
-    const next = JSON.parse(S().snapshot());
+    const snap0 = S().snapshot();
+    const next = JSON.parse(snap0);
     const hb = b.h.orders = b.h.orders || {};
     for (const part of chunk(missing, 100)) {
       const rows = await C().raw(`/rest/v1/orders?select=*&id=in.(${part.map(id => `"${id}"`).join(',')})`, { method: 'GET' }) || [];
@@ -557,6 +584,7 @@
         hb[d.id] = fp(t, d);
       }
     }
+    keepLocal(snap0, next);
     next.orders.sort((a, z) => String(z.in).localeCompare(String(a.in)));
     S().importJSON(JSON.stringify(next));
     saveBase(b);
@@ -704,7 +732,8 @@
     // "the cloud is right, make this laptop match", not a merge.
     async pull(onProgress) {
       pullGen++;
-      const next = JSON.parse(S().snapshot());
+      const pullSnap = S().snapshot();
+      const next = JSON.parse(pullSnap);
       for (const t of TABLES) {
         onProgress && onProgress(t.table);
         const rows = await selectAll(t.table);
@@ -734,6 +763,10 @@
         .map(r => ({ tag: r.tag, reason: r.reason, staff: r.staff_id, at: r.at }));
 
       pullGen++;
+      { const live = S().get(); let snapIds; try { snapIds = new Set((JSON.parse(pullSnap).orders || []).map(o => o.id)); } catch (e) { snapIds = new Set(); }
+        const have = new Set((next.orders || []).map(o => o.id));
+        for (const o of (live.orders || [])) if (!snapIds.has(o.id) && !have.has(o.id)) next.orders.unshift(o);
+        for (const k of ['payments', 'expenses']) { const snapK = new Set(((() => { try { return JSON.parse(pullSnap)[k] || []; } catch (e) { return []; } })()).map(r => r.id)); const hk = new Set((next[k] || []).map(r => r.id)); for (const r of (live[k] || [])) if (!snapK.has(r.id) && !hk.has(r.id)) (next[k] = next[k] || []).unshift(r); } }
       const ok = S().importJSON(JSON.stringify(next));
       // This laptop now matches the cloud: record that, so the next sync neither
       // re-sends every row nor skips cloud rows as "changed here".

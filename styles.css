@@ -3452,3 +3452,80 @@ button { font-family: inherit; }
 .safi-table .safi-mono,.safi-table .safi-rowlink,.safi-streams__i b,.safi-streams__i .safi-mono{white-space:nowrap}
 .safi-streams__i{min-width:0;align-items:baseline}
 .safi-streams{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+.safi-diffsum__t.is-click{cursor:pointer;transition:transform .12s,box-shadow .12s}.safi-diffsum__t.is-click:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(15,20,40,.08)}.safi-diffsum__t.is-picked{outline:2px solid var(--brand);outline-offset:2px}
+.safi-ledger-f{display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:3px 6px 3px 10px;border-radius:999px;font-size:12px;font-weight:600;vertical-align:middle}.safi-ledger-f--short{background:#fff0ef;color:#b42318}.safi-ledger-f--over{background:#eefaf3;color:#0a8f4e}.safi-ledger-f--exact{background:var(--paper);color:var(--ink-2)}.safi-ledger-f button{border:0;background:rgba(0,0,0,.06);border-radius:999px;width:18px;height:18px;line-height:1;cursor:pointer;color:inherit}
+.safi-redate__item{grid-template-columns:auto auto minmax(0,1fr) auto auto auto!important}
+/* Revenue streams adapt to the card's own width (4-across dashboard vs 2-across) */
+.safi-stat{container-type:inline-size}
+@container (max-width: 460px){
+  .safi-streams{grid-template-columns:1fr!important;gap:4px!important}
+  .safi-streams__i{display:flex!important;width:100%;white-space:nowrap}
+  .safi-streams__i b{margin-left:auto}
+}
+.safi-frozen{position:relative}.safi-frozen.is-frozen>.safi-card{filter:blur(6px);pointer-events:none;user-select:none}
+.safi-frozen__veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:24px;background:rgba(245,246,250,.55);border-radius:var(--r-lg);z-index:3}
+.safi-frozen__veil b{font-family:var(--ff-display);font-size:18px}.safi-frozen__veil span:last-child{color:var(--ink-3);max-width:420px}
+.safi-frozen__ico{width:48px;height:48px;border-radius:14px;background:#1A0B36;color:#fff;display:flex;align-items:center;justify-content:center}
+/* Dashboard: keep the four stat cards in one row whenever there is room, so Today's queue stays high */
+.safi-main{container-type:inline-size}
+@container (min-width: 960px){.safi-grid--4{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
+.safi-frozen-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;background:#f3eefe;color:#3b1d6e;font-size:13px}.safi-frozen-chip{border:1px solid #c9b6f0;background:#fff;border-radius:999px;padding:3px 10px;font:inherit;font-weight:600;color:#5C2D91;cursor:pointer}.safi-frozen-chip:hover{background:#5C2D91;color:#fff}
+/* Compact two-column lists inside narrow stat cards (4-across dashboard) */
+@container (max-width: 460px){
+  .safi-streams{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px 14px!important}
+  .safi-streams__i{display:flex!important;width:auto;min-width:0;gap:6px;font-size:12.5px}
+  .safi-streams__i b{margin-left:auto;white-space:nowrap}
+  .safi-stat__value{font-size:24px}
+  .safi-stat__delta{font-size:12px}
+  .safi-stagecount{font-size:.68em;white-space:nowrap}
+}
+@container (max-width: 460px){
+  .safi-streams{grid-template-columns:auto minmax(0,1fr)!important;gap:6px 12px!important}
+  .safi-streams__i{font-size:12px;overflow:hidden}
+  .safi-streams__l{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .safi-streams__i b{flex-shrink:0;font-size:11.5px}
+}
+@container (max-width: 460px){
+  .safi-streams{gap:6px 8px!important}
+  .safi-streams__i{gap:5px}
+  .safi-streams__i b{letter-spacing:-.02em}
+}
+.safi-recent-open__go{white-space:nowrap;flex-shrink:0}
+/* Narrow stat cards: two columns; each stream = dot + full label on one line, amount underneath */
+@container (max-width: 460px){
+  .safi-streams{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px 12px!important}
+  .safi-streams__i{display:grid!important;grid-template-columns:8px minmax(0,1fr);column-gap:6px;row-gap:1px;align-items:center;overflow:visible;white-space:normal}
+  .safi-streams__i i{width:8px!important;height:8px!important;flex:none}
+  .safi-streams__l{overflow:visible;text-overflow:clip;white-space:normal;line-height:1.25}
+  .safi-streams__i b{grid-column:2;margin-left:0!important;font-size:12.5px;letter-spacing:0}
+}
+.safi-frozen__veil .safi-btn{margin-top:8px}
+/* Keep "label value" side by side (as on full screen) in every card width */
+@container (max-width: 460px){
+  .safi-streams__i{display:flex!important;align-items:center;gap:6px;white-space:nowrap;overflow:hidden}
+  .safi-streams__i i{width:8px!important;height:8px!important;flex:none}
+  .safi-streams__l{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .safi-streams__i b{grid-column:auto;margin-left:0!important;flex:none}
+}
+/* Front Desk dashboard: 4 across on full screen, 2 × 2 on smaller windows */
+.safi-grid.safi-grid--dash{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+@container (min-width: 880px){
+  .safi-grid.safi-grid--dash{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  .safi-grid--dash .safi-stat{padding:16px 14px}
+}
+/* Narrow cards: 2 columns sized to their content, label and value side by side, nothing cut */
+@container (max-width: 460px){
+  .safi-streams{grid-template-columns:max-content max-content!important;justify-content:start;gap:6px 12px!important}
+  .safi-streams__i{font-size:11.5px;gap:5px}
+  .safi-streams__l{overflow:visible;text-overflow:clip}
+  .safi-streams__i b{font-size:11px;letter-spacing:-.02em}
+}
+/* Narrow cards: if "label value" doesn't fit, only that value drops under its label */
+@container (max-width: 460px){
+  .safi-streams{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px 12px!important}
+  .safi-streams__i{display:flex!important;flex-wrap:wrap;align-items:baseline;column-gap:5px;row-gap:0;white-space:normal;overflow:visible}
+  .safi-streams__i i{align-self:center}
+  .safi-streams__l{white-space:nowrap;overflow:visible;text-overflow:clip}
+  .safi-streams__i b{white-space:nowrap;margin-left:0!important}
+}
+@container (max-width: 460px){.safi-streams{align-items:start!important}}

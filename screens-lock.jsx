@@ -358,11 +358,17 @@ function StaffSignInCard() {
     toast(`New code for ${a.username}: ${r.code}`, 'success');
   }
   function patchAcc(a, patch) { const n = { ...acc, [a.username]: { ...acc[a.username], ...patch } }; lkSaveAccounts(n); toast(patch.approved ? `${a.username} approved` : patch.disabled ? `${a.username} disabled` : `${a.username} enabled`, 'success'); }
-  function remove(a) {
-    const pin = prompt(`Delete the account ${a.username}? Enter the Management PIN to confirm.`);
-    if (pin == null) return;
+  // The desktop app can't show prompt() boxes, so the PIN is asked in our own window.
+  const [delAsk, setDelAsk] = useStateLk(null);
+  const [delPin, setDelPin] = useStateLk('');
+  function remove(a) { setDelPin(''); setDelAsk(a); }
+  function doRemove() {
+    const a = delAsk; if (!a) return;
     const real = String(window.__safiOwnerPin || window.SAFI_OWNER_PIN || st.ownerPin || '');
-    if (!real || pin.trim() !== real) { toast('Wrong Management PIN', 'error'); return; } const n = { ...acc }; delete n[a.username]; lkSaveAccounts(n); }
+    if (!real || delPin.trim() !== real) { toast('Wrong Management PIN', 'error'); setDelPin(''); return; }
+    const n = { ...acc }; delete n[a.username]; lkSaveAccounts(n);
+    toast(`${a.username} deleted`, 'success'); setDelAsk(null); setDelPin('');
+  }
   return (
     <Card title="Staff sign-in & screen lock" action={<span className="safi-cell-sub">Blurs the working area until someone signs in</span>}>
       <div className="safi-form" style={{ maxWidth: 760 }}>
@@ -400,6 +406,11 @@ function StaffSignInCard() {
           </table>
         ) : <p className="safi-cell-sub">No requests yet. While this is off, test it here: tick Require sign-in, then tap "Get a code" on the lock screen.</p>}
       </div>
+      <Modal open={!!delAsk} onClose={() => setDelAsk(null)} title={delAsk ? `Delete ${delAsk.username}?` : ''} width={420}
+        footer={<><Button kind="ghost" onClick={() => setDelAsk(null)}>Cancel</Button><Button kind="primary" onClick={doRemove}>Delete account</Button></>}>
+        {delAsk && <div className="safi-form"><p style={{ margin: 0 }}>This removes the sign-in for {delAsk.name || delAsk.username}. They can ask for a new code later.</p>
+          <label>Management PIN<input className="safi-input safi-mono" type="password" inputMode="numeric" autoFocus value={delPin} onChange={e => setDelPin(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') doRemove(); }}/></label></div>}
+      </Modal>
     </Card>
   );
 }

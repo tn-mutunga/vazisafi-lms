@@ -399,6 +399,7 @@ function CategoryManager({ open, onClose }) {
   const [name, setName]   = useStateEx('');
   const [color, setColor] = useStateEx('blue');
   const [icon, setIcon]   = useStateEx('package');
+  const [delCat, setDelCat] = useStateEx(null); // desktop app can't show confirm(); ask in-app
 
   function add() {
     if (!name.trim()) { toast('Name required', 'error'); return; }
@@ -410,7 +411,7 @@ function CategoryManager({ open, onClose }) {
   const colors = ['blue', 'green', 'amber', 'red', 'violet', 'gray'];
   const icons  = ['box', 'tag', 'wash', 'iron', 'shoe', 'staff', 'alert', 'arrow', 'package'];
 
-  return (
+  return (<>
     <Modal open={open} onClose={onClose} title="Manage expense categories" width={560}
       footer={<Button kind="primary" onClick={onClose}>Done</Button>}>
       <div className="safi-form">
@@ -419,7 +420,7 @@ function CategoryManager({ open, onClose }) {
           {D.expenseCategories.map(c => (
             <li key={c.id}>
               <span className={`safi-tag safi-tag--${c.color}`}><Icon name={c.icon} size={12}/> &nbsp;{c.name}</span>
-              <button className="safi-rowlink safi-rowlink--danger" onClick={() => { if (confirm(`Delete "${c.name}"? Existing expenses keep this category as ID.`)) { window.SAFI_STORE.removeExpenseCategory(c.id); toast('Removed'); } }}>Delete</button>
+              <button className="safi-rowlink safi-rowlink--danger" onClick={() => setDelCat(c)}>Delete</button>
             </li>
           ))}
         </ul>
@@ -436,6 +437,11 @@ function CategoryManager({ open, onClose }) {
         <Button kind="secondary" icon="plus" onClick={add}>Add category</Button>
       </div>
     </Modal>
+    <Modal open={!!delCat} onClose={() => setDelCat(null)} title={delCat ? `Delete "${delCat.name}"?` : ''} width={420}
+      footer={<><Button kind="ghost" onClick={() => setDelCat(null)}>Cancel</Button><Button kind="primary" onClick={() => { window.SAFI_STORE.removeExpenseCategory(delCat.id); toast('Removed'); setDelCat(null); }}>Delete category</Button></>}>
+      <p style={{ margin: 0 }}>Expenses already logged under it keep their records.</p>
+    </Modal>
+    </>
   );
 }
 

@@ -271,15 +271,23 @@
   // Fetch other laptops' changes even when nobody is typing here.
   // Every 10 minutes (plus on open, on wake, when the internet returns and on close).
   setInterval(() => schedule(0), 300000);
-  // Fast sync (every 8 s) while staff accounts are being set up: a code was requested,
-  // someone is waiting for approval, a sign-in screen is open, or an account just changed.
+  // Normal sync is every 5 minutes. Faster only for short spells while sign-in is being used:
+  // - for 10 minutes after a code is requested or an account changes (every 8 s), and
+  // - while the sign-in screen is showing (every 30 s), so a new approval arrives promptly.
+  let lastLockSync = 0;
   setInterval(() => {
     try {
       const st = (window.SAFI_STORE.get().settings) || {};
       const acc = st.staffAccounts || {};
-      const pending = Object.values(acc).some(a => a && !a.deleted && (a.tempHash || (a.kind !== 'management' && a.hash && !a.approved)));
+      const now = Date.now();
+      const recentCode = Object.values(acc).some(a => {
+        if (!a || a.deleted || !a.tempHash || !a.issuedAt) return false;
+        const t = new Date(String(a.issuedAt).replace(' ', 'T')).getTime();
+        return t && now - t < 10 * 60e3;
+      });
+      if (recentCode || (window.__safiFastSyncUntil || 0) > now) { schedule(0); return; }
       const lockOpen = !!document.querySelector('.safi-lockscreen, .safi-lock');
-      if (pending || lockOpen || (window.__safiFastSyncUntil || 0) > Date.now()) schedule(0);
+      if (lockOpen && now - lastLockSync > 30e3) { lastLockSync = now; schedule(0); }
     } catch (e) {}
   }, 8000);
   // Teller on duty: check the cloud every 30 seconds (one tiny request) so a change made

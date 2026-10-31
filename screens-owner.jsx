@@ -804,6 +804,105 @@ function StaffScreen({ lang }) {
   );
 }
 
+
+// ─── Correct order stages (bulk) ─────────────────────────────────────────
+function RestageCard() {
+  const D = useStore();
+  const ST = [['intake', 'Intake'], ['washing', 'Washing'], ['holding', 'Holding'], ['drying', 'Drying'], ['finalhold', 'Final Hold'], ['ironing', 'Ironing'], ['drycleaning', 'Dry cleaning'], ['ready', 'Ready'], ['collected', 'Collected']];
+  const [from, setFrom] = useStateOw(SAFI_TIME.daysAgo(1));
+  const [to, setTo] = useStateOw(SAFI_TIME.day());
+  const [cur, setCur] = useStateOw('open');
+  const [target, setTarget] = useStateOw('ready');
+  const [pin, setPin] = useStateOw('');
+  const [picked, setPicked] = useStateOw({});
+  const [payAsk, setPayAsk] = useStateOw(null); // { owedIds, total }
+  const [payTxn, setPayTxn] = useStateOw('');
+  const [payMethod, setPayMethod] = useStateOw('bank');
+  const [pin2, setPin2] = useStateOw('');
+  const list = D.orders.filter(x => { const k = String(x.in || '').slice(0, 10); if (k < from || k > to) return false; return cur === 'all' ? true : cur === 'open' ? x.status !== 'collected' : x.status === cur; }).sort((a, b) => String(a.in).localeCompare(String(b.in)));
+  const ids = list.filter(x => picked[x.id]).map(x => x.id);
+  const label = (k) => (ST.find(s => s[0] === k) || [k, k])[1];
+  function apply() {
+    const real = String(window.__safiOwnerPin || window.SAFI_OWNER_PIN || (D.settings || {}).ownerPin || '');
+    if (!real || pin.trim() !== real) { toast('Wrong Management PIN', 'error'); return; }
+    const owedIds = target === 'collected' ? ids.filter(id => { const ord = D.orders.find(x => x.id === id); return ord && ord.status !== 'collected' && (ord.total || 0) - (ord.paid || 0) > 0; }) : [];
+    if (owedIds.length) {
+      const tot = owedIds.reduce((s, id) => { const ord = D.orders.find(x => x.id === id); return s + Math.max(0, (ord.total || 0) - (ord.paid || 0)); }, 0);
+      setPayAsk({ owedIds, total: tot }); setPayTxn(''); setPin2(''); return;
+    }
+    move(ids, 0);
+  }
+  function move(list2, paidN) {
+    let done = 0, owed = 0;
+    for (const id of list2) {
+      const ord = window.SAFI_STORE.get().orders.find(x => x.id === id); if (!ord || ord.status === target) continue;
+      if (target === 'collected' && (ord.total || 0) - (ord.paid || 0) > 0) { owed++; continue; }
+      window.SAFI_STORE.setStatus(id, target); done++;
+    }
+    toast(`${done} order${done === 1 ? '' : 's'} moved to ${label(target)}${paidN ? ` · ${paidN} payment${paidN === 1 ? '' : 's'} recorded` : ''}${owed ? ` · ${owed} skipped (balance due)` : ''}`, done ? 'success' : 'error');
+    setPicked({}); setPin(''); setPayAsk(null); setPin2('');
+  }
+  function payAndMove() {
+    const real = String(window.__safiOwnerPin || window.SAFI_OWNER_PIN || (D.settings || {}).ownerPin || '');
+    if (!real || pin2.trim() !== real) { toast('Wrong Management PIN', 'error'); setPin2(''); return; }
+    const code = payTxn.trim().toUpperCase();
+    if (code.length < 5) { toast('Transaction code needs at least 5 characters', 'error'); return; }
+    let n = 0;
+    for (const id of payAsk.owedIds) {
+      const ord = window.SAFI_STORE.get().orders.find(x => x.id === id); if (!ord) continue;
+      const bal = Math.max(0, (ord.total || 0) - (ord.paid || 0)); if (!bal) continue;
+      const c = D.customers.find(y => y.id === ord.customer);
+      window.SAFI_STORE.recordPayment({ orderId: id, method: payMethod, amount: bal, txn: code, customer: c?.name || '' }); n++;
+    }
+    move(ids, n);
+  }
+  return (
+    <Card title="Correct order stages" action={<span className="safi-cell-sub">Move several orders to one stage at once · Management PIN</span>}>
+      <div className="safi-redate">
+        <div className="safi-redate__row">
+          <label>Orders from<input type="date" className="safi-input" value={from} max={to} onChange={e => { setFrom(e.target.value); setPicked({}); }}/></label>
+          <label>to<input type="date" className="safi-input" value={to} min={from} onChange={e => { setTo(e.target.value); setPicked({}); }}/></label>
+          <label>Now at<select className="safi-input" value={cur} onChange={e => { setCur(e.target.value); setPicked({}); }}><option value="open">Any stage except Collected</option><option value="all">Any stage</option>{ST.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+          <label>Move ticked orders to<select className="safi-input" value={target} onChange={e => setTarget(e.target.value)}>{ST.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+        </div>
+        <div className="safi-redate__row">
+          <Button kind="ghost" size="sm" onClick={() => setPicked(Object.fromEntries(list.map(x => [x.id, true])))}>Tick all ({list.length})</Button>
+          <Button kind="ghost" size="sm" onClick={() => setPicked({})}>Clear</Button>
+          <label style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>Management PIN<input className="safi-input safi-mono" type="password" inputMode="numeric" style={{ width: 130 }} value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && ids.length && pin) apply(); }}/></label>
+          <Button kind="primary" icon="check" onClick={apply} disabled={!ids.length || !pin}>Move {ids.length || ''} to {label(target)}</Button>
+        </div>
+        <div className="safi-redate__list">
+          {list.length === 0 && <p className="safi-cell-sub" style={{ padding: 12, margin: 0 }}>No orders match these dates and stage.</p>}
+          {list.map(x => { const c = D.customers.find(y => y.id === x.customer); return (
+            <label key={x.id} className="safi-redate__item">
+              <input type="checkbox" checked={!!picked[x.id]} onChange={e => setPicked({ ...picked, [x.id]: e.target.checked })}/>
+              <span className="safi-mono">{orderNo(x.id)}</span>
+              <span>{c?.name || orderNo(x.id)}</span>
+              <span className="safi-cell-sub">{dmDate(x.in)}</span>
+              <StatusBadge status={x.status}/>
+              <span className="safi-mono">KES {(x.total || 0).toLocaleString('en-KE')}</span>
+            </label>); })}
+        </div>
+        <p className="safi-hint">Each move is saved with its time and shows in the order's stage line and the audit log. Moving orders with a balance to Collected asks you to record their payment first. Changes sync to every laptop.</p>
+      </div>
+      <Modal open={!!payAsk} onClose={() => setPayAsk(null)} title="Confirm payment before Collected" width={520}
+        footer={<>
+          <Button kind="ghost" onClick={() => setPayAsk(null)}>Cancel</Button>
+          <Button kind="ghost" onClick={() => { const rest = ids.filter(id => !payAsk.owedIds.includes(id)); setPayAsk(null); move(rest, 0); }}>Skip unpaid, move the rest</Button>
+          <Button kind="primary" icon="check" onClick={payAndMove}>Record payments & move</Button>
+        </>}>
+        {payAsk && <div className="safi-form">
+          <p style={{ margin: 0 }}><b>{payAsk.owedIds.length}</b> of the ticked order{payAsk.owedIds.length === 1 ? '' : 's'} still owe{payAsk.owedIds.length === 1 ? 's' : ''} a total of <b className="safi-mono">KES {payAsk.total.toLocaleString('en-KE')}</b>. Record each balance as paid, then move them to Collected.</p>
+          <label>Paid by<div className="safi-seg">{['bank', 'mpesa'].map(m => <button key={m} className={`safi-seg__btn ${payMethod === m ? 'is-active' : ''}`} onClick={() => setPayMethod(m)}>{m === 'bank' ? 'Bank' : 'M-Pesa'}</button>)}</div></label>
+          <label>Transaction code (used for all){' '}<span className="safi-cell-sub">at least 5 characters, e.g. TESTDATA</span><input className="safi-input safi-mono" autoFocus value={payTxn} onChange={e => setPayTxn(e.target.value.toUpperCase())}/></label>
+          <label>Management PIN again<input className="safi-input safi-mono" type="password" inputMode="numeric" value={pin2} onChange={e => setPin2(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') payAndMove(); }}/></label>
+        </div>}
+      </Modal>
+    </Card>
+  );
+}
+const dmDate = (s) => { const v = String(s || ''); return v.length >= 16 ? `${v.slice(8, 10)}-${v.slice(5, 7)} ${v.slice(11, 16)}` : v; };
+
 // ─── Correct order dates (e.g. a till whose clock was wrong) ──────────────
 function RedateCard() {
   const D = useStore();
@@ -999,6 +1098,8 @@ function DataScreen({ lang }) {
       </div>
 
       <RedateCard/>
+
+      <RestageCard/>
 
       <Card title="Backup">
         <p className="safi-cell-sub" style={{ marginTop: 0 }}>

@@ -1,21 +1,14 @@
-VAZI SAFI LMS v2.5.2
-ORDERS
-- New stage Final Hold (FH) between Drying and Ready, for clothes left to air-dry overnight. Optional when advancing from Drying.
-- Final Hold badge: pale orange with a sweeping light (same speed as Holding's red). Holding & Final Hold badges never cut off their text.
-- Order page: overlapping Holding / Final Hold bubbles — click one to bring it forward (Final Hold on top by default).
-- Order page header: on narrow windows the title stays on one line and buttons wrap below.
-- Orders page buttons: Today · Yesterday · Oct · Sept · Any date (month names follow the computer's clock).
-- Stage card counts include H and FH only when such orders exist.
-FRONT DESK
-- Overdue / Uncollected card: Sept / Oct / Custom period (this month by default).
-- Order numbers, KES amounts and "Open →" no longer split across lines in tables and on the Revenue card.
-- Customer names starting with an initial keep the next word (T Mutunga); receipts and SMS.
-MANAGEMENT
-- Revenue vs Expenses chart: hover shows Profit (green) or Loss (red).
-- Reports: "Orders by service band" — Laundry / Dry Cleaning / Shoes counts and values.
-- Payments & Audit: Sept / Oct / Custom period; search by name, order number or TXN code.
-- Clear data: choose a date range, PIN twice and a reason; reminder to download a backup first.
-EXPENSES
-- General purchases (Management only, always Special). Bank is the default payment method.
-SMS
-- Ready message: "...is READY for collection/delivery at Vazi Safi..." (changes on every laptop unless the text was edited).
+VAZI SAFI LMS v2.5.3
+IMPORTANT FIX
+- Orders no longer vanish after "Order created". A sync that was running while an order was
+  saved used to write back an older copy and erase it. Changes made during a sync are now kept
+  (orders, payments, expenses, edits). "Pull cloud" also keeps anything created during the pull.
+- Sync back to every 5 minutes. Fast sync only for 10 min after a sign-in code/account change,
+  and every 30 s while the sign-in screen is showing.
+NEW ORDER
+- "Other" in the type pickers (per pc, dry cleaning, ironing, shoes, duvet): price is typed by
+  the attendant, pre-filled with the standard price.
+FRONT DESK DASHBOARD
+- Stat cards: one row on full screen, 2 x 2 on smaller windows; Revenue Today streams stay
+  next to their labels, long amounts drop to a second line.
+- Overdue / Uncollected / Month End buttons match the month buttons.

@@ -63,11 +63,11 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
 
       <BacklogAlert D={D} setView={setView}/>
 
-      <div className="safi-grid safi-grid--4">
+      <div className="safi-grid safi-grid--4 safi-grid--dash">
         <StatCard label={t('orders_today', lang)} value={todayOrders.length} icon="list" delta={`${D.orders.filter(o => o.status !== 'collected').length} active in the shop`}
           sparkline={<div className="safi-streams">{[['normal', 'Normal'], ['student', 'Student'], ['corporate', 'Corporate']].map(([k, l]) => <span key={k} className={`safi-streams__i safi-streams__i--tier-${k}`}><i/>{l} <b className="safi-mono">{todayOrders.filter(o => ((D.customers.find(c => c.id === o.customer) || {}).group || 'normal') === k).length}</b></span>)}</div>}/>
         <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" deltaKind="none" delta={<><span className={ordDiff < 0 ? 'safi-delta-dn' : 'safi-delta-up'}>{ordDiff < 0 ? '↓' : '↑'} {ordDiff > 0 ? '+' : ordDiff < 0 ? '−' : '±'}{Math.abs(ordDiff)} orders</span>{' · '}<span className={revDiff < 0 ? 'safi-delta-dn' : 'safi-delta-up'}>{revDiff < 0 ? '↓' : '↑'} {revDiff > 0 ? '+' : revDiff < 0 ? '−' : '±'}{money(Math.abs(revDiff))}</span><span className="safi-cell-sub"> vs yesterday</span></>}
-          sparkline={<div className="safi-streams">{streams.map(x => <span key={x.k} className={`safi-streams__i safi-streams__i--${x.k}`}><i/>{x.l} <b className="safi-mono">{money(x.v)}</b></span>)}</div>}/>
+          sparkline={<div className="safi-streams">{streams.map(x => <span key={x.k} className={`safi-streams__i safi-streams__i--${x.k}`}><i/><span className="safi-streams__l" title={x.l}>{x.l}</span> <b className="safi-mono">{money(x.v)}</b></span>)}</div>}/>
         <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} orders ready now`}/>
         <StatCard label="Washing → Drying → Ready → Collected" value={<span className="safi-stagecount"><span className="is-w">W-{washing}</span> → {D.orders.some(o => o.status === 'holding') && <><span className="is-h">H-{D.orders.filter(o => o.status === 'holding').length}</span> → </>}<span className="is-d">D-{D.orders.filter(o => o.status === 'drying').length}</span> → {D.orders.some(o => o.status === 'finalhold') && <><span className="is-fh">FH-{D.orders.filter(o => o.status === 'finalhold').length}</span> → </>}<span className="is-r">R-{D.orders.filter(o => o.status === 'ready').length}</span> → <span className="is-c">C-{collectedOrdersToday.length}</span></span>} icon="wash" delta="Today's Orders Stats"/>
       </div>
@@ -662,6 +662,14 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
               if (q > 0) {
                 const sub = subtypePicker.svc.subtypes.find(s => (typeof s === 'string' ? s : s.name) === name);
                 const subObj = typeof sub === 'string' ? { name: sub } : sub;
+                const isOtherRow = /^other$/i.test(String(name).trim());
+                if (isOtherRow && !subtypePicker.svc.tellerPrice) {
+                  const typed = (subtypePicker.price || {})[name];
+                  const pr = typed != null && typed !== '' ? Number(typed) || 0 : window.SAFI_PRICING.subPrice(subtypePicker.svc, subObj, effGroup).price;
+                  if (pr <= 0) { toast(`Enter a price for ${name}`, 'error'); return; }
+                  toAdd.push({ svc: subtypePicker.svc.id, subtype: name, qty: q, customPrice: pr });
+                  continue;
+                }
                 if (subtypePicker.svc.tellerPrice) {
                   const pr = Number((subtypePicker.price || {})[name]) || 0;
                   if (pr <= 0) { toast(`Enter a price for ${name}`, 'error'); return; }
@@ -688,8 +696,12 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
             {subtypePicker.svc.subtypes.map((st, i) => {
               const sub = typeof st === 'string' ? { name: st } : st;
               const tier = subtypePicker.svc.tiers[effGroup] || 0;
-              const tp = !!subtypePicker.svc.tellerPrice;
-              const sp = tp ? { price: Number((subtypePicker.price || {})[sub.name]) || 0, promo: '' } : window.SAFI_PRICING.subPrice(subtypePicker.svc, sub, effGroup);
+              // "Other" is always priced by the attendant (pre-filled with the standard price).
+              const isOther = /^other$/i.test(String(sub.name || '').trim());
+              const tp = !!subtypePicker.svc.tellerPrice || isOther;
+              const base = window.SAFI_PRICING.subPrice(subtypePicker.svc, sub, effGroup);
+              const typed = (subtypePicker.price || {})[sub.name];
+              const sp = tp ? { price: typed != null && typed !== '' ? Number(typed) || 0 : (isOther && !subtypePicker.svc.tellerPrice ? base.price : 0), promo: '' } : base;
               const price = sp.price;
               const q = (subtypePicker.qty && subtypePicker.qty[sub.name]) || 0;
               const setQ = (newQ) => setSubtypePicker({ ...subtypePicker, qty: { ...(subtypePicker.qty || {}), [sub.name]: Math.max(0, newQ) }});
@@ -697,7 +709,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                 <div key={i} className={`safi-subtype-multi__row ${q > 0 ? 'is-picked' : ''}`}>
                   <Icon name={subtypePicker.svc.icon} size={16}/>
                   <span className="safi-subtype-multi__name">{sub.name}</span>
-                  {tp ? <input type="number" min="0" className="safi-input safi-mono" style={{ width: 90 }} placeholder="KES" value={(subtypePicker.price || {})[sub.name] ?? ''} onChange={e => setSubtypePicker({ ...subtypePicker, price: { ...(subtypePicker.price || {}), [sub.name]: e.target.value } })}/>
+                  {tp ? <input type="number" min="0" className="safi-input safi-mono" style={{ width: 90 }} placeholder="KES" value={(subtypePicker.price || {})[sub.name] ?? (isOther && !subtypePicker.svc.tellerPrice ? base.price : '')} onChange={e => setSubtypePicker({ ...subtypePicker, price: { ...(subtypePicker.price || {}), [sub.name]: e.target.value } })}/>
                   : <span className="safi-subtype-multi__price safi-mono">{money(price)}{sub.price != null && sub.price !== tier ? ' *' : ''}</span>}
                   {sp.promo && <span className="safi-tag safi-tag--green" style={{ fontSize: 10 }}>{sp.promo}</span>}
                   <div className="safi-qty">
@@ -1367,9 +1379,9 @@ function OverdueCard({ D, setView, setActiveOrderId, money }) {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
       <div className="safi-seg">{[['last', monthTag(-1)], ['this', monthTag(0)], ['custom', 'Custom']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${per === k ? 'is-active' : ''}`} onClick={() => { setPer(k); setMore(false); }}>{l}</button>)}</div>
       {per === 'custom' && <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="date" className="safi-input safi-input--inline" value={pFrom} max={pTo} onChange={e => setPFrom(e.target.value)}/><span className="safi-cell-sub">to</span><input type="date" className="safi-input safi-input--inline" value={pTo} min={pFrom} onChange={e => setPTo(e.target.value)}/></span>}
-      <div className="safi-tabs">
-        <button className={`safi-tabs__btn ${tab === 'overdue' ? 'is-active' : ''}`} onClick={() => { setTab('overdue'); setMore(false); }}>Overdue</button>
-        <button className={`safi-tabs__btn ${tab === 'all' ? 'is-active' : ''}`} onClick={() => { setTab('all'); setMore(false); }}>Uncollected{monthEnd ? ' · month end' : ''}</button>
+      <div className="safi-seg">
+        <button className={`safi-seg__btn ${tab === 'overdue' ? 'is-active' : ''}`} onClick={() => { setTab('overdue'); setMore(false); }}>Overdue</button>
+        <button className={`safi-seg__btn ${tab === 'all' ? 'is-active' : ''}`} onClick={() => { setTab('all'); setMore(false); }}>Uncollected{monthEnd ? ' · month end' : ''}</button>
       </div>
       </div>
     }>
@@ -2513,6 +2525,7 @@ function PaymentsScreen({ lang, money, role }) {
   const D = useStore();
   const isManagement = role === 'owner';
   const [tab, setTab] = useStateFD('all');
+  const [diffF, setDiffF] = useStateFD(null); // 'short' | 'over' | 'exact' from the Statement differences cards
   const [form, setForm] = useStateFD({ order: '', method: 'mpesa', amount: '', txn: '', date: SAFI_TIME.day() });
 
   const [preset, setPreset] = useStateFD(() => { const p = window.__safiPreset; window.__safiPreset = null; return p && p.kind === 'collectedToday' ? p : null; });
@@ -2528,6 +2541,37 @@ function PaymentsScreen({ lang, money, role }) {
   const rows = D.payments.filter(p => (tab === 'all' || p.method === tab) && (!preset || (preset.ids || []).includes(p.order)) && inPer(p) && hit(p)).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const [pinFor, setPinFor] = useStateFD(null);
   const [vPin, setVPin] = useStateFD('');
+  // Months Management has frozen for the Front Desk (synced). Management always sees everything.
+  const frozen = ((D.settings || {}).frozenMonths) || [];
+  const lastMonthKey = (() => { const d = new Date(); const x = new Date(d.getFullYear(), d.getMonth() - 1, 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; })();
+  const rangeMonths = (() => { const out2 = []; let [y, m] = range[0].slice(0, 7).split('-').map(Number); const [y2, m2] = range[1].slice(0, 7).split('-').map(Number); while (y < y2 || (y === y2 && m <= m2)) { out2.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++; } if (out2.length > 24) break; } return out2; })();
+  const frozenHere = !isManagement && !preset && rangeMonths.some(k => frozen.includes(k));
+  const monthName = (k) => { const [y, m] = k.split('-').map(Number); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sept','Oct','Nov','Dec'][m - 1] + ' ' + y; };
+  // The desktop app can't show prompt() boxes, so the PIN is asked in our own window.
+  const [frzAsk, setFrzAsk] = useStateFD(null); // { k, mode: 'freeze' | 'reopen' | 'reopenAll' }
+  const [frzPin, setFrzPin] = useStateFD('');
+  function toggleFreeze(k, mode) { setFrzPin(''); setFrzAsk({ k, mode: mode || (frozen.includes(k) ? 'reopen' : 'freeze') }); }
+  function doFreeze() {
+    const { k, mode } = frzAsk; const pin = frzPin;
+    const on = mode !== 'freeze';
+    const real = String(window.__safiOwnerPin || window.SAFI_OWNER_PIN || (D.settings || {}).ownerPin || '');
+    if (!real || pin.trim() !== real) { toast('Wrong Management PIN', 'error'); setFrzPin(''); return; }
+    // Freezing closes last month AND every earlier month (so Custom can't reach them). Reopening is per month.
+    let next;
+    if (mode === 'reopenAll') next = [];
+    else if (on) next = frozen.filter(x => x !== k);
+    else {
+      const first = [...D.payments.map(p => String(p.date || '').slice(0, 7)), ...D.orders.map(o => String(o.in || '').slice(0, 7))].filter(Boolean).sort()[0] || k;
+      const start = first < k ? first : k;
+      const all = []; let [y, m] = start.split('-').map(Number); const [y2, m2] = k.split('-').map(Number);
+      while (y < y2 || (y === y2 && m <= m2)) { all.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++; } if (all.length > 120) break; }
+      next = [...new Set([...frozen, ...all, k])];
+    }
+    window.SAFI_STORE.setSetting('frozenMonths', next);
+    setTimeout(() => { try { window.SAFI_CLOUD && window.SAFI_CLOUD.syncNow && window.SAFI_CLOUD.syncNow().catch(() => {}); } catch (e) {} }, 300);
+    toast(mode === 'reopenAll' ? 'All months reopened for the Front Desk' : on ? `${monthName(k)} reopened for the Front Desk` : `${monthName(k)} and all earlier months closed for the Front Desk`, 'success');
+    setFrzAsk(null); setFrzPin('');
+  }
 
   // Totals and Unverified follow the chosen period (and search).
   const perRows = D.payments.filter(p => inPer(p) && hit(p) && (!preset || (preset.ids || []).includes(p.order)));
@@ -2543,6 +2587,7 @@ function PaymentsScreen({ lang, money, role }) {
     if (String(form.txn || '').trim().length < 5) { toast('Transaction code needs at least 5 characters (ideally the last 5)', 'error'); return; }
     const order = D.orders.find(o => o.id === form.order) || D.orders.find(o => orderNo(o.id) === form.order);
     if (!order) { toast(`Order ${form.order} not found`, 'error'); return; }
+    if (!isManagement && frozen.includes(String(order.in || '').slice(0, 7))) { toast(`${monthName(String(order.in).slice(0, 7))} is closed by Management. Ask Management to reopen it.`, 'error'); return; }
     const cust = D.customers.find(c => c.id === order.customer);
     window.SAFI_STORE.recordPayment({
       orderId: order.id, method: form.method,
@@ -2551,6 +2596,26 @@ function PaymentsScreen({ lang, money, role }) {
     });
     toast('Payment recorded', 'success');
     setForm({ order: '', method: 'mpesa', amount: '', txn: '', date: SAFI_TIME.day() });
+  }
+
+  const diffOf = (x) => (x.verified && x.stmtAmount != null) ? Math.round(x.stmtAmount - x.amount) : null;
+  const ledgerRows = (list) => !diffF ? list : list.filter(x => { const d = diffOf(x); return d != null && (diffF === 'short' ? d < 0 : diffF === 'over' ? d > 0 : d === 0); });
+  function pickDiff(k) {
+    setDiffF(v => v === k ? null : k);
+    setTimeout(() => { const el = document.getElementById('safi-ledger'); const sc = el && el.closest('.safi-main'); if (el && sc) sc.scrollTo({ top: el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 16, behavior: 'smooth' }); }, 30);
+  }
+  function exportLedger(list, kind) {
+    const head = ['Date', 'Order #', 'Customer', 'Method', 'Amount', 'Txn code', 'Status', 'Statement amount', 'Difference'];
+    const body = list.map(x => { const d = diffOf(x); return [dm(x.date), orderNo(x.order), x.customer || '', x.method === 'mpesa' ? 'M-Pesa' : x.method === 'bank' ? 'Bank' : (x.method || ''), Math.round(x.amount || 0), x.txn || '', x.verified ? 'Verified' : 'Unverified', x.stmtAmount != null ? Math.round(x.stmtAmount) : '', d == null ? '' : d]; });
+    const tag = diffF ? '-' + diffF : '';
+    const name = `Vazi Safi - Payments & Audit${tag} - ${SAFI_TIME.day()}`;
+    if (kind === 'xlsx') window.safiXlsx(name + '.xlsx', 'Payments', head, body);
+    else {
+      const esc = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+      const blob = new Blob(['\ufeff' + [head, ...body].map(r => r.map(esc).join(',')).join('\r\n')], { type: 'text/csv' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+    toast(`${list.length} payment${list.length === 1 ? '' : 's'} exported`, 'success');
   }
 
   return (
@@ -2562,10 +2627,20 @@ function PaymentsScreen({ lang, money, role }) {
           : "Record payments and transaction codes. Management will verify them against statements."}
         right={<>
           {isManagement && <Button kind="ghost" icon="print" onClick={() => window.print()}>{t('print_summary', lang)}</Button>}
+          {isManagement && (frozen.length ? <Button kind="primary" icon="lock" onClick={() => toggleFreeze(lastMonthKey, 'reopenAll')}>Past months closed · Tap to reopen</Button> : <Button kind="ghost" icon="lock" onClick={() => toggleFreeze(lastMonthKey, 'freeze')}>Close {monthName(lastMonthKey)} & earlier</Button>)}
           {isManagement && <ReconcilePeriod/>}
           {isManagement && <StatementReconcile/>}
         </>}
       />
+      <Modal open={!!frzAsk} onClose={() => setFrzAsk(null)} width={440}
+        title={frzAsk ? (frzAsk.mode === 'freeze' ? `Close ${monthName(frzAsk.k)} & earlier for Front Desk` : frzAsk.mode === 'reopenAll' ? 'Reopen all past months' : `Reopen ${monthName(frzAsk.k)}`) : ''}
+        footer={<><Button kind="ghost" onClick={() => setFrzAsk(null)}>Cancel</Button><Button kind="primary" icon="lock" onClick={doFreeze}>{frzAsk && frzAsk.mode === 'freeze' ? 'Close months' : 'Reopen'}</Button></>}>
+        {frzAsk && <div className="safi-form">
+          <p style={{ margin: 0 }}>{frzAsk.mode === 'freeze' ? `Front Desk won't see or record payments for ${monthName(frzAsk.k)} or any earlier month. Management still sees everything.` : frzAsk.mode === 'reopenAll' ? 'Front Desk will see every past month again.' : `Front Desk will see ${monthName(frzAsk.k)} again. Other closed months stay closed.`}</p>
+          <label>Management PIN<input className="safi-input safi-mono" type="password" inputMode="numeric" autoFocus value={frzPin} onChange={e => setFrzPin(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') doFreeze(); }}/></label>
+        </div>}
+      </Modal>
+      {isManagement && frozen.length > 0 && <div className="safi-frozen-bar"><Icon name="lock" size={14}/><span>Closed for Front Desk:</span>{[...frozen].sort().map(k => <button key={k} className="safi-frozen-chip" onClick={() => toggleFreeze(k)} title={`Reopen ${monthName(k)} (PIN)`}>{monthName(k)} ×</button>)}<span className="safi-cell-sub">Tap a month to reopen it.</span></div>}
       {preset && <div className="safi-preset"><Icon name="income" size={14}/><span>Showing: <b>{preset.label}</b> · {(preset.ids || []).length} order{(preset.ids || []).length === 1 ? '' : 's'} · {rows.length} payment{rows.length === 1 ? '' : 's'} · {money(rows.reduce((s, p) => s + (p.amount || 0), 0))}</span><button className="safi-rowlink" onClick={() => setPreset(null)}>Show all payments</button></div>}
 
       <div className="safi-grid safi-grid--4">
@@ -2615,8 +2690,11 @@ function PaymentsScreen({ lang, money, role }) {
         </div>
       </Card>
 
-      <Card pad={false} title="Transaction ledger" action={
+      <div className={`safi-frozen${frozenHere ? ' is-frozen' : ''}`}>
+      <Card pad={false} title={<span id="safi-ledger">Transaction ledger{diffF && <span className={`safi-ledger-f safi-ledger-f--${diffF}`}>{diffF === 'short' ? 'Short-paid only' : diffF === 'over' ? 'Over-paid only' : 'Matched exactly'}<button onClick={() => setDiffF(null)} title="Show all">×</button></span>}</span>} action={
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <Button kind="ghost" size="sm" icon="box" onClick={() => exportLedger(ledgerRows(rows), 'csv')}>CSV</Button>
+        <Button kind="ghost" size="sm" icon="box" onClick={() => exportLedger(ledgerRows(rows), 'xlsx')}>Excel</Button>
         <div className="safi-cust-pick__search safi-cust-pick__search--inline" style={{ minWidth: 240 }}><Icon name="search" size={15}/><input placeholder="Search name, order no. or txn code" value={q} onChange={e => setQ(e.target.value)}/>{q && <button className="safi-rowlink" onClick={() => setQ('')}>×</button>}</div>
         {!preset && <div className="safi-seg">{[['last', monthTag(-1)], ['this', monthTag(0)], ['custom', 'Custom']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${per === k ? 'is-active' : ''}`} onClick={() => setPer(k)}>{l}</button>)}</div>}
         {!preset && per === 'custom' && <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="date" className="safi-input safi-input--inline" value={pFrom} max={pTo} onChange={e => setPFrom(e.target.value)}/><span className="safi-cell-sub">to</span><input type="date" className="safi-input safi-input--inline" value={pTo} min={pFrom} onChange={e => setPTo(e.target.value)}/></span>}
@@ -2646,10 +2724,12 @@ function PaymentsScreen({ lang, money, role }) {
                 return <span className={`safi-vres safi-vres--${d > 0 ? 'up' : 'down'}`} title={`Statement shows KES ${r.stmtAmount.toLocaleString()}`}>{d > 0 ? '+' : '−'}{Math.abs(d).toLocaleString()}</span>;
               } },
           ]}
-          rows={rows}
-          empty={qq ? `No payments match "${q.trim()}" in this period.` : D.payments.length ? 'No payments in this period.' : 'No payments yet.'}
+          rows={ledgerRows(rows)}
+          empty={diffF ? 'No payments of this kind in this period.' : qq ? `No payments match "${q.trim()}" in this period.` : D.payments.length ? 'No payments in this period.' : 'No payments yet.'}
         />
       </Card>
+        {frozenHere && <div className="safi-frozen__veil"><span className="safi-frozen__ico"><Icon name="lock" size={22}/></span><b>{rangeMonths.filter(k => frozen.includes(k)).map(monthName).join(', ')} {rangeMonths.filter(k => frozen.includes(k)).length > 1 ? 'are' : 'is'} closed</b><span>Management has frozen this month. Ask Management to reopen it if you need to see or record something.</span><Button kind="primary" onClick={() => setPer('this')}>Back to {monthTag(0)}</Button></div>}
+      </div>
 
       {preset ? (() => {
         const sum = (m) => rows.filter(r => !m || r.method === m).reduce((s, r) => s + (r.amount || 0), 0);
@@ -2670,9 +2750,9 @@ function PaymentsScreen({ lang, money, role }) {
         return (
           <Card title="Statement differences" action={<span className="safi-cell-sub">Verified payments in this list · statement minus recorded</span>}>
             <div className="safi-diffsum">
-              <div className="safi-diffsum__t is-down"><span>Short-paid (−)</span><b className="safi-mono">−{Math.abs(sumS).toLocaleString()}</b><span className="safi-cell-sub">{short.length} payment{short.length === 1 ? '' : 's'}</span></div>
-              <div className="safi-diffsum__t is-up"><span>Over-paid (+)</span><b className="safi-mono">+{sumO.toLocaleString()}</b><span className="safi-cell-sub">{over.length} payment{over.length === 1 ? '' : 's'}</span></div>
-              <div className="safi-diffsum__t"><span>Net difference</span><b className="safi-mono">{sumS + sumO > 0 ? '+' : sumS + sumO < 0 ? '−' : ''}{Math.abs(sumS + sumO).toLocaleString()}</b><span className="safi-cell-sub">{exact.length} matched exactly</span></div>
+              <div className={`safi-diffsum__t is-down is-click${diffF === 'short' ? ' is-picked' : ''}`} onClick={() => pickDiff('short')} title="Show these payments"><span>Short-paid (−)</span><b className="safi-mono">−{Math.abs(sumS).toLocaleString()}</b><span className="safi-cell-sub">{short.length} payment{short.length === 1 ? '' : 's'}</span></div>
+              <div className={`safi-diffsum__t is-up is-click${diffF === 'over' ? ' is-picked' : ''}`} onClick={() => pickDiff('over')} title="Show these payments"><span>Over-paid (+)</span><b className="safi-mono">+{sumO.toLocaleString()}</b><span className="safi-cell-sub">{over.length} payment{over.length === 1 ? '' : 's'}</span></div>
+              <div className={`safi-diffsum__t is-click${diffF === 'exact' ? ' is-picked' : ''}`} onClick={() => pickDiff('exact')} title="Show payments that matched exactly"><span>Net difference</span><b className="safi-mono">{sumS + sumO > 0 ? '+' : sumS + sumO < 0 ? '−' : ''}{Math.abs(sumS + sumO).toLocaleString()}</b><span className="safi-cell-sub">{exact.length} matched exactly</span></div>
             </div>
           </Card>
         );
