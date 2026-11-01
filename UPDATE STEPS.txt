@@ -1,17 +1,13 @@
-VAZI SAFI LMS v2.5.4
-MANAGEMENT
-- "Excluded from totals": leave a test month/range (e.g. Oct) out of dashboard, period summary, charts, reports.
-- Period summary: Today, Week, Month, Quarter, Custom (date range), All-time.
-- Payroll: month calendar (pick any past month); Freeze an employee for a month (left out of all totals and exports).
-- Staff roles: Supervisor, Interim Manager, or type your own.
-- Payments & Audit: PIN-locked M-Pesa / bank statements ask for the document PIN in the app.
-EXPENSES
-- Management: Today (default), Week, Month, Quarter, Year, Custom, All-time.
-- Front Desk: Today (default), Week, current month (e.g. Nov) only.
+VAZI SAFI LMS v2.5.5
 FRONT DESK
-- W → D → R → C card counts today's orders only (queue still lists every uncollected order).
-- Reminders deck: Delivered/Collected · Ready ▸ Paid → Hand over · Ready ▸ Balance due ·
-  24 Hrs + Old orders ▸ Not delivered/Collected · Pick-ups · Deliveries.
-- Final Hold badge sweep made more visible.
-ISSUES
-- Sample issues removed; "Raised by" is the attendant on duty.
+- Closing check: from 19:35 (Sun 16:35) a window lists orders still in Washing/Drying with
+  stage-coloured buttons (Holding, Drying, Final Hold, Ready). Final Hold is allowed overnight.
+  Thin purple throbbing ring, chime, "Remind me in" 10 / 15 min, scroll bar on the left.
+- Orders search: client name / phone / order # shows this month + last 30 days + anything
+  still open or owing; unpaid/uncollected first; scrolls.
+- Final Hold badge now flashes like Holding.
+MANAGEMENT
+- Settings → Closing check: on/off, closing times (Mon–Sat, Sunday), minutes before,
+  chime every (2–15 min), quiet after, the two "Remind me" values.
+- Payments & Audit: tick payments (or "Select all shown") and Delete selected with the PIN
+  (for test data). Orders go back to owing the deleted amount.

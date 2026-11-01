@@ -988,6 +988,19 @@ window.SAFI_STORE = (() => {
       save();
       return p;
     },
+    // Management: delete payments (e.g. test data). Each order's "paid" drops by the amount removed.
+    removePayments(ids) {
+      const set = new Set(ids || []);
+      const gone = state.payments.filter(p => set.has(p.id));
+      if (!gone.length) return 0;
+      const byOrder = {};
+      for (const p of gone) byOrder[p.order] = (byOrder[p.order] || 0) + (Number(p.amount) || 0);
+      state.orders = state.orders.map(o => byOrder[o.id] ? { ...o, paid: Math.max(0, (o.paid || 0) - byOrder[o.id]) } : o);
+      state.payments = state.payments.filter(p => !set.has(p.id));
+      try { audit('payment.delete', gone.map(p => p.order).join(','), gone.length + ' payment(s) deleted, KES ' + gone.reduce((a, p) => a + (Number(p.amount) || 0), 0)); } catch (e) {}
+      save();
+      return gone.length;
+    },
     verifyPayment(id, opts = {}) {
       const p = state.payments.find(x => x.id === id);
       state.payments = state.payments.map(x => x.id === id ? { ...x, verified: true,

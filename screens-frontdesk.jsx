@@ -194,7 +194,7 @@ function CollectionReminders({ D, money, setView, collectedOrdersToday, collecte
       {tiles.map(x => (
         <button key={x.k} className={`safi-remind__t safi-remind__t--${x.k}${!x.good && x.n > 0 ? ' is-hot' : ''}`} onClick={() => { window.__safiPreset = x.preset || null; window.__safiFromDeck = true; setView(x.go); }} title="Open">
           <span className="safi-remind__ico"><Icon name={x.ico} size={16}/></span>
-          <span className="safi-remind__lbl">{x.label}</span>
+          <span className="safi-remind__lbl">{String(x.label).split(' ▸ ').map((part, i) => <React.Fragment key={i}>{i > 0 && <span className="safi-tri"> ▸ </span>}{part}</React.Fragment>)}</span>
           <b className="safi-remind__n">{x.n}</b>
           <span className="safi-remind__sub">{x.sub}</span>
         </button>
@@ -895,8 +895,14 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
     // Status filter
     if (filter === 'active') { if (o.status === 'collected') return false; }
     else if (filter !== 'all' && o.status !== filter) return false;
-    // Date filter
-    if (dateFilter && !o.in.startsWith(dateFilter)) return false;
+    // Date filter (a client search shows the whole current month instead of one day)
+    if (q) {
+      // Client search: this month + last 30 days, plus anything still uncollected or owing (any date).
+      const owes = o.status !== 'collected' || (o.total || 0) - (o.paid || 0) > 0;
+      const d10 = String(o.in || '').slice(0, 10);
+      if (!owes && !d10.startsWith(SAFI_TIME.day().slice(0, 7)) && d10 < SAFI_TIME.daysAgo(30)) return false;
+    }
+    else if (dateFilter && !o.in.startsWith(dateFilter)) return false;
     // Payment / collection filter
     const bal = (o.total || 0) - (o.paid || 0);
     if (payFilter === 'unpaid' && !((o.paid || 0) === 0 && (o.total || 0) > 0)) return false;
@@ -908,7 +914,8 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
     if (q) {
       const c = D.customers.find(x => x.id === o.customer);
       const hay = (o.id + ' ' + (c?.name || '') + ' ' + (c?.phone || '')).toLowerCase();
-      if (!hay.includes(q.toLowerCase())) return false;
+      const qq = q.toLowerCase(), qd = q.replace(/\D/g, '');
+      if (!hay.includes(qq) && !(qd.length >= 3 && String(c?.phone || '').replace(/\D/g, '').includes(qd))) return false;
     }
     return true;
   });
@@ -985,7 +992,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
         <div className="safi-toolbar">
           <div className="safi-cust-pick__search safi-cust-pick__search--inline">
             <Icon name="search" size={16}/>
-            <input placeholder="Search order #, customer name or phone…" value={q} onChange={e => setQ(e.target.value)}/>
+            <input placeholder="Search client name, phone or order #…" value={q} onChange={e => setQ(e.target.value)}/>
           </div>
           <div className="safi-toolbar__filters">
             <button className={`safi-chip ${dateFilter === todayStr ? 'is-active' : ''}`} onClick={() => setDateFilter(todayStr)}>Today</button>
@@ -1003,6 +1010,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
           </div>
         </div>
 
+        <div className={q ? 'safi-ordscroll' : ''}>
         <Table
           cols={[
             { label: t('order_id', lang), render: r => <span className="safi-mono safi-cell-strong">{orderNo(r.id)}</span> },
@@ -1028,10 +1036,11 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
             { label: t('status', lang), render: r => <StageTrail order={r}/> },
             { label: '', render: r => <button className="safi-rowlink" onClick={(e) => { e.stopPropagation(); setActiveOrderId(r.id); setView('order-detail'); }}>Open →</button> },
           ]}
-          rows={filtered}
+          rows={q ? [...filtered].sort((a, b) => { const owe = o => (o.status !== 'collected' || (o.total || 0) - (o.paid || 0) > 0) ? 0 : 1; return owe(a) - owe(b) || String(b.in).localeCompare(String(a.in)); }) : filtered}
           onRow={r => { setActiveOrderId(r.id); setView('order-detail'); }}
-          empty={dateFilter ? `No orders on ${dateFilter.split('-').reverse().join('-')}.` : "No orders match your filter."}
+          empty={q ? `No recent or open orders for "${q}".` : dateFilter ? `No orders on ${dateFilter.split('-').reverse().join('-')}.` : "No orders match your filter."}
         />
+        </div>
       </Card>
     </>
   );
@@ -2558,6 +2567,7 @@ function StatementReconcile() {
 function PaymentsScreen({ lang, money, role }) {
   const D = useStore();
   const isManagement = role === 'owner';
+  const [paySel, setPaySel] = useStateFD(new Set());
   const [tab, setTab] = useStateFD('all');
   const [diffF, setDiffF] = useStateFD(null); // 'short' | 'over' | 'exact' from the Statement differences cards
   const [form, setForm] = useStateFD({ order: '', method: 'mpesa', amount: '', txn: '', date: SAFI_TIME.day() });
@@ -2739,8 +2749,17 @@ function PaymentsScreen({ lang, money, role }) {
         </div>
         </div>
       }>
+        {isManagement && (
+          <div className="safi-paysel">
+            <label className="safi-cell-sub" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={ledgerRows(rows).length > 0 && ledgerRows(rows).every(r => paySel.has(r.id))} onChange={e => setPaySel(e.target.checked ? new Set(ledgerRows(rows).map(r => r.id)) : new Set())}/> Select all shown ({ledgerRows(rows).length})</label>
+            {paySel.size > 0 && <span className="safi-cell-sub">{paySel.size} selected · KES {D.payments.filter(x => paySel.has(x.id)).reduce((a, x) => a + (Number(x.amount) || 0), 0).toLocaleString()}</span>}
+            {paySel.size > 0 && <Button kind="ghost" size="sm" onClick={() => setPaySel(new Set())}>Clear</Button>}
+            {paySel.size > 0 && <Button kind="ghost" size="sm" icon="alert" onClick={() => window.safiPinConfirm({ title: `Delete ${paySel.size} payment${paySel.size === 1 ? '' : 's'}?`, body: 'Use this for test data. Each order goes back to owing the deleted amount. Removed on every laptop at the next sync. This cannot be undone.', confirmLabel: 'Delete payments', onConfirm: () => { const n = window.SAFI_STORE.removePayments([...paySel]); setPaySel(new Set()); toast(`${n} payment${n === 1 ? '' : 's'} deleted`, 'success'); } })}><span style={{ color: 'var(--red)' }}>Delete selected</span></Button>}
+          </div>
+        )}
         <Table
           cols={[
+            ...(isManagement ? [{ label: '', render: r => <input type="checkbox" checked={paySel.has(r.id)} onClick={e => e.stopPropagation()} onChange={e => { const n = new Set(paySel); e.target.checked ? n.add(r.id) : n.delete(r.id); setPaySel(n); }}/> }] : []),
             { label: 'Date', render: r => <span className="safi-cell-sub">{dm(r.date)}</span> },
             { label: 'Order #', render: r => <span className="safi-mono safi-cell-strong">{orderNo(r.order)}</span> },
             { label: 'Customer', render: r => r.customer || '—' },

@@ -170,6 +170,66 @@ function ApprovalChime({ role }) {
   return null;
 }
 
+// Closing check: from 30 min before closing (default 20:00), any order still in Washing or
+// Drying makes a reminder pop up (with chime) until each is moved to Holding / Final Hold /
+// Ready. Snooze hides it for 10 minutes. Times are set in Management → Settings → Operations.
+function ClosingCheck() {
+  const D = useStore();
+  const st = D.settings || {};
+  const [now, setNow] = useAppState(Date.now());
+  const [snooze, setSnooze] = useAppState(0);
+  useAppEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
+  const enabled = st.closingCheck !== false;
+  // Sundays close earlier (default 17:00), every other day 20:00.
+  const isSun = new Date(now).getDay() === 0;
+  const close = isSun ? String(st.closingTimeSun || '17:00') : String(st.closingTime || '20:00');
+  const lead = Number(st.closingLeadMin == null ? 25 : st.closingLeadMin);
+  const d = new Date(now);
+  const [ch, cm] = close.split(':').map(Number);
+  const closeAt = new Date(d.getFullYear(), d.getMonth(), d.getDate(), ch || 20, cm || 0).getTime();
+  const late = now >= closeAt - lead * 60e3 || d.getHours() < 6;
+  const stuck = (D.orders || []).filter(o => o.status === 'washing' || o.status === 'drying');
+  const key = stuck.map(o => o.id).join(',');
+  useAppEffect(() => { if (enabled && late && stuck.length && now > snooze && window.safiSound) window.safiSound('request'); }, [enabled, late, key, snooze > now]);
+  // While the window is open: chime every 5 minutes, but stay quiet after 22:00.
+  const showing = enabled && late && stuck.length > 0 && now >= snooze;
+  useAppEffect(() => {
+    if (!showing) return;
+    const every = Math.max(1, Number(st.closingChimeMin) || 5) * 60e3;
+    const quiet = String(st.closingQuietAt || '22:00');
+    const t = setInterval(() => { const d = new Date(); const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); if ((hm < quiet || d.getHours() < 6) && window.safiSound) window.safiSound('request'); }, every);
+    return () => clearInterval(t);
+  }, [showing, st.closingChimeMin, st.closingQuietAt]);
+
+  if (!enabled || !late || !stuck.length || now < snooze) return null;
+  const cname = (o) => ((D.customers || []).find(c => c.id === o.customer) || {}).name || orderNo(o.id);
+  const S = window.SAFI_STORE;
+  return (
+    <div className="safi-modal">
+      <div className="safi-modal__sheet safi-closewin" style={{ width: 560 }}>
+        <header className="safi-modal__hd"><h3>Before closing: {stuck.length} order{stuck.length === 1 ? '' : 's'} still in the machines</h3></header>
+        <div className="safi-modal__body">
+          <p className="safi-cell-sub" style={{ marginTop: 0 }}>We close at {close}. Orders must not stay in Washing or Drying overnight. Move each one to where it really is. Final Hold stage is allowed overnight.</p>
+          <div className="safi-closecheck">
+            {stuck.map(o => (
+              <div key={o.id} className="safi-closecheck__row">
+                <div><b>{cname(o)}</b><span className="safi-cell-sub"> · {orderNo(o.id)}</span><div><StatusBadge status={o.status}/></div></div>
+                <div className="safi-closecheck__acts">
+                  {o.status === 'washing' && <button className="safi-btn safi-btn--sm safi-cc safi-cc--h" onClick={() => { S.holdOrder ? S.holdOrder(o.id) : S.setStatus(o.id, 'holding'); toast(`${orderNo(o.id)} → Holding`, 'success'); }}>Holding</button>}
+                  {o.status === 'washing' && <button className="safi-btn safi-btn--sm safi-cc safi-cc--d" onClick={() => { S.setStatus(o.id, 'drying'); }}>Drying</button>}
+                  {o.status === 'drying' && <button className="safi-btn safi-btn--sm safi-cc safi-cc--fh" onClick={() => { S.finalHoldOrder ? S.finalHoldOrder(o.id) : S.setStatus(o.id, 'finalhold'); toast(`${orderNo(o.id)} → Final Hold`, 'success'); }}>Final Hold</button>}
+                  {o.status === 'drying' && <button className="safi-btn safi-btn--sm safi-cc safi-cc--r" onClick={() => { S.setStatus(o.id, 'ready'); toast(`${orderNo(o.id)} → Ready`, 'success'); }}>Ready</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <footer className="safi-modal__ft" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}><span className="safi-cell-sub">Remind me in</span><div className="safi-seg">{[Number(st.closingSnoozeA) || 10, Number(st.closingSnoozeB) || 15].map(m => <button key={m} className="safi-seg__btn" onClick={() => setSnooze(Date.now() + m * 60e3)}>{m} min</button>)}</div></footer>
+      </div>
+    </div>
+  );
+}
+
 // Front Desk: shows Management's decisions on requests this laptop hasn't seen yet.
 function DecisionNotice() {
   const D = useStore();
@@ -361,6 +421,7 @@ function App() {
       <PinConfirmHost/>
       {role === 'frontdesk' && <DecisionNotice/>}
       <ApprovalChime role={role}/>
+      {role === 'frontdesk' && <ClosingCheck/>}
 
       <Modal open={pinPrompt} onClose={() => setPinPrompt(false)} title="Enter Owner PIN" width={360}
         footer={<>

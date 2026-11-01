@@ -266,6 +266,31 @@ function SettingsScreen({ lang, shop, setShop }) {
 
       <SoundsCard/>
 
+      <Card title="Closing check" action={<span className="safi-cell-sub">Stops orders being left in Washing / Drying overnight</span>}>
+        <div className="safi-form" style={{ maxWidth: 560 }}>
+          <label className="safi-toggle safi-toggle--lg">
+            <input type="checkbox" checked={(D.settings || {}).closingCheck !== false} onChange={e => window.SAFI_STORE.setSetting('closingCheck', e.target.checked)}/><span/>
+            <div><b>Remind Front Desk before closing</b><p className="safi-cell-sub" style={{ margin: '2px 0 0' }}>A window with a chime lists every order still in Washing or Drying until each is moved to Holding, Final Hold or Ready.</p></div>
+          </label>
+          <div className="safi-form__row">
+            <label>Closing time (Mon–Sat)<input type="time" className="safi-input safi-mono" value={(D.settings || {}).closingTime || '20:00'} onChange={e => window.SAFI_STORE.setSetting('closingTime', e.target.value)}/></label>
+            <label>Closing time (Sunday)<input type="time" className="safi-input safi-mono" value={(D.settings || {}).closingTimeSun || '17:00'} onChange={e => window.SAFI_STORE.setSetting('closingTimeSun', e.target.value)}/></label>
+            
+            <label>Chime every
+              <div className="safi-seg">{[2, 3, 5, 10, 15].map(m => <button key={m} className={`safi-seg__btn ${(Number((D.settings || {}).closingChimeMin) || 5) === m ? 'is-active' : ''}`} onClick={() => window.SAFI_STORE.setSetting('closingChimeMin', m)}>{m} min</button>)}</div>
+            </label>
+            <label>Quiet after<input type="time" className="safi-input safi-mono" value={(D.settings || {}).closingQuietAt || '22:00'} onChange={e => window.SAFI_STORE.setSetting('closingQuietAt', e.target.value)}/></label>
+            <label>"Remind me" buttons (minutes)
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select className="safi-input" style={{ width: 'auto' }} value={Number((D.settings || {}).closingSnoozeA) || 10} onChange={e => window.SAFI_STORE.setSetting('closingSnoozeA', Number(e.target.value))}>{[5, 10, 15, 20, 25, 30].map(m => <option key={m} value={m}>{m} min</option>)}</select>
+                <select className="safi-input" style={{ width: 'auto' }} value={Number((D.settings || {}).closingSnoozeB) || 15} onChange={e => window.SAFI_STORE.setSetting('closingSnoozeB', Number(e.target.value))}>{[5, 10, 15, 20, 25, 30].map(m => <option key={m} value={m}>{m} min</option>)}</select>
+              </div>
+            </label>
+            <label>Start reminding (minutes before)<input type="number" min="0" max="180" className="safi-input safi-mono" value={(D.settings || {}).closingLeadMin == null ? 25 : (D.settings || {}).closingLeadMin} onChange={e => window.SAFI_STORE.setSetting('closingLeadMin', Number(e.target.value) || 0)}/></label>
+          </div>
+        </div>
+      </Card>
+
       <Card title="Operations">
         <ul className="safi-form" style={{ gap: 14 }}>
           <li>

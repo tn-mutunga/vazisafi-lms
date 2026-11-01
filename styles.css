@@ -3436,7 +3436,7 @@ button { font-family: inherit; }
 .safi-stepper.front-h .safi-stepper__node:has(.safi-stepper__hold:not(.safi-stepper__hold--fh)){z-index:6}
 /* Final hold badge: pale, see-through orange with the light sweeping across (like Holding) */
 .safi-pill.safi-pill--fh{background:rgba(255,122,0,.14)!important;color:#9A3412!important;box-shadow:inset 0 0 0 1px rgba(255,122,0,.25)}
-.safi-pill.safi-pill--fh::before{background:linear-gradient(90deg,transparent 0%,rgba(253,186,116,.85) 40%,rgba(255,122,0,.75) 60%,transparent 100%)!important}
+.safi-pill.safi-pill--fh::before{background-image:linear-gradient(90deg,transparent 0%,rgba(253,186,116,.85) 40%,rgba(255,122,0,.75) 60%,transparent 100%)!important}
 /* Narrow windows: title block can't be squeezed into a thin column; buttons wrap below instead */
 .safi-top{flex-wrap:wrap}
 .safi-top>div:first-child{flex:1 1 auto;min-width:min(100%,360px)}
@@ -3534,3 +3534,23 @@ button { font-family: inherit; }
 .safi-py__namecell{display:flex;flex-direction:column;align-items:flex-start;gap:4px}.safi-py__freeze{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600;color:var(--ink-3);cursor:pointer}.safi-py__freeze:hover{border-color:#7dd3fc;color:#0369a1}.safi-py__freeze.is-on{background:#e0f2fe;border-color:#7dd3fc;color:#0369a1}tr.is-frozen td{background:#f4f9fc}tr.is-frozen td:not(:nth-child(2)) > *{opacity:.45}
 /* Final Hold sweep: stronger so the moving light is as visible as Holding's */
 .safi-pill.safi-pill--fh::before{background-image:linear-gradient(90deg,transparent 0%,rgba(255,170,90,.95) 35%,#ff7a00 55%,rgba(255,170,90,.95) 70%,transparent 100%)!important}
+.safi-closecheck{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto}.safi-closecheck__row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}.safi-closecheck__acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.safi-tri{font-size:1.25em;line-height:1;vertical-align:-1px}
+.safi-tri{font-size:1.5em}
+.safi-cc{border:1px solid transparent;font-weight:600;cursor:pointer}.safi-cc--h{background:#FDE2E4;color:#9F1239;border-color:#fda4af}.safi-cc--h:hover{background:#e11d48;color:#fff}.safi-cc--d{background:#f3e5d8;color:#7a4a22;border-color:#d9b28c}.safi-cc--d:hover{background:#b07a4a;color:#fff}.safi-cc--fh{background:#FFEDD5;color:#9A3412;border-color:#fdba74}.safi-cc--fh:hover{background:#ff7a00;color:#fff}.safi-cc--r{background:#dcfce7;color:#0a8f4e;border-color:#86efac}.safi-cc--r:hover{background:#0a8f4e;color:#fff}
+.safi-closewin{border:2px solid #7c3aed;box-shadow:0 0 0 4px rgba(124,58,237,.15),0 20px 50px rgba(30,10,60,.25)}
+/* Closing window: steady purple ring that throbs (gentle pulse) */
+.safi-closewin{position:relative;border:2px solid #7c3aed!important;animation:safiRingThrob 2.4s ease-in-out infinite}
+@keyframes safiRingThrob{0%,100%{box-shadow:0 0 0 3px rgba(124,58,237,.12),0 20px 50px rgba(30,10,60,.25);border-color:#7c3aed}50%{box-shadow:0 0 0 9px rgba(124,58,237,.28),0 0 26px 4px rgba(167,139,250,.45),0 20px 50px rgba(30,10,60,.25);border-color:#a78bfa}}
+@media (prefers-reduced-motion:reduce){.safi-closewin{animation:none}}
+.safi-closewin{border-width:1.5px!important;animation-name:safiRingThrobThin!important}
+@keyframes safiRingThrobThin{0%,100%{box-shadow:0 0 0 2px rgba(124,58,237,.10),0 20px 50px rgba(30,10,60,.25);border-color:#7c3aed}50%{box-shadow:0 0 0 5px rgba(124,58,237,.22),0 0 16px 2px rgba(167,139,250,.35),0 20px 50px rgba(30,10,60,.25);border-color:#a78bfa}}
+/* Closing check: long lists scroll, with the scroll bar on the LEFT */
+.safi-closecheck{max-height:48vh;overflow-y:auto;direction:rtl;padding-left:8px}
+.safi-closecheck>*{direction:ltr}
+.safi-closecheck::-webkit-scrollbar{width:8px}
+.safi-closecheck::-webkit-scrollbar-track{background:#f1ecfb;border-radius:8px}
+.safi-closecheck::-webkit-scrollbar-thumb{background:#a78bfa;border-radius:8px}
+.safi-closecheck::-webkit-scrollbar-thumb:hover{background:#7c3aed}
+.safi-ordscroll{max-height:62vh;overflow-y:auto}.safi-ordscroll::-webkit-scrollbar{width:9px}.safi-ordscroll::-webkit-scrollbar-track{background:#f1ecfb}.safi-ordscroll::-webkit-scrollbar-thumb{background:#a78bfa;border-radius:8px}.safi-ordscroll thead th{position:sticky;top:0;z-index:2}
+.safi-paysel{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 20px;border-bottom:1px solid var(--line);background:var(--paper)}
