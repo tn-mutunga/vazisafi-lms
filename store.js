@@ -24,6 +24,13 @@ window.dmy = (v, o = {}) => {
   return o.time === false || x.length < 16 ? d : d + ' ' + x.slice(11, 16);
 };
 window.dmyT = (d) => window.dmy(SAFI_TIME.stamp(new Date(d)), { year: true });
+// Management can exclude test periods (e.g. October practice) from the running totals.
+window.safiTrim = (D) => {
+  const ex = ((D && D.settings) || {}).excludedPeriods || [];
+  if (!ex.length) return D;
+  const out = (d) => { const v = String(d || '').slice(0, 10); return ex.some(p => v >= p.from && v <= p.to); };
+  return { ...D, orders: (D.orders || []).filter(o => !out(o.in)), expenses: (D.expenses || []).filter(e => !out(e.date)), payments: (D.payments || []).filter(p => !out(p.date)) };
+};
 window.SAFI_TIME = (() => {
   const p = n => String(n).padStart(2, '0');
   const day = (d = new Date()) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -293,6 +300,8 @@ window.SAFI_STORE = (() => {
   }
   // v2.5.2: Ready SMS mentions delivery too (only if the shop never edited the text).
   if (state.smsTemplates && state.smsTemplates.ready === "Hi {name}, your order {id} is READY for collection at Vazi Safi. Balance: {balance}. Asante!") { state.smsTemplates.ready = "Hi {name}, your order {id} is READY for collection/delivery at Vazi Safi. Balance: {balance}. Asante!"; migrated = true; }
+  // v2.5.4: remove the sample issues that shipped with the demo data.
+  { const SAMPLE_ISSUES = new Set(['is1', 'is2', 'is3', 'is4', 'is5']); const before = (state.issues || []).length; state.issues = (state.issues || []).filter(i => !SAMPLE_ISSUES.has(i.id)); if (state.issues.length !== before) migrated = true; }
   // Persist any migration changes immediately
   if (migrated) {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
@@ -1071,7 +1080,7 @@ window.SAFI_STORE = (() => {
       const i = {
         id: nextId('is'), date: fmt, subject,
         priority: priority || 'medium', status: status || 'open',
-        order: order || '', raisedBy: raisedBy || 'Grace Wairimu',
+        order: order || '', raisedBy: raisedBy || ((window.SAFI_STORE && window.SAFI_STORE.getCurrentStaff && window.SAFI_STORE.getCurrentStaff().name) || 'Attendant'),
         details: details || '',
       };
       state.issues = [i, ...state.issues];

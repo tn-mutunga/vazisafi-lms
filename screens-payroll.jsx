@@ -24,6 +24,39 @@ function pyCompile(src) {
   catch (e) { return { err: 'Formula has a mistake (check brackets and signs)' }; }
 }
 
+// Month calendar: arrows step a month; the button opens a year grid to pick any past month.
+function PayMonthPicker({ ym, setYm }) {
+  const [open, setOpen] = React.useState(false);
+  const [y, m] = ym.split('-').map(Number);
+  const [yr, setYr] = React.useState(y);
+  const now = new Date();
+  const cy = now.getFullYear(), cm = now.getMonth() + 1;
+  const M = ['Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'];
+  const go = (yy, mm) => { setYm(`${yy}-${String(mm).padStart(2, '0')}`); };
+  const step = (d) => { const t = new Date(y, m - 1 + d, 1); if (t.getFullYear() > cy || (t.getFullYear() === cy && t.getMonth() + 1 > cm)) return; go(t.getFullYear(), t.getMonth() + 1); };
+  const atNow = y === cy && m === cm;
+  return (
+    <div className="safi-pmp">
+      <button className="safi-pmp__arr" onClick={() => step(-1)} title="Previous month">‹</button>
+      <button className="safi-pmp__btn" onClick={() => { setYr(y); setOpen(!open); }}><Icon name="calendar" size={14}/> {M[m - 1]} {y}</button>
+      <button className="safi-pmp__arr" onClick={() => step(1)} disabled={atNow} title="Next month">›</button>
+      {open && (
+        <div className="safi-pmp__pop" onMouseLeave={() => setOpen(false)}>
+          <div className="safi-pmp__yr">
+            <button onClick={() => setYr(yr - 1)}>‹</button><b>{yr}</b><button onClick={() => setYr(yr + 1)} disabled={yr >= cy}>›</button>
+          </div>
+          <div className="safi-pmp__grid">
+            {M.map((nm, i) => {
+              const future = yr > cy || (yr === cy && i + 1 > cm);
+              return <button key={nm} disabled={future} className={yr === y && i + 1 === m ? 'is-on' : ''} onClick={() => { go(yr, i + 1); setOpen(false); }}>{nm}</button>;
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PayrollScreen({ money }) {
   const D = useStore();
   const P = (D.settings || {}).payroll || { meta: {}, months: {} };
@@ -96,7 +129,8 @@ function PayrollScreen({ money }) {
     window.SAFI_STORE.setSetting('payroll', { ...cur, meta: merged, seededDirectors: true, seededDirectors2: true, seededDirectors3: true, seededDirectors4: true });
   }, []);
   const rows = staff.map(s => ({ s, ...calc(s) }));
-  const tot = (k) => rows.reduce((a, r) => a + (r[k] || 0), 0);
+  const live = rows.filter(r => !r.r.frozen);
+  const tot = (k) => live.reduce((a, r) => a + (r[k] || 0), 0);
   const label = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' });
   const num = (v) => Math.round(v).toLocaleString('en-KE');
 
@@ -109,11 +143,11 @@ function PayrollScreen({ money }) {
     setPayFor(null); setPayTxn('');
   }
 
-  const exportRows = () => rows.map(r => [r.m.empNo, r.s.name, r.s.role || '', r.m.off.map(d => PY_DAYS[d]).join(' & '), r.wd.working, r.absent, r.worked, num(r.m.pay), num(r.rate), num(r.absDed), num(r.bonus + r.ot), num(r.advance), num(r.deduct), num(r.net), r.r.paidAt ? `Paid ${r.r.paidAt}` : 'Not paid', r.r.note || '']);
+  const exportRows = () => rows.map(r => [r.m.empNo, r.s.name, r.s.role || '', r.m.off.map(d => PY_DAYS[d]).join(' & '), r.wd.working, r.absent, r.worked, num(r.m.pay), num(r.rate), num(r.absDed), num(r.bonus + r.ot), num(r.advance), num(r.deduct), num(r.net), r.r.frozen ? 'Frozen (not in totals)' : r.r.paidAt ? `Paid ${r.r.paidAt}` : 'Not paid', r.r.note || '']);
   const head = ['Emp no.', 'Name', 'Role', 'Off days', 'Days', 'Absent', 'Worked', 'Monthly pay', 'Daily rate', 'Absence deduction', 'Bonus / overtime', 'Advance', 'Other deductions', 'Net pay', 'Status', 'Notes'];
   const fname = `Vazi Safi - Payroll - ${ym}`;
   const csv = () => { const cell = (v) => { const s = String(v ?? '').replace(/,/g, ''); return s; }; const text = [head.join(','), ...exportRows().map(r => r.map((c, i) => i === 15 || i === 1 || i === 2 ? `"${String(c).replace(/"/g, '""')}"` : cell(c)).join(','))].join('\n'); const b = new Blob(['\ufeff' + text], { type: 'text/csv' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = fname + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(u), 1000); };
-  const pdf = () => window.expPDF && window.expPDF({ head, rows: exportRows(), money: [7, 8, 9, 10, 11, 12, 13], summary: [['Staff', rows.length], ['Gross', `KES ${num(tot('m') ? rows.reduce((a, r) => a + r.m.pay, 0) : 0)}`], ['Net to pay', `KES ${num(tot('net'))}`]] }, fname, `Payroll · ${label}`, (D.settings || {}).shopName);
+  const pdf = () => window.expPDF && window.expPDF({ head, rows: exportRows(), money: [7, 8, 9, 10, 11, 12, 13], summary: [['Staff', `${live.length}${rows.length > live.length ? ` (+${rows.length - live.length} frozen)` : ''}`], ['Gross', `KES ${num(tot('m') ? live.reduce((a, r) => a + r.m.pay, 0) : 0)}`], ['Net to pay', `KES ${num(tot('net'))}`]] }, fname, `Payroll · ${label}`, (D.settings || {}).shopName);
 
   const NumIn = ({ v, on, w = 70 }) => <input type="number" min="0" className="safi-input safi-mono safi-py__in" style={{ width: w }} key={String(v)} defaultValue={v || ''} placeholder="0" onBlur={e => { const n = Number(e.target.value) || 0; if (n !== (Number(v) || 0)) on(n); }}/>;
 
@@ -121,16 +155,15 @@ function PayrollScreen({ money }) {
     <>
       <Topbar title="Payroll" subtitle={`${label} · net pay = monthly pay − daily rate × absent days + bonus − advance − other deductions`}
         right={<>
-          <input type="month" className="safi-input" style={{ width: 'auto' }} value={ym} onChange={e => setYm(e.target.value || ym)}/>
           <Button kind="ghost" icon="box" onClick={csv}>CSV</Button>
           <Button kind="ghost" icon="print" onClick={pdf}>PDF</Button>
         </>}/>
 
       <div className="safi-grid safi-grid--4">
-        <StatCard label="Staff on payroll" value={rows.length} icon="staff"/>
-        <StatCard label="Gross monthly pay" value={money(rows.reduce((a, r) => a + r.m.pay, 0))} icon="wallet"/>
+        <StatCard label="Staff on payroll" value={live.length} icon="staff" delta={rows.length > live.length ? `${rows.length - live.length} frozen` : undefined}/>
+        <StatCard label="Gross monthly pay" value={money(live.reduce((a, r) => a + r.m.pay, 0))} icon="wallet"/>
         <StatCard label="Absence deductions" value={money(tot('absDed'))} icon="alert" deltaKind="down" delta={`${tot('absent')} absent days`}/>
-        <StatCard label="Net to pay" value={money(tot('net'))} icon="check" delta={`${rows.filter(r => r.r.paidAt).length} of ${rows.length} paid`}/>
+        <StatCard label="Net to pay" value={money(tot('net'))} icon="check" delta={`${live.filter(r => r.r.paidAt).length} of ${live.length} paid`}/>
       </div>
 
       <Card title="Net pay formula" action={<span className="safi-cell-sub">Applies to every row</span>}>
@@ -144,7 +177,7 @@ function PayrollScreen({ money }) {
         <p className="safi-hint" style={{ margin: '6px 0 0' }}>Names you can use: <b className="safi-mono">pay</b> monthly pay · <b className="safi-mono">rate</b> daily rate · <b className="safi-mono">days</b> = 30 · <b className="safi-mono">absent</b> · <b className="safi-mono">worked</b> · <b className="safi-mono">bonus</b> · <b className="safi-mono">ot</b> overtime · <b className="safi-mono">advance</b> · <b className="safi-mono">deduct</b>. Also min( ), max( ), round( ). Example: <span className="safi-mono">rate * worked + ot</span></p>
       </Card>
 
-      <Card pad={false} title={`Payroll · ${label}`} action={<div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><label className="safi-cell-sub" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)}/> show inactive staff</label><Button kind="primary" size="sm" icon="plus" onClick={() => { setNewS({ name: '', role: 'Front Desk' }); setAddOpen(true); }}>Add staff</Button></div>}>
+      <Card pad={false} title={`Payroll · ${label}`} action={<div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><PayMonthPicker ym={ym} setYm={setYm}/><label className="safi-cell-sub" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)}/> show inactive staff</label><Button kind="primary" size="sm" icon="plus" onClick={() => { setNewS({ name: '', role: 'Front Desk' }); setAddOpen(true); }}>Add staff</Button></div>}>
         <div className="safi-py-wrap">
           <table className="safi-table safi-py">
             <thead><tr>
@@ -152,9 +185,9 @@ function PayrollScreen({ money }) {
             </tr></thead>
             <tbody>
               {rows.map(r => (
-                <tr key={r.s.id} className={r.r.paidAt ? 'is-paid' : ''}>
+                <tr key={r.s.id} className={`${r.r.paidAt ? 'is-paid' : ''}${r.r.frozen ? ' is-frozen' : ''}`}>
                   <td><input className="safi-input safi-mono safi-py__in" style={{ width: 78 }} key={'e' + r.s.id + r.m.empNo} defaultValue={r.m.empNo} onBlur={e => { const v = e.target.value.trim().toUpperCase(); if (!v || v === r.m.empNo) { e.target.value = r.m.empNo; return; } if (setMeta(r.s, { empNo: v }) === false) e.target.value = r.m.empNo; }}/></td>
-                  <td><b>{r.s.name}</b></td>
+                  <td><div className="safi-py__namecell"><b>{r.s.name}</b><button className={`safi-py__freeze${r.r.frozen ? ' is-on' : ''}`} title={r.r.frozen ? 'Frozen: not counted in this month\'s totals. Click to include.' : 'Freeze: leave out of this month\'s totals'} onClick={() => { setRow(r.s, { frozen: !r.r.frozen }); toast(r.r.frozen ? `${r.s.name} counted again` : `${r.s.name} frozen for this month`, 'success'); }}>{r.r.frozen ? '❄ Frozen' : '❄ Freeze'}</button></div></td>
                   <td><input className="safi-input safi-py__in" style={{ width: 110 }} key={'r' + r.s.id + (r.s.role || '')} defaultValue={r.s.role || ''} placeholder="Role" onBlur={e => e.target.value.trim() !== (r.s.role || '') && window.SAFI_STORE.updateStaff(r.s.id, { role: e.target.value.trim() })}/></td>
                   <td><NumIn v={r.m.pay} w={90} on={(n) => setMeta(r.s, { pay: n })}/></td>
                   <td>
@@ -184,7 +217,7 @@ function PayrollScreen({ money }) {
               {!rows.length && <tr><td colSpan="14" className="safi-cell-sub" style={{ padding: 20 }}>No staff yet. Add staff in Management → Staff.</td></tr>}
             </tbody>
             {rows.length > 0 && <tfoot><tr>
-              <td colSpan="3"><b>Total</b></td><td className="safi-mono"><b>{num(rows.reduce((a, r) => a + r.m.pay, 0))}</b></td><td colSpan="2"/>
+              <td colSpan="3"><b>Total</b></td><td className="safi-mono"><b>{num(live.reduce((a, r) => a + r.m.pay, 0))}</b></td><td colSpan="2"/>
               <td className="safi-mono">{tot('absent')} d</td><td className="safi-mono">{num(tot('bonus') + tot('ot'))}</td><td className="safi-mono">{num(tot('advance'))}</td><td className="safi-mono">{num(tot('deduct'))}</td>
               <td className="safi-mono safi-py__net"><b>{num(tot('net'))}</b></td><td colSpan="2"/>
             </tr></tfoot>}

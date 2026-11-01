@@ -108,8 +108,52 @@ function StageAverages() {
   );
 }
 
+function ExcludedPeriods() {
+  const raw = useStore();
+  const ex = ((raw.settings || {}).excludedPeriods) || [];
+  const [open, setOpen] = useStateOw(false);
+  const [from, setFrom] = useStateOw('');
+  const [to, setTo] = useStateOw('');
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const monthRange = (y, m) => ({ from: `${y}-${pad(m + 1)}-01`, to: `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}` });
+  const shortM = ['Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'];
+  const fmt = (v) => v ? `${v.slice(8, 10)}-${v.slice(5, 7)}-${v.slice(2, 4)}` : '';
+  const save = (list) => window.SAFI_STORE.setSetting('excludedPeriods', list);
+  const add = (p) => { if (!p.from || !p.to || p.from > p.to) { toast('Pick a valid date range', 'error'); return; } if (ex.some(x => x.from === p.from && x.to === p.to)) return; save([...ex, p]); toast(`Excluded ${p.label}`, 'success'); };
+  const recent = [1, 2, 3].map(k => { const x = new Date(now.getFullYear(), now.getMonth() - k, 1); return { ...monthRange(x.getFullYear(), x.getMonth()), label: `${shortM[x.getMonth()]} ${x.getFullYear()}` }; });
+  return (
+    <div className="safi-exclude">
+      <button className="safi-exclude__hd" onClick={() => setOpen(!open)}>
+        <Icon name="lock" size={14}/>
+        <span><b>Excluded from totals</b> {ex.length ? ex.map(p => p.label || `${fmt(p.from)} → ${fmt(p.to)}`).join(', ') : 'none'}</span>
+        <span className="safi-exclude__go">{open ? 'Close' : 'Manage'}</span>
+      </button>
+      {open && (
+        <div className="safi-exclude__body">
+          <p className="safi-hint" style={{ margin: 0 }}>Excluded periods are left out of the dashboard, period summary, charts and reports (e.g. a practice month on a different price model). The orders themselves are not deleted.</p>
+          <div className="safi-exclude__row">
+            {recent.map(r => <Button key={r.from} kind="ghost" size="sm" onClick={() => add(r)}>Exclude {r.label}</Button>)}
+          </div>
+          <div className="safi-exclude__row">
+            <input type="date" className="safi-input" value={from} onChange={e => setFrom(e.target.value)}/>
+            <span className="safi-cell-sub">to</span>
+            <input type="date" className="safi-input" value={to} onChange={e => setTo(e.target.value)}/>
+            <Button kind="primary" size="sm" onClick={() => add({ from, to, label: `${fmt(from)} → ${fmt(to)}` })}>Exclude range</Button>
+          </div>
+          {ex.length > 0 && (
+            <div className="safi-exclude__list">
+              {ex.map((p, i) => <span key={i} className="safi-exclude__chip">{p.label || `${fmt(p.from)} → ${fmt(p.to)}`}<button onClick={() => save(ex.filter((_, j) => j !== i))} title="Include again">×</button></span>)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OwnerDashboard({ lang, money, setView }) {
-  const D = useStore();
+  const D = window.safiTrim(useStore());
   const todayStr = SAFI_TIME.day();
   // Revenue = value of orders taken (sales). Collected = money actually received.
   const today = D.orders.filter(o => o.in.startsWith(todayStr)).reduce((s, o) => s + (o.total || 0), 0);
@@ -177,6 +221,8 @@ function OwnerDashboard({ lang, money, setView }) {
           <Button kind="ghost" icon="box" onClick={() => window.SAFI_STORE.exportJSON()}>Backup data</Button>
         </>}
       />
+
+      <ExcludedPeriods/>
 
       <div className="safi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
         <StatCard label={t('revenue_today', lang)} value={money(today)} delta={`${todayOrders.length} orders · ${money(collectedToday)} collected`} icon="wallet"/>
@@ -293,7 +339,7 @@ function OwnerDashboard({ lang, money, setView }) {
 
 // ─── Reports ──────────────────────────────────────────────────────────────
 function ReportsScreen({ lang, money }) {
-  const D = useStore();
+  const D = window.safiTrim(useStore());
   const [tab, setTab] = useStateOw('daily');
   const todayStr = SAFI_TIME.day();
   const [from, setFrom] = useStateOw(SAFI_TIME.daysAgo(29));
@@ -785,11 +831,12 @@ function StaffScreen({ lang }) {
         <div className="safi-form">
           <label>Full name<input className="safi-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Grace Wairimu"/></label>
           <label>Role
-            <div className="safi-seg">
-              {['Front Desk', 'Washer', 'Ironing', 'Rider', 'Manager'].map(r => (
+            <div className="safi-seg" style={{ flexWrap: 'wrap' }}>
+              {['Front Desk', 'Washer', 'Ironing', 'Rider', 'Supervisor', 'Interim Manager', 'Manager'].map(r => (
                 <button key={r} className={`safi-seg__btn ${form.role === r ? 'is-active' : ''}`} onClick={() => setForm({ ...form, role: r })}>{r}</button>
               ))}
             </div>
+            <input className="safi-input" style={{ marginTop: 6 }} placeholder="Or type another role, e.g. Marketing, Cleaner" value={['Front Desk', 'Washer', 'Ironing', 'Rider', 'Supervisor', 'Interim Manager', 'Manager'].includes(form.role) ? '' : (form.role || '')} onChange={e => setForm({ ...form, role: e.target.value })}/>
           </label>
           <label>Shift
             <div className="safi-seg">

@@ -129,13 +129,7 @@ window.SAFI_DATA = (() => {
     { id: 'i6', item: 'Bleach',                 stock: 7,  reorder: 4,  unit: 'L' },
   ];
 
-  const issues = [
-    { id: 'is1', date: '2026-05-27 09:15', raisedBy: 'Grace Wairimu', subject: 'Customer says shirt color faded', priority: 'high',   status: 'open',       order: 'SF-2418' },
-    { id: 'is2', date: '2026-05-26 14:02', raisedBy: 'David Otieno',  subject: 'Washing machine 2 making noise',  priority: 'medium', status: 'in-review',  order: '' },
-    { id: 'is3', date: '2026-05-26 11:30', raisedBy: 'Lucy Nyambura', subject: 'Run out of fabric softener',      priority: 'medium', status: 'resolved',   order: '' },
-    { id: 'is4', date: '2026-05-25 16:45', raisedBy: 'Joseph Kimani', subject: 'Delivery bike puncture repair',   priority: 'low',    status: 'resolved',   order: '' },
-    { id: 'is5', date: '2026-05-25 09:20', raisedBy: 'Grace Wairimu', subject: 'M-Pesa code mismatch on SF-2410', priority: 'high',   status: 'open',       order: 'SF-2410' },
-  ];
+  const issues = [];
 
   return { services, customers, staff, orders, revenueTrend, revenueByService, revenueByMethod, payments, packages, discounts, inventory, issues, expenseCategories, expenses };
 })();

@@ -1,5 +1,5 @@
 // Vazi Safi — Expenses (front-desk add + management view)
-const { useState: useStateEx, useRef: useRefEx } = React;
+const { useState: useStateEx, useRef: useRefEx, useEffect: useEffectEx } = React;
 
 // ─── Expenses screen (works for both Front Desk + Management) ─────────────
 // Colour + icon per expense category, picked from the name so every laptop agrees.
@@ -109,7 +109,7 @@ function catLook(name) {
 
 // Two cost groups. Each category is Operational (default) or Special; drag chips
 // between the two boxes. Stored in synced settings.expenseGroups { catId: 'special' }.
-function CostGroups({ D, money, periodCutoff, period }) {
+function CostGroups({ D, money, periodCutoff, periodEnd, period }) {
   const [over, setOver] = useStateEx('');
   const groups = (D.settings && D.settings.expenseGroups) || {};
   const groupOf = (id) => groups[id] === 'special' ? 'special' : 'operational';
@@ -123,7 +123,7 @@ function CostGroups({ D, money, periodCutoff, period }) {
     window.SAFI_STORE.setSetting('expenseGroupOverrides', ov);
     toast(`${c ? c.name : 'Category'} → ${g === 'special' ? 'Special' : 'Operational'}`);
   };
-  const inP = (d) => !periodCutoff || String(d || '').slice(0, 10) >= periodCutoff;
+  const inP = (d) => { const v = String(d || '').slice(0, 10); return (!periodCutoff || v >= periodCutoff) && (!periodEnd || v <= periodEnd); };
   const revenue = D.orders.filter(o => inP(o.in)).reduce((s, o) => s + (o.total || 0), 0);
   const exp = D.expenses.filter(x => inP(x.date));
   const sumG = (g) => exp.filter(x => costGroupOf(D, x) === g).reduce((s, x) => s + (x.amount || 0), 0);
@@ -171,7 +171,9 @@ function ExpensesScreen({ lang, money, role }) {
   const [showAdd, setShowAdd]   = useStateEx(false);
   const [editId, setEditId]     = useStateEx(null);
   const [showCats, setShowCats] = useStateEx(false);
-  const [period, setPeriod]     = useStateEx('all');
+  const [period, setPeriod]     = useStateEx('today');
+  const [cFrom, setCFrom] = useStateEx(SAFI_TIME.day().slice(0, 8) + '01');
+  const [cTo, setCTo]     = useStateEx(SAFI_TIME.day());
   const [catFilter, setCatFilter] = useStateEx('all');
   const [form, setForm]         = useStateEx({ category: D.expenseCategories[0]?.id, label: '', amount: '', method: 'bank', txn: '', notes: '', linkedOrder: '', linkedCustomer: '' });
   const isManagement = role === 'owner';
@@ -180,15 +182,22 @@ function ExpensesScreen({ lang, money, role }) {
 
   // Filter
   const todayStr = SAFI_TIME.day();
-  const periodCutoff = period === 'today'
-    ? todayStr
-    : period === 'week'
-      ? SAFI_TIME.day(new Date(Date.now() - 7 * 86400e3))
-      : period === 'month'
-        ? SAFI_TIME.day(new Date(Date.now() - 30 * 86400e3))
-        : null;
+  useEffectEx(() => { if (!isManagement && !['today', 'week', 'month'].includes(period)) setPeriod('today'); }, [isManagement, period]);
+  // Today (default) · Week (last 7 days) · Month (this calendar month) · Quarter · Year · Custom · All
+  const nowD = new Date();
+  const pad2 = n => String(n).padStart(2, '0');
+  const ymd = (y, m, d) => `${y}-${pad2(m + 1)}-${pad2(d)}`;
+  const range = period === 'today' ? [todayStr, todayStr]
+    : period === 'week' ? [SAFI_TIME.daysAgo(6), todayStr]
+    : period === 'month' ? [ymd(nowD.getFullYear(), nowD.getMonth(), 1), todayStr]
+    : period === 'quarter' ? [ymd(nowD.getFullYear(), Math.floor(nowD.getMonth() / 3) * 3, 1), todayStr]
+    : period === 'year' ? [ymd(nowD.getFullYear(), 0, 1), todayStr]
+    : period === 'custom' ? [cFrom || '0000', cTo || '9999']
+    : null;
+  const periodCutoff = range ? range[0] : null;
   const filtered = D.expenses.filter(e => {
-    if (periodCutoff && e.date.slice(0, 10) < periodCutoff) return false;
+    const dd = String(e.date || '').slice(0, 10);
+    if (range && (dd < range[0] || dd > range[1])) return false;
     if (catFilter !== 'all' && e.category !== catFilter) return false;
     return true;
   }).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
@@ -263,15 +272,25 @@ function ExpensesScreen({ lang, money, role }) {
         <StatCard label="Total expenses" value={money(totalAll)} icon="wallet"/>
         <StatCard label="Transactions" value={filtered.length} icon="list"/>
         <StatCard label="Top category" value={byCat[0]?.name || '—'} icon="tag"/>
-        <StatCard label="This period" value={period === 'all' ? 'All time' : period[0].toUpperCase() + period.slice(1)} icon="clock"/>
+        <StatCard label="This period" value={({ today: 'Today', week: 'Last 7 days', month: ['Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'][new Date().getMonth()] + ' ' + new Date().getFullYear(), quarter: 'Q' + (Math.floor(new Date().getMonth() / 3) + 1) + ' ' + new Date().getFullYear(), year: String(new Date().getFullYear()), custom: `${(cFrom || '').slice(8, 10)}-${(cFrom || '').slice(5, 7)} → ${(cTo || '').slice(8, 10)}-${(cTo || '').slice(5, 7)}`, all: 'All time' })[period]} icon="clock"/>
       </div>
 
       <div className="safi-toolbar" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)' }}>
         <div className="safi-seg">
-          {[['today', 'Today'], ['week', '7 days'], ['month', '30 days'], ['all', 'All']].map(([k, lbl]) => (
+          {(isManagement
+            ? [['today', 'Today'], ['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year'], ['custom', 'Custom'], ['all', 'All-time']]
+            : [['today', 'Today'], ['week', 'Week'], ['month', ['Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'][new Date().getMonth()]]]
+          ).map(([k, lbl]) => (
             <button key={k} className={`safi-seg__btn ${period === k ? 'is-active' : ''}`} onClick={() => setPeriod(k)}>{lbl}</button>
           ))}
         </div>
+        {period === 'custom' && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="date" className="safi-input" style={{ width: 'auto' }} value={cFrom} max={cTo || undefined} onChange={e => setCFrom(e.target.value)}/>
+            <span className="safi-cell-sub">to</span>
+            <input type="date" className="safi-input" style={{ width: 'auto' }} value={cTo} min={cFrom || undefined} onChange={e => setCTo(e.target.value)}/>
+          </div>
+        )}
       </div>
       <div className="safi-catchips">
         <button className={`safi-catchip ${catFilter === 'all' ? 'is-active' : ''}`} style={{ '--c': 'var(--brand)' }} onClick={() => setCatFilter('all')}><Icon name="list" size={14}/>All categories</button>
@@ -283,7 +302,7 @@ function ExpensesScreen({ lang, money, role }) {
         ); })}
       </div>
 
-      {isManagement && <CostGroups D={D} money={money} periodCutoff={periodCutoff} period={period}/>}
+      {isManagement && <CostGroups D={D} money={money} periodCutoff={periodCutoff} periodEnd={range ? range[1] : null} period={period}/>}
 
       {isManagement && byCat.length > 0 && (
         <Card title="Spend by category">

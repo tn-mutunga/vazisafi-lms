@@ -69,7 +69,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
         <StatCard label={t('revenue_today', lang)} value={money(revenueToday)} icon="wallet" deltaKind="none" delta={<><span className={ordDiff < 0 ? 'safi-delta-dn' : 'safi-delta-up'}>{ordDiff < 0 ? '↓' : '↑'} {ordDiff > 0 ? '+' : ordDiff < 0 ? '−' : '±'}{Math.abs(ordDiff)} orders</span>{' · '}<span className={revDiff < 0 ? 'safi-delta-dn' : 'safi-delta-up'}>{revDiff < 0 ? '↓' : '↑'} {revDiff > 0 ? '+' : revDiff < 0 ? '−' : '±'}{money(Math.abs(revDiff))}</span><span className="safi-cell-sub"> vs yesterday</span></>}
           sparkline={<div className="safi-streams">{streams.map(x => <span key={x.k} className={`safi-streams__i safi-streams__i--${x.k}`}><i/><span className="safi-streams__l" title={x.l}>{x.l}</span> <b className="safi-mono">{money(x.v)}</b></span>)}</div>}/>
         <StatCard label={t('pending_collection', lang)} value={pending} icon="package" delta={`${money(pendingBalance)} to collect · ${D.orders.filter(o => o.status === 'ready').length} orders ready now`}/>
-        <StatCard label="Washing → Drying → Ready → Collected" value={<span className="safi-stagecount"><span className="is-w">W-{washing}</span> → {D.orders.some(o => o.status === 'holding') && <><span className="is-h">H-{D.orders.filter(o => o.status === 'holding').length}</span> → </>}<span className="is-d">D-{D.orders.filter(o => o.status === 'drying').length}</span> → {D.orders.some(o => o.status === 'finalhold') && <><span className="is-fh">FH-{D.orders.filter(o => o.status === 'finalhold').length}</span> → </>}<span className="is-r">R-{D.orders.filter(o => o.status === 'ready').length}</span> → <span className="is-c">C-{collectedOrdersToday.length}</span></span>} icon="wash" delta="Today's Orders Stats"/>
+        <StatCard label="Washing → Drying → Ready → Collected" value={<span className="safi-stagecount"><span className="is-w">W-{todayOrders.filter(o => o.status === 'washing').length}</span> → {todayOrders.some(o => o.status === 'holding') && <><span className="is-h">H-{todayOrders.filter(o => o.status === 'holding').length}</span> → </>}<span className="is-d">D-{todayOrders.filter(o => o.status === 'drying').length}</span> → {todayOrders.some(o => o.status === 'finalhold') && <><span className="is-fh">FH-{todayOrders.filter(o => o.status === 'finalhold').length}</span> → </>}<span className="is-r">R-{todayOrders.filter(o => o.status === 'ready').length}</span> → <span className="is-c">C-{todayOrders.filter(o => o.status === 'collected').length}</span></span>} icon="wash" delta="Today's Orders Stats"/>
       </div>
 
 
@@ -181,9 +181,9 @@ function CollectionReminders({ D, money, setView, collectedOrdersToday, collecte
   const sum = (arr) => arr.reduce((s, o) => s + bal(o), 0);
   const tiles = [
     { k: 'done', ico: 'income', label: 'Delivered / Collected today', n: collectedOrdersToday.length, sub: money(collectedToday), go: 'payments', preset: { kind: 'collectedToday', ids: collectedOrdersToday.map(o => o.id), label: 'Payments for orders delivered / collected today' }, good: true },
-    { k: 'paid', ico: 'package', label: 'Ready & paid · hand over', n: readyPaid.length, sub: 'Mark Collected when it leaves', go: 'orders', preset: { kind: 'readyPaid', label: 'Ready & paid · hand over' } },
-    { k: 'old', ico: 'clock', label: '24 hrs+ old orders · not delivered/collected', n: old24.length, sub: `${money(sum(old24))} unpaid`, go: 'orders', preset: { kind: 'old24', label: '24 hrs+ old · not delivered/collected' } },
-    { k: 'unpaid', ico: 'wallet', label: 'Ready · balance due', n: readyUnpaid.length, sub: `${money(sum(readyUnpaid))} to collect`, go: 'orders', preset: { kind: 'readyDue', label: 'Ready · balance due' } },
+    { k: 'paid', ico: 'package', label: 'Ready ▸ Paid → Hand over', n: readyPaid.length, sub: 'Mark Collected when it leaves', go: 'orders', preset: { kind: 'readyPaid', label: 'Ready ▸ Paid → Hand over' } },
+    { k: 'unpaid', ico: 'wallet', label: 'Ready ▸ Balance due', n: readyUnpaid.length, sub: `${money(sum(readyUnpaid))} to collect`, go: 'orders', preset: { kind: 'readyDue', label: 'Ready ▸ Balance due' } },
+    { k: 'old', ico: 'clock', label: '24 Hrs + Old orders ▸ Not delivered/Collected', n: old24.length, sub: `${money(sum(old24))} unpaid`, go: 'orders', preset: { kind: 'old24', label: '24 Hrs + Old orders ▸ Not delivered/Collected' } },
     { k: 'pick', ico: 'phone', label: 'Pick-ups due today', n: pickups.length, sub: pickups.length ? 'Not yet collected from client' : 'None scheduled', go: 'dispatch' },
     { k: 'drop', ico: 'truck', label: 'Deliveries due today', n: drops.length, sub: drops.length ? 'Not yet completed' : 'None scheduled', go: 'dispatch' },
   ];
@@ -2299,10 +2299,44 @@ async function loadPdfJs() {
   window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
   return window.pdfjsLib;
 }
+// In-app PIN box (the desktop app has no browser prompt()).
+function safiAskPin(message) {
+  return new Promise((resolve) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'safi-modal';
+    wrap.innerHTML = '<div class="safi-modal__sheet" style="width:420px"><header class="safi-modal__hd"><h3>Statement PIN</h3></header>'
+      + '<div class="safi-modal__body"><p class="safi-cell-sub" style="margin:0 0 10px"></p>'
+      + '<input class="safi-input safi-mono" type="password" autocomplete="off" placeholder="PIN / password"/></div>'
+      + '<footer class="safi-modal__ft"><button class="safi-btn safi-btn--ghost" data-x>Cancel</button><button class="safi-btn safi-btn--primary" data-ok>Open statement</button></footer></div>';
+    wrap.querySelector('p').textContent = message;
+    const inp = wrap.querySelector('input');
+    const done = (v) => { wrap.remove(); resolve(v); };
+    wrap.querySelector('[data-x]').onclick = () => done(null);
+    wrap.querySelector('[data-ok]').onclick = () => done(inp.value.trim() || null);
+    inp.onkeydown = (e) => { if (e.key === 'Enter') done(inp.value.trim() || null); if (e.key === 'Escape') done(null); };
+    document.body.appendChild(wrap);
+    setTimeout(() => inp.focus(), 30);
+  });
+}
 async function statementText(file) {
   if (!/\.pdf$/i.test(file.name)) return await file.text();
   const lib = await loadPdfJs();
-  const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  // M-Pesa and some bank statements are locked with a PIN/password. Ask for it when needed;
+  // the last one used in this session is tried first and is never saved to disk.
+  const task = lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+  let tried = 0;
+  task.onPassword = (update, reason) => {
+    if (reason === 1 && window.__safiStmtPin && tried === 0) { tried++; update(window.__safiStmtPin); return; }
+    tried++;
+    safiAskPin(reason === 1 ? `"${file.name}" is locked. Enter the document PIN / password. For M-Pesa statements Safaricom sends it by SMS.` : 'That PIN / password is not right. Try again.').then(pw => {
+      if (!pw) { task.destroy(); return; }
+      window.__safiStmtPin = pw;
+      update(pw);
+    });
+  };
+  let doc;
+  try { doc = await task.promise; }
+  catch (e) { if (/password/i.test(String(e && (e.name || e.message)))) throw new Error('Statement is locked: PIN not entered.'); throw e; }
   let t = '';
   for (let i = 1; i <= doc.numPages; i++) { const pg = await doc.getPage(i); const tc = await pg.getTextContent(); t += tc.items.map(x => x.str).join(' ') + '\n'; }
   return t;
@@ -2882,7 +2916,7 @@ function IssuesScreen({ lang }) {
 
   function submit() {
     if (!form.subject.trim()) { toast('Subject required', 'error'); return; }
-    window.SAFI_STORE.addIssue(form);
+    window.SAFI_STORE.addIssue({ ...form, raisedBy: window.SAFI_STORE.getCurrentStaff().name });
     toast('Issue raised', 'success');
     setForm({ subject: '', order: '', priority: 'medium', details: '' });
   }

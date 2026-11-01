@@ -4,8 +4,10 @@ const { useState: useStateX, useRef: useRefX, useEffect: useEffectX } = React;
 
 // ─── Period Summary (used on Management Dashboard) ────────────────────────
 function PeriodSummary({ money }) {
-  const D = useStore();
+  const D = window.safiTrim(useStore());
   const [period, setPeriod] = useStateX('month');
+  const [cFrom, setCFrom] = useStateX(SAFI_TIME.day().slice(0, 8) + '01');
+  const [cTo, setCTo] = useStateX(SAFI_TIME.day());
 
   // Returns date strings { from, to } inclusive
   function rangeFor(p) {
@@ -29,9 +31,11 @@ function PeriodSummary({ money }) {
       const d = new Date(today.getFullYear(), 0, 1);
       return { from: d, to: now, label: `${today.getFullYear()}` };
     }
-    if (p === '5y') {
-      const d = new Date(today.getFullYear() - 4, 0, 1);
-      return { from: d, to: now, label: `${today.getFullYear() - 4}–${today.getFullYear()}` };
+    if (p === 'custom') {
+      const f = new Date((cFrom || '2000-01-01') + 'T00:00:00');
+      const t2 = new Date((cTo || SAFI_TIME.day()) + 'T23:59:59');
+      const dm = (v) => v ? `${v.slice(8, 10)}-${v.slice(5, 7)}-${v.slice(2, 4)}` : '';
+      return { from: f, to: t2, label: `${dm(cFrom)} → ${dm(cTo)}` };
     }
     return { from: new Date(2000, 0, 1), to: now, label: 'All-time' };
   }
@@ -57,10 +61,7 @@ function PeriodSummary({ money }) {
       from: new Date(cur.from.getFullYear() - 1, 0, 1),
       to:   cur.from,
     },
-    '5y':    {
-      from: new Date(cur.from.getFullYear() - 5, 0, 1),
-      to:   cur.from,
-    },
+    custom:  { from: new Date(cur.from.getTime() - (cur.to.getTime() - cur.from.getTime()) - 1000), to: new Date(cur.from.getTime() - 1000) },
   };
   const prev = prevMap[period];
 
@@ -82,13 +83,13 @@ function PeriodSummary({ money }) {
     return D.orders.filter(o => { const d = new Date(o.in); return d >= from && (!to || d <= to); }).length;
   }
 
-  const revenue = sumOrdersPaid(cur.from);
-  const gross   = sumOrdersGross(cur.from);
-  const expense = sumExpenses(cur.from);
+  const revenue = sumOrdersPaid(cur.from, cur.to);
+  const gross   = sumOrdersGross(cur.from, cur.to);
+  const expense = sumExpenses(cur.from, cur.to);
   const profit  = revenue - expense;
-  const opExpense = D.expenses.filter(e => new Date(e.date.replace(' ', 'T')) >= cur.from && (!window.costGroupOf || window.costGroupOf(D, e) !== 'special')).reduce((s, e) => s + (e.amount || 0), 0);
+  const opExpense = D.expenses.filter(e => new Date(e.date.replace(' ', 'T')) >= cur.from && new Date(e.date.replace(' ', 'T')) <= cur.to && (!window.costGroupOf || window.costGroupOf(D, e) !== 'special')).reduce((s, e) => s + (e.amount || 0), 0);
   const opProfit = revenue - opExpense;
-  const orders  = countOrders(cur.from);
+  const orders  = countOrders(cur.from, cur.to);
 
   const prevRev = prev ? sumOrdersPaid(prev.from, prev.to) : 0;
   const prevExp = prev ? sumExpenses(prev.from, prev.to) : 0;
@@ -99,7 +100,7 @@ function PeriodSummary({ money }) {
   const catLabels = { laundry: 'Laundry', drycleaning: 'Dry Cleaning', shoes: 'Shoes', other: 'Other' };
   const catColors = { laundry: 'blue', drycleaning: 'violet', shoes: 'amber', other: 'gray' };
   const byCategory = ['laundry', 'drycleaning', 'shoes', 'other'].map(cat => {
-    const total = D.orders.filter(o => new Date(o.in) >= cur.from).reduce((s, o) => {
+    const total = D.orders.filter(o => new Date(o.in) >= cur.from && new Date(o.in) <= cur.to).reduce((s, o) => {
       return s + o.items.reduce((ss, it) => {
         const svc = D.services.find(x => x.id === it.svc);
         return ss + ((svc?.category || 'other') === cat ? it.price : 0);
@@ -112,10 +113,19 @@ function PeriodSummary({ money }) {
   return (
     <>
       <Card title={`Period summary · ${cur.label}`} action={
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <div className="safi-seg">
-          {[['today', 'Today'], ['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year'], ['5y', '5 years'], ['all', 'All-time']].map(([k, lbl]) => (
+          {[['today', 'Today'], ['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['custom', 'Custom'], ['all', 'All-time']].map(([k, lbl]) => (
             <button key={k} className={`safi-seg__btn ${period === k ? 'is-active' : ''}`} onClick={() => setPeriod(k)}>{lbl}</button>
           ))}
+        </div>
+        {period === 'custom' && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 10 }}>
+            <input type="date" className="safi-input" style={{ width: 'auto' }} value={cFrom} max={cTo || undefined} onChange={e => setCFrom(e.target.value)}/>
+            <span className="safi-cell-sub">to</span>
+            <input type="date" className="safi-input" style={{ width: 'auto' }} value={cTo} min={cFrom || undefined} onChange={e => setCTo(e.target.value)}/>
+          </div>
+        )}
         </div>
       }>
         <div className="safi-period-grid">
@@ -794,7 +804,7 @@ function ApprovalsScreen({ lang, money, setView, setActiveOrderId }) {
 
 // ─── Time series chart (Revenue vs Expenses) ───────────────────────────────
 function TimeSeries({ money }) {
-  const D = useStore();
+  const D = window.safiTrim(useStore());
   const [granularity, setGranularity] = useStateX('month'); // 'day' | 'month' | 'year'
   const [expMode, setExpMode] = useStateX('total'); // 'total' | 'op' — which expenses the chart shows
   const now = new Date();

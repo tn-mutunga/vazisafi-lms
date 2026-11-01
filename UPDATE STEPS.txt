@@ -1,14 +1,17 @@
-VAZI SAFI LMS v2.5.3
-IMPORTANT FIX
-- Orders no longer vanish after "Order created". A sync that was running while an order was
-  saved used to write back an older copy and erase it. Changes made during a sync are now kept
-  (orders, payments, expenses, edits). "Pull cloud" also keeps anything created during the pull.
-- Sync back to every 5 minutes. Fast sync only for 10 min after a sign-in code/account change,
-  and every 30 s while the sign-in screen is showing.
-NEW ORDER
-- "Other" in the type pickers (per pc, dry cleaning, ironing, shoes, duvet): price is typed by
-  the attendant, pre-filled with the standard price.
-FRONT DESK DASHBOARD
-- Stat cards: one row on full screen, 2 x 2 on smaller windows; Revenue Today streams stay
-  next to their labels, long amounts drop to a second line.
-- Overdue / Uncollected / Month End buttons match the month buttons.
+VAZI SAFI LMS v2.5.4
+MANAGEMENT
+- "Excluded from totals": leave a test month/range (e.g. Oct) out of dashboard, period summary, charts, reports.
+- Period summary: Today, Week, Month, Quarter, Custom (date range), All-time.
+- Payroll: month calendar (pick any past month); Freeze an employee for a month (left out of all totals and exports).
+- Staff roles: Supervisor, Interim Manager, or type your own.
+- Payments & Audit: PIN-locked M-Pesa / bank statements ask for the document PIN in the app.
+EXPENSES
+- Management: Today (default), Week, Month, Quarter, Year, Custom, All-time.
+- Front Desk: Today (default), Week, current month (e.g. Nov) only.
+FRONT DESK
+- W → D → R → C card counts today's orders only (queue still lists every uncollected order).
+- Reminders deck: Delivered/Collected · Ready ▸ Paid → Hand over · Ready ▸ Balance due ·
+  24 Hrs + Old orders ▸ Not delivered/Collected · Pick-ups · Deliveries.
+- Final Hold badge sweep made more visible.
+ISSUES
+- Sample issues removed; "Raised by" is the attendant on duty.
