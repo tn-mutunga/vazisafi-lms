@@ -321,6 +321,57 @@ const MethodBadge = ({ method }) => {
   return <span className={`safi-tag safi-tag--${m.c}`}>{m.label}</span>;
 };
 
+// ─── Zoom ─────────────────────────────────────────────────────────────────
+// Makes the whole app bigger or smaller on this laptop only (remembered here, not
+// synced: each screen has its own size). In the desktop app this is the real browser
+// zoom; in a plain browser it falls back to CSS zoom. Ctrl/Cmd + = / − / 0 work too.
+window.safiZoom = (() => {
+  const KEY = 'safi_zoom_v1';
+  const STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5];
+  const subs = new Set();
+  let z = 1;
+  try { z = Number(localStorage.getItem(KEY)) || 1; } catch (e) {}
+  function apply() {
+    if (window.lms && window.lms.setZoom) { try { window.lms.setZoom(z); } catch (e) {} }
+    else document.documentElement.style.zoom = z === 1 ? '' : String(z);
+  }
+  function set(v) {
+    z = Math.max(STEPS[0], Math.min(STEPS[STEPS.length - 1], Math.round(v * 100) / 100));
+    try { localStorage.setItem(KEY, String(z)); } catch (e) {}
+    apply(); subs.forEach(f => f(z));
+  }
+  const step = (dir) => set(dir > 0
+    ? (STEPS.find(s => s > z + 0.001) ?? STEPS[STEPS.length - 1])
+    : ([...STEPS].reverse().find(s => s < z - 0.001) ?? STEPS[0]));
+  apply();
+  // Desktop app: the VaziSafi LMS menu sends zoom in / out / reset (its shortcuts too).
+  try { window.lms && window.lms.onZoom && window.lms.onZoom((dir) => dir === 'in' ? step(1) : dir === 'out' ? step(-1) : set(1)); } catch (e) {}
+  // In a plain browser there is no menu, so the keyboard shortcuts are handled here.
+  window.addEventListener('keydown', (e) => {
+    if (window.lms && window.lms.onZoom) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    if (e.key === '=' || e.key === '+') { e.preventDefault(); step(1); }
+    else if (e.key === '-' || e.key === '_') { e.preventDefault(); step(-1); }
+    else if (e.key === '0') { e.preventDefault(); set(1); }
+  });
+  // Browser printing at 100% (the desktop app handles this itself).
+  window.addEventListener('beforeprint', () => { if (!(window.lms && window.lms.setZoom)) document.documentElement.style.zoom = ''; });
+  window.addEventListener('afterprint', apply);
+  return { get: () => z, set, in: () => step(1), out: () => step(-1), reset: () => set(1), subscribe: (f) => { subs.add(f); return () => subs.delete(f); } };
+})();
+
+function ZoomControl() {
+  const [z, setZ] = React.useState(window.safiZoom.get());
+  React.useEffect(() => window.safiZoom.subscribe(setZ), []);
+  return (
+    <div className="safi-side__zoom" role="group" aria-label="Zoom">
+      <button className="safi-side__zoom-btn" onClick={() => window.safiZoom.out()} disabled={z <= 0.7} title="Zoom out (Ctrl/Cmd −)" aria-label="Zoom out">−</button>
+      <button className="safi-side__zoom-pct" onClick={() => window.safiZoom.reset()} title="Back to 100% (Ctrl/Cmd 0)">{Math.round(z * 100)}%</button>
+      <button className="safi-side__zoom-btn" onClick={() => window.safiZoom.in()} disabled={z >= 1.5} title="Zoom in (Ctrl/Cmd +)" aria-label="Zoom in">+</button>
+    </div>
+  );
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────
 const Sidebar = ({ role, setRole, view, setView, lang, shop, direction, setDirection }) => {
   const store = useStore();

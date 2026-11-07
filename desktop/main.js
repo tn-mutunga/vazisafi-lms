@@ -106,6 +106,15 @@ function aboutDialog() {
 
 function buildMenu() {
   const mac = process.platform === 'darwin';
+  // Zoom lives in the app's own menu. The page applies it (and remembers it per laptop),
+  // so the menu just tells the page which way to go.
+  const zoomTo = (dir) => { if (win && !win.isDestroyed()) win.webContents.send('lms:zoom', dir); };
+  const zoomItems = [
+    { label: 'Zoom in', accelerator: 'CmdOrCtrl+=', click: () => zoomTo('in') },
+    { label: 'Zoom in', accelerator: 'CmdOrCtrl+Plus', visible: false, acceleratorWorksWhenHidden: true, click: () => zoomTo('in') },
+    { label: 'Zoom out', accelerator: 'CmdOrCtrl+-', click: () => zoomTo('out') },
+    { label: 'Actual size (100%)', accelerator: 'CmdOrCtrl+0', click: () => zoomTo('reset') },
+  ];
   const template = [
     // On macOS the first menu IS the app menu: it must carry About/Services/Hide/Quit
     // or the system inserts its own and Cmd+H / Cmd+Q go missing.
@@ -115,6 +124,8 @@ function buildMenu() {
         { label: 'About VaziSafi LMS', click: aboutDialog },
         { type: 'separator' },
         { label: 'Check for updates…', click: () => updateCtl.check(true) },
+        { type: 'separator' },
+        ...zoomItems,
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -130,6 +141,7 @@ function buildMenu() {
       submenu: [
         { label: 'Check for updates…', click: () => updateCtl.check(true) },
         { type: 'separator' },
+        ...(mac ? [] : [...zoomItems, { type: 'separator' }]),
         { label: 'Reload app', accelerator: 'CmdOrCtrl+R', click: () => win && win.reload() },
         {
           label: 'Toggle kiosk mode',
