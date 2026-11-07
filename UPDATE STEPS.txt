@@ -1,13 +1,20 @@
-VAZI SAFI LMS v2.5.7
-(Includes everything in 2.5.6. If 2.5.6 was never published, copy the 2.5.6 folder first,
-then this one, and publish once as 2.5.7.)
+VAZI SAFI LMS v2.5.8  (complete: includes 2.5.6 and 2.5.7 — no other folder needed)
 
-ALL SCREENS
-- Zoom in the app menu: VaziSafi LMS → Zoom in / Zoom out / Actual size (100%).
-  (Mac: the VaziSafi LMS menu next to the Apple. Windows: the VaziSafi LMS menu at the top.)
-  Shortcuts: Ctrl/Cmd + (bigger), Ctrl/Cmd − (smaller), Ctrl/Cmd 0 (100%). 70% to 150%.
-- Each laptop remembers its own zoom (not shared between laptops).
-- Receipts and job cards still print at 100% whatever the screen zoom.
+COPY: paste everything in this folder into Documents/Vazi Safi/Laundry Management System
+and choose Replace. The desktop and supabase folders here are COMPLETE, so replacing is safe
+(this also puts back the desktop files the earlier partial 2.5.7 copy removed).
 
-FILES CHANGED
-components.jsx, styles.css, desktop/main.js, desktop/preload.js, package.json
+NEW IN 2.5.8
+- Closing check ("Before closing: N orders still in the machines") only pops up and chimes on
+  the counter laptop. Auto: a laptop counts as the counter if it took an order in the last
+  7 days. Settings → Closing check → "Show it on this laptop": Auto / Always / Never
+  (each laptop has its own choice).
+
+FROM 2.5.7
+- Zoom in the VaziSafi LMS menu: Zoom in / Zoom out / Actual size; Cmd/Ctrl + − 0.
+
+FROM 2.5.6
+- Sync: one refused order no longer blocks the rest; uploads within a minute, even while a
+  window is open; "N orders waiting to send" pill; refusals and storage shown on Cloud & Updates.
+- Final Hold accepted by the cloud (09_finalhold.sql, already run).
+- Theme switch, Payments Today/Yesterday, attendant-on-duty fixes, loyalty points, tracking link.

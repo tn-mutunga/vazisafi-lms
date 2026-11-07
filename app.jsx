@@ -425,7 +425,7 @@ function App() {
       <PinConfirmHost/>
       {role === 'frontdesk' && <DecisionNotice/>}
       <ApprovalChime role={role}/>
-      {role === 'frontdesk' && <ClosingCheck/>}
+      {role === 'frontdesk' && window.safiCounter.is() && <ClosingCheck/>}
 
       <Modal open={pinPrompt} onClose={() => setPinPrompt(false)} title="Enter Owner PIN" width={360}
         footer={<>

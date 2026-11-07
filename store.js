@@ -1314,3 +1314,24 @@ window.safiTokens = (body, order, customer) => {
   }
   return s;
 };
+
+// ── The counter laptop ─────────────────────────────────────────────────
+// Shop reminders (the Closing check) belong on the laptop at the counter, not on a
+// laptop at home. Each laptop decides for itself (kept on this laptop, not synced):
+//   auto   — on if this laptop took an order in the last 7 days (its own code is on the order id)
+//   on     — always (this is the counter)
+//   off    — never
+window.safiCounter = {
+  KEY: 'safi_counter_mode_v1',
+  mode() { try { return localStorage.getItem(this.KEY) || 'auto'; } catch (e) { return 'auto'; } },
+  setMode(m) { try { localStorage.setItem(this.KEY, m); } catch (e) {} },
+  code() { try { return localStorage.getItem('safi_device_code_v1') || ''; } catch (e) { return ''; } },
+  tookOrdersRecently() {
+    const code = this.code();
+    if (!code) return false;
+    const re = new RegExp('-' + code + '(-RW\\d*)?$');
+    const since = SAFI_TIME.daysAgo(7);
+    return ((window.SAFI_STORE.get() || {}).orders || []).some(o => re.test(String(o.id)) && String(o.in || '').slice(0, 10) >= since);
+  },
+  is() { const m = this.mode(); return m === 'on' ? true : m === 'off' ? false : this.tookOrdersRecently(); },
+};

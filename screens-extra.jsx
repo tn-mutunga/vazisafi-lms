@@ -292,6 +292,7 @@ function SettingsScreen({ lang, shop, setShop }) {
             <input type="checkbox" checked={(D.settings || {}).closingCheck !== false} onChange={e => window.SAFI_STORE.setSetting('closingCheck', e.target.checked)}/><span/>
             <div><b>Remind Front Desk before closing</b><p className="safi-cell-sub" style={{ margin: '2px 0 0' }}>A window with a chime lists every order still in Washing or Drying until each is moved to Holding, Final Hold or Ready.</p></div>
           </label>
+          <CounterLaptopChoice/>
           <div className="safi-form__row">
             <label>Closing time (Mon–Sat)<input type="time" className="safi-input safi-mono" value={(D.settings || {}).closingTime || '20:00'} onChange={e => window.SAFI_STORE.setSetting('closingTime', e.target.value)}/></label>
             <label>Closing time (Sunday)<input type="time" className="safi-input safi-mono" value={(D.settings || {}).closingTimeSun || '17:00'} onChange={e => window.SAFI_STORE.setSetting('closingTimeSun', e.target.value)}/></label>
@@ -1023,6 +1024,29 @@ function MachineTimersCard() {
   );
 }
 Object.assign(window, { MachineTimersCard });
+
+// ─── Which laptop shows the Closing check (Settings, per laptop) ──────────
+function CounterLaptopChoice() {
+  const C = window.safiCounter;
+  const [mode, setMode] = useStateX(C.mode());
+  const pick = (m) => { C.setMode(m); setMode(m); };
+  const auto = C.tookOrdersRecently();
+  return (
+    <label>Show it on this laptop
+      <div className="safi-seg">
+        {[['auto', 'Auto'], ['on', 'Always'], ['off', 'Never']].map(([k, l]) => (
+          <button key={k} type="button" className={`safi-seg__btn ${mode === k ? 'is-active' : ''}`} onClick={() => pick(k)}>{l}</button>
+        ))}
+      </div>
+      <span className="safi-hint" style={{ display: 'block', marginTop: 4 }}>
+        {mode === 'auto'
+          ? (auto ? 'Auto: shows here, because this laptop took orders this week (it is the counter laptop).' : 'Auto: hidden here, because this laptop has not taken any orders this week.')
+          : mode === 'on' ? 'Always shows on this laptop.' : 'Never shows on this laptop.'}
+        {' '}Each laptop has its own choice. Laptop code: <span className="safi-mono">{C.code() || '—'}</span>.
+      </span>
+    </label>
+  );
+}
 
 // ─── Loyalty points (Settings) ────────────────────────────────────────────
 function LoyaltyPointsCard() {
