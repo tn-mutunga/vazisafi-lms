@@ -266,6 +266,26 @@ function SettingsScreen({ lang, shop, setShop }) {
 
       <SoundsCard/>
 
+      <LoyaltyPointsCard/>
+
+      <TrackingCard/>
+
+      {(D.settings || {}).pointsOn === false && <Card title="Loyalty discount" action={<span className="safi-cell-sub">Every Nth order earns a discount on the next one</span>}>
+        <div className="safi-form" style={{ maxWidth: 560 }}>
+          <label className="safi-toggle safi-toggle--lg">
+            <input type="checkbox" checked={(D.settings || {}).loyaltyOn !== false && Number((D.settings || {}).loyaltyPct) > 0} onChange={e => { window.SAFI_STORE.setSetting('loyaltyOn', e.target.checked); if (e.target.checked && !Number((D.settings || {}).loyaltyPct)) window.SAFI_STORE.setSetting('loyaltyPct', 10); }}/><span/>
+            <div><b>Loyalty discount on</b><p className="safi-cell-sub" style={{ margin: '2px 0 0' }}>At the {Number((D.settings || {}).loyaltyEvery) || 10}th order the client gets a thank-you SMS; the next order gets the discount automatically and the count restarts.</p></div>
+          </label>
+          <div className="safi-form__row">
+            <label>Orders to earn it<input type="number" min="2" max="50" className="safi-input safi-mono" value={Number((D.settings || {}).loyaltyEvery) || 10} onChange={e => window.SAFI_STORE.setSetting('loyaltyEvery', Math.max(2, Number(e.target.value) || 10))}/></label>
+            <label>Discount %<input type="number" min="0" max="100" className="safi-input safi-mono" value={Number((D.settings || {}).loyaltyPct) || 0} onChange={e => window.SAFI_STORE.setSetting('loyaltyPct', Math.min(100, Math.max(0, Number(e.target.value) || 0)))}/></label>
+          </div>
+          <label>Thank-you SMS (tokens: {'{name} {n} {pct} {since}'})
+            <textarea className="safi-textarea" rows="2" defaultValue={(D.smsTemplates || {}).loyalty || 'Hi {name}, thank you for choosing Vazi Safi! This is your {n}th order{since}. Your next order gets {pct}% off. Asante!'} onBlur={e => window.SAFI_STORE.setSmsTemplate && window.SAFI_STORE.setSmsTemplate('loyalty', e.target.value)}/>
+          </label>
+        </div>
+      </Card>}
+
       <Card title="Closing check" action={<span className="safi-cell-sub">Stops orders being left in Washing / Drying overnight</span>}>
         <div className="safi-form" style={{ maxWidth: 560 }}>
           <label className="safi-toggle safi-toggle--lg">
@@ -331,7 +351,7 @@ function SettingsScreen({ lang, shop, setShop }) {
         </div>
       </Card>
 
-      <Card title="SMS templates" action={<span className="safi-cell-sub">{'Tokens: {name} {id} {balance} {rider} {due}'}</span>}>
+      <Card title="SMS templates" action={<span className="safi-cell-sub">{'Tokens: {name} {id} {balance} {rider} {due} {track} {points}'}</span>}>
         <div className="safi-form" style={{ maxWidth: 760 }}>
           <h4 className="safi-section-h">Built-in stages (sent automatically when offered)</h4>
           {[
@@ -436,7 +456,7 @@ function DispatchScreen({ lang, money, setView }) {
       if (cust && cust.phone) {
         const tpl = (D.smsTemplates || {}).delivery || 'Hi {name}, our rider {rider} is on the way with your order {id}.';
         const order = d.orderId ? D.orders.find(o => o.id === d.orderId) : null;
-        const body = tpl
+        const body = window.safiTokens(tpl, order, cust)
           .replace(/\{name\}/g, firstName(cust.name))
           .replace(/\{id\}/g, d.orderId || '—')
           .replace(/\{rider\}/g, rider?.name || 'our rider')
@@ -1003,3 +1023,171 @@ function MachineTimersCard() {
   );
 }
 Object.assign(window, { MachineTimersCard });
+
+// ─── Loyalty points (Settings) ────────────────────────────────────────────
+function LoyaltyPointsCard() {
+  const D = useStore();
+  const st = D.settings || {};
+  const P = window.SAFI_POINTS;
+  const c = P.cfg();
+  const set = (k, v) => window.SAFI_STORE.setSetting(k, v);
+  const groups = c.groups;
+  const toggleGroup = (g) => set('pointsGroups', groups.includes(g) ? groups.filter(x => x !== g) : [...groups, g]);
+  // Shop-wide totals, for a sense of what is owed in points.
+  const totals = (() => {
+    if (!c.on) return null;
+    let bal = 0, holders = 0;
+    for (const cu of D.customers || []) { if (!P.eligible(cu)) continue; const b = P.balance(cu.id); if (b > 0) { bal += b; holders++; } }
+    return { bal, holders, kes: Math.round(bal * c.value) };
+  })();
+  const pct = (c.value / c.perKes * 100);
+  return (
+    <Card title="Loyalty points" action={<span className="safi-cell-sub">Customers earn points on what they pay and use them as money off</span>}>
+      <div className="safi-form" style={{ maxWidth: 620 }}>
+        <label className="safi-toggle safi-toggle--lg">
+          <input type="checkbox" checked={c.on} onChange={e => { set('pointsOn', e.target.checked); if (e.target.checked && !st.pointsStart) set('pointsStart', SAFI_TIME.day()); }}/><span/>
+          <div><b>Points on</b><p className="safi-cell-sub" style={{ margin: '2px 0 0' }}>Replaces the every-Nth-order discount. Turn off to go back to it.</p></div>
+        </label>
+        {c.on && <>
+          <div className="safi-form__row">
+            <label>KES spent for 1 point<input type="number" min="1" className="safi-input safi-mono" defaultValue={c.perKes} onBlur={e => set('pointsPerKes', Math.max(1, Number(e.target.value) || 100))}/></label>
+            <label>1 point is worth (KES)<input type="number" min="0.01" step="0.01" className="safi-input safi-mono" defaultValue={c.value} onBlur={e => set('pointValue', Math.max(0.01, Number(e.target.value) || 1))}/></label>
+          </div>
+          <div className="safi-form__row">
+            <label>Points needed before use<input type="number" min="0" className="safi-input safi-mono" defaultValue={c.minRedeem} onBlur={e => set('pointsMinRedeem', Math.max(0, parseInt(e.target.value, 10) || 0))}/></label>
+            <label>Expire after no visit for (months, 0 = never)<input type="number" min="0" className="safi-input safi-mono" defaultValue={c.expiryMonths} onBlur={e => set('pointsExpiryMonths', Math.max(0, parseInt(e.target.value, 10) || 0))}/></label>
+          </div>
+          <label>Who earns
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              {[['normal', 'Normal'], ['student', 'Student'], ['corporate', 'Corporate']].map(([g, l]) => (
+                <button key={g} type="button" className={`safi-chip ${groups.includes(g) ? 'is-active' : ''}`} onClick={() => toggleGroup(g)}>{l}</button>
+              ))}
+            </div>
+          </label>
+          <p className="safi-hint">
+            That is {pct % 1 ? pct.toFixed(1) : pct}% back: a KES {(c.perKes * 10).toLocaleString('en-KE')} order earns 10 points = KES {Math.round(10 * c.value)} off later.
+            Points are earned once an order is fully paid, on the amount after discounts. Counting since {c.start || 'today'}.
+            Front Desk sees the balance on New Order and ticks <b>Use points</b> to apply it.
+          </p>
+          {totals && <p className="safi-hint" style={{ marginBottom: 0 }}><b>{totals.bal.toLocaleString('en-KE')} points</b> held by {totals.holders} customer{totals.holders === 1 ? '' : 's'} (KES {totals.kes.toLocaleString('en-KE')} if all used). Add <span className="safi-mono">{'{points}'}</span> to any SMS template to show the customer's balance.</p>}
+        </>}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Order tracking link (Settings) ───────────────────────────────────────
+// The tracking page is a single HTML file. It is generated here with this shop's cloud
+// address and public key already in it, so it only needs to be put online once.
+function trackPageHtml(url, key) {
+  const esc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Track your order · Vazi Safi</title>
+<style>
+:root{--brand:#5C2D91;--accent:#E87722;--ink:#1d1730;--ink2:#5b5670;--line:#e6e2ef;--bg:#f6f4fa;--ok:#1f8a4c}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:460px;margin:0 auto;padding:20px 16px 40px}
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:16px}.logo{width:38px;height:38px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.hd b{font-size:17px}.hd small{display:block;color:var(--ink2);font-size:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:12px}
+h1{font-size:20px;margin:0 0 2px}.sub{color:var(--ink2);font-size:13px;margin:0}
+.big{font-size:24px;font-weight:700;color:var(--brand);margin:14px 0 4px}
+.steps{list-style:none;margin:14px 0 0;padding:0}.steps li{display:flex;gap:12px;padding:0 0 14px;position:relative;color:var(--ink2)}
+.steps li:before{content:"";position:absolute;left:9px;top:20px;bottom:0;width:2px;background:var(--line)}.steps li:last-child:before{display:none}
+.dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);background:#fff;flex:none;z-index:1}
+.done{color:var(--ink)}.done .dot{background:var(--brand);border-color:var(--brand)}.now .dot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 4px rgba(232,119,34,.18)}.now{color:var(--ink);font-weight:600}
+.t{font-size:12px;color:var(--ink2);font-weight:400}
+.row{display:flex;justify-content:space-between;padding:6px 0;font-size:14px}.row b{font-variant-numeric:tabular-nums}
+.due{color:#b42318}.paid{color:var(--ok)}
+.pay{background:#fff7ef;border-color:#f5d3b3}.btn{display:inline-block;margin-top:10px;padding:10px 14px;border-radius:10px;background:var(--brand);color:#fff;text-decoration:none;font-weight:600;font-size:14px}
+.muted{color:var(--ink2);font-size:12px;text-align:center;margin-top:16px}
+</style></head><body><div class="wrap">
+<div class="hd"><div class="logo">VS</div><div><b id="shop">Vazi Safi Laundry</b><small>Order tracking</small></div></div>
+<div id="out"><div class="card"><p class="sub">Loading your order…</p></div></div>
+<p class="muted">This page updates by itself every minute.</p>
+</div>
+<script>
+var URL_='${esc(url)}'.replace(/\\/+$/,''), KEY='${esc(key)}';
+var q=new URLSearchParams(location.search), code=(q.get('c')||location.hash.slice(1)||'').trim();
+var STEPS=[['Received',['intake']],['Washing',['washing','holding']],['Drying',['drying','finalhold']],['Ironing & finishing',['ironing','drycleaning']],['Ready',['ready']],['Collected',['collected']]];
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function when(s){if(!s)return'';var d=new Date(s);if(isNaN(d))return'';return d.toLocaleString('en-KE',{timeZone:'Africa/Nairobi',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+function kes(n){return 'KES '+Math.round(Number(n)||0).toLocaleString('en-KE')}
+function show(o){
+  var out=document.getElementById('out');out.innerHTML='';
+  if(o.shop)document.getElementById('shop').textContent=o.shop;
+  var c=el('div','card');c.appendChild(el('h1',null,(o.name?'Hi '+o.name+', ':'')+'order '+o.order));
+  c.appendChild(el('p','sub',(o.items?o.items+' item(s) · ':'')+'received '+when(o.received)));
+  var idx=0;STEPS.forEach(function(s,i){if(s[1].indexOf(o.status)>=0)idx=i});
+  var label=o.status==='drycleaning'?'Dry cleaning':STEPS[idx][0];
+  c.appendChild(el('div','big',idx===4?'Ready for collection':idx===5?'Collected · thank you!':label));
+  if(o.due&&idx<4)c.appendChild(el('p','sub','Expected ready: '+when(o.due)));
+  var ul=el('ul','steps'),st=o.stages||{};
+  STEPS.forEach(function(s,i){var li=el('li',i<idx?'done':i===idx?'now':'');li.appendChild(el('span','dot'));var d=el('div',null,i===3&&o.status==='drycleaning'?'Dry cleaning':s[0]);
+    var t=i===0?o.received:s[1].map(function(k){return st[k]}).filter(Boolean)[0];if(t&&i<=idx){d.appendChild(el('br'));d.appendChild(el('span','t',when(t)))}li.appendChild(d);ul.appendChild(li)});
+  c.appendChild(ul);out.appendChild(c);
+  var m=el('div','card');[['Total',kes(o.total)],['Paid',kes(o.paid)]].forEach(function(r){var x=el('div','row');x.appendChild(el('span',null,r[0]));x.appendChild(el('b',null,r[1]));m.appendChild(x)});
+  var bx=el('div','row');bx.appendChild(el('span',null,'Balance'));bx.appendChild(el('b',o.balance>0?'due':'paid',o.balance>0?kes(o.balance):'Fully paid'));m.appendChild(bx);out.appendChild(m);
+  if(o.balance>0&&o.payTo){var p=el('div','card pay');p.appendChild(el('b',null,'How to pay'));p.appendChild(el('p','sub','Pay '+kes(o.balance)+' ONLY to '+o.payTo+(o.payName?' ('+o.payName+')':'')+'. Use order '+o.order+' as the reference.'));out.appendChild(p)}
+  if(o.phone){var h=el('div','card');h.appendChild(el('p','sub','Questions about your order?'));var a=el('a','btn','Call '+o.phone);a.href='tel:'+String(o.phone).replace(/[^0-9+]/g,'');h.appendChild(a);out.appendChild(h)}
+}
+function fail(msg){document.getElementById('out').innerHTML='';var c=el('div','card');c.appendChild(el('h1',null,'Order not found'));c.appendChild(el('p','sub',msg));document.getElementById('out').appendChild(c)}
+function load(){
+  if(code.length<10){fail('Open the link from your SMS exactly as it was sent.');return}
+  fetch(URL_+'/rest/v1/rpc/track_order',{method:'POST',headers:{'apikey':KEY,'Content-Type':'application/json'},body:JSON.stringify({code:code})})
+  .then(function(r){return r.json()}).then(function(o){if(o&&o.order)show(o);else fail('This link has no order. Open the link from your SMS exactly as it was sent.')})
+  .catch(function(){fail('Could not reach the shop. Check your internet and try again.')});
+}
+load();setInterval(load,60000);
+</script></body></html>`;
+}
+
+function TrackingCard() {
+  const D = useStore();
+  const st = D.settings || {};
+  const [ready, setReady] = useStateX(() => !!(window.SAFI_SYNC && window.SAFI_SYNC.trackingReady && window.SAFI_SYNC.trackingReady()));
+  const [checking, setChecking] = useStateX(false);
+  const cloud = window.SAFI_CLOUD ? window.SAFI_CLOUD.getConfig() : {};
+  const base = window.SAFI_TRACK.base();
+  const sample = (D.orders || []).find(o => o.track);
+  function download() {
+    if (!cloud.url || !cloud.anonKey) { toast('Connect the cloud first (Cloud & Updates)', 'error'); return; }
+    const blob = new Blob([trackPageHtml(cloud.url, cloud.anonKey)], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'index.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('Tracking page saved as index.html', 'success');
+  }
+  return (
+    <Card title="Order tracking link" action={<span className="safi-cell-sub">Customers follow their order on their phone from the SMS link</span>}>
+      <div className="safi-form" style={{ maxWidth: 620 }}>
+        <div className="safi-store-info">
+          <div><span>Cloud ready</span><b>{ready ? 'Yes' : 'Not yet: run supabase/08_tracking_points.sql'}</b></div>
+          <div><span>Tracking page</span><b>{base || 'Not set'}</b></div>
+        </div>
+        {!ready && <div><Button kind="ghost" icon="refresh" disabled={checking} onClick={async () => { setChecking(true); try { setReady(!!(await window.SAFI_SYNC.recheckTracking())); } finally { setChecking(false); } }}>{checking ? 'Checking…' : 'Check again'}</Button></div>}
+        <label>Tracking page address
+          <input className="safi-input safi-mono" placeholder="https://vazisafi-track.netlify.app" defaultValue={st.trackUrl || ''}
+            onBlur={e => window.SAFI_STORE.setSetting('trackUrl', e.target.value.trim())}/>
+        </label>
+        <label className="safi-toggle">
+          <input type="checkbox" checked={st.trackOn !== false} onChange={e => window.SAFI_STORE.setSetting('trackOn', e.target.checked)}/><span/>
+          <b>Add the link to SMS and receipts</b>
+        </label>
+        <ol className="safi-hint" style={{ paddingLeft: 18, margin: '4px 0' }}>
+          <li>In Supabase → SQL Editor, run <span className="safi-mono">supabase/08_tracking_points.sql</span> once.</li>
+          <li><Button kind="ghost" icon="box" onClick={download}>Download tracking page</Button> (it already holds your cloud address).</li>
+          <li>Go to <b>app.netlify.com/drop</b> and drag the downloaded file onto it. Copy the address it gives you into the box above.</li>
+        </ol>
+        <p className="safi-hint" style={{ marginBottom: 0 }}>
+          The link goes wherever an SMS template has <span className="safi-mono">{'{track}'}</span> (the order-received SMS has it already). With no address set, the token is left out.
+          The page shows one order only (first name, stage, due time, balance, how to pay) and nothing else from the shop's data. Note: the link makes the received SMS longer than 160 characters, so it goes as 2 SMS.
+          {sample && base ? <> Example: <span className="safi-mono">{base}/?c={sample.track}</span></> : null}
+        </p>
+      </div>
+    </Card>
+  );
+}
+Object.assign(window, { LoyaltyPointsCard, TrackingCard });

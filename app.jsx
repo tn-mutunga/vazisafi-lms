@@ -187,8 +187,12 @@ function ClosingCheck() {
   const d = new Date(now);
   const [ch, cm] = close.split(':').map(Number);
   const closeAt = new Date(d.getFullYear(), d.getMonth(), d.getDate(), ch || 20, cm || 0).getTime();
-  const late = now >= closeAt - lead * 60e3 || d.getHours() < 6;
   const stuck = (D.orders || []).filter(o => o.status === 'washing' || o.status === 'drying');
+  // Orders left in Washing/Drying from an earlier day keep the window up the next morning too,
+  // until the attendant moves them on.
+  const todayKey = SAFI_TIME.day(new Date(now));
+  const leftOver = stuck.some(o => { const t = (window.SAFI_STORE.stageTimes(o.id) || {})[o.status] || o.in; return String(t || '').slice(0, 10) < todayKey; });
+  const late = now >= closeAt - lead * 60e3 || d.getHours() < 6 || leftOver;
   const key = stuck.map(o => o.id).join(',');
   useAppEffect(() => { if (enabled && late && stuck.length && now > snooze && window.safiSound) window.safiSound('request'); }, [enabled, late, key, snooze > now]);
   // While the window is open: chime every 5 minutes, but stay quiet after 22:00.
@@ -209,7 +213,7 @@ function ClosingCheck() {
       <div className="safi-modal__sheet safi-closewin" style={{ width: 560 }}>
         <header className="safi-modal__hd"><h3>Before closing: {stuck.length} order{stuck.length === 1 ? '' : 's'} still in the machines</h3></header>
         <div className="safi-modal__body">
-          <p className="safi-cell-sub" style={{ marginTop: 0 }}>We close at {close}. Orders must not stay in Washing or Drying overnight. Move each one to where it really is. Final Hold stage is allowed overnight.</p>
+          <p className="safi-cell-sub" style={{ marginTop: 0 }}>{leftOver && !(now >= closeAt - lead * 60e3) ? <b>These were left in the machines overnight. </b> : null}We close at {close}. Orders must not stay in Washing or Drying overnight. Move each one to where it really is. Final Hold stage is allowed overnight.</p>
           <div className="safi-closecheck">
             {stuck.map(o => (
               <div key={o.id} className="safi-closecheck__row">
@@ -412,7 +416,7 @@ function App() {
 
   return (
     <div className="safi-app" data-screen-label={`${role}/${view}`}>
-      <Sidebar role={role} setRole={safeSetRole} view={view} setView={(v) => { window.__safiFromDeck = false; setView(v); }} lang={lang} shop={shop}/>
+      <Sidebar role={role} setRole={safeSetRole} view={view} setView={(v) => { window.__safiFromDeck = false; setView(v); }} lang={lang} shop={shop} direction={t.direction} setDirection={(d) => setTweak('direction', d)}/>
       <LockScreen onUnlock={(acc) => { if (acc.kind === 'management') { setRole('owner'); setView('dashboard'); } else { if (acc.staffId) window.SAFI_STORE.setCurrentStaff(acc.staffId); setRole('frontdesk'); setView('dashboard'); } }}/>
       <main className="safi-main"><UpdateBar/>{window.DispatchReminders && <window.DispatchReminders setView={setView}/>}{view !== 'dashboard' && !['order-detail', 'receipt', 'jobcard'].includes(view) && (
         <button className="safi-backbar" onClick={() => { if (window.__safiFromDeck) window.__safiScrollTo = 'reminders'; window.__safiFromDeck = false; window.__safiPreset = null; setView('dashboard'); try { const m = document.querySelector('.safi-main'); if (m && !window.__safiScrollTo) m.scrollTop = 0; } catch (e) {} }}><Icon name="arrow-l" size={16}/> Back</button>

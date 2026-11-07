@@ -322,7 +322,7 @@ const MethodBadge = ({ method }) => {
 };
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────
-const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
+const Sidebar = ({ role, setRole, view, setView, lang, shop, direction, setDirection }) => {
   const store = useStore();
   const current = window.SAFI_STORE.getCurrentStaff();
   const [showSwitch, setShowSwitch] = useState(false);
@@ -405,6 +405,17 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
         </button>
       </div>
 
+      {setDirection && (
+        <div className="safi-side__theme" role="group" aria-label="Theme">
+          {['navy', 'sky'].map(d => (
+            <button key={d} className={`safi-side__theme-btn ${direction === d ? 'is-active' : ''}`}
+              onClick={() => setDirection(d)} aria-pressed={direction === d}>
+              <span className={`safi-side__swatch safi-side__swatch--${d}`}/>{d === 'navy' ? 'Navy' : 'Sky'}
+            </button>
+          ))}
+        </div>
+      )}
+
       <nav className="safi-side__nav">
         {items.map(([id, key, icon]) => (
           <button key={id} className={`safi-side__item ${view === id ? 'is-active' : ''}`} onClick={() => setView(id)}>
@@ -453,13 +464,18 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop }) => {
 // nagged about a thing it does not use.
 const SyncPill = () => {
   const [st, setSt] = React.useState(() => window.SAFI_CLOUD ? window.SAFI_CLOUD.status() : null);
-  const [, tick] = React.useState(0);
+  const [n, tick] = React.useState(0);
   React.useEffect(() => {
     if (!window.SAFI_CLOUD) return;
     const off = window.SAFI_CLOUD.subscribe(setSt);
-    const t = setInterval(() => tick(n => n + 1), 60000);
+    const t = setInterval(() => tick(n => n + 1), 30000);
     return () => { off(); clearInterval(t); };
   }, []);
+  // Orders on this laptop the cloud has not confirmed. Worked out every 30 s and after
+  // each sync, not on every screen refresh.
+  const unsent = React.useMemo(() => {
+    try { return window.SAFI_SYNC && window.SAFI_SYNC.unsent ? window.SAFI_SYNC.unsent() : []; } catch (e) { return []; }
+  }, [n, st && st.syncing, st && st.lastSync]);
   if (!st || !st.configured || !st.liveSync) return null;
 
   const ageMs = st.lastSync ? Date.now() - new Date(st.lastSync).getTime() : Infinity;
@@ -477,21 +493,34 @@ const SyncPill = () => {
   else if (stale)            { tone = 'bad';   label = 'Not synced'; }
   else if (!st.online)       { tone = 'wait';  label = 'Offline'; }
   else if (!st.signedIn)     { tone = 'bad';   label = 'Signed out'; }
+  // "Synced" only when every order really is in the cloud.
+  const k = unsent.length;
+  if (k && tone === 'ok') { tone = 'wait'; label = `${k} order${k === 1 ? '' : 's'} waiting to send`; }
+  else if (k && tone === 'bad') label = `${label} · ${k} not sent`;
 
-  const title = tone === 'busy'
+  const list = k ? ` Not in the cloud yet: ${unsent.slice(0, 8).map(id => orderNo(id)).join(', ')}${k > 8 ? ' …' : ''}.` : '';
+  const title = (tone === 'busy'
     ? "Sending today's work to the cloud now."
     : tone === 'bad'
-      ? `${label}. Last reached the cloud ${ago}. Work is still saved on this machine — tell the owner.`
+      ? `${label}. Last reached the cloud ${ago}. Work is still saved on this machine — tell the owner.${st.syncError ? ' Reason: ' + st.syncError : ''}`
       : !st.online
         ? 'No internet. Keep working normally; everything is saved here and sent when the line is back.'
-        : isFinite(ageMs)
-          ? `Everything sent to the cloud ${ago}.`
-          : 'Connected. Nothing has been sent yet.';
+        : k
+          ? 'New work goes up within about a minute.'
+          : isFinite(ageMs)
+            ? `Everything sent to the cloud ${ago}.`
+            : 'Connected. Nothing has been sent yet.') + list + (st.signedIn && st.online ? ' Tap to send now.' : '');
 
+  const retry = () => {
+    if (!st.signedIn || st.syncing || !window.SAFI_CLOUD) return;
+    window.SAFI_CLOUD.syncNow()
+      .then(() => toast('Cloud is up to date', 'success'))
+      .catch(e => toast(String(e.message || e).slice(0, 220), 'error', 9000));
+  };
   return (
-    <span className={`safi-syncpill is-${tone}`} title={title}>
+    <button type="button" className={`safi-syncpill is-${tone}`} title={title} onClick={retry}>
       <i className="safi-syncpill__dot"></i>{label}
-    </span>
+    </button>
   );
 };
 

@@ -227,33 +227,60 @@
       finally { syncing = false; emit(); }
     },
 
-    async syncNow() {
-      if (!session) throw new Error('Sign in first');
-      if (!window.SAFI_SYNC) throw new Error('Sync module not loaded');
-      syncing = true; syncError = null; emit();
+    // Only one sync at a time. A second request (the button pressed while the timer
+    // fired, say) waits for the one already running instead of sending everything twice.
+    syncNow() { return runOnce(() => window.SAFI_SYNC.sync()); },
+    // Upload only; used while a window is open on screen.
+    pushNow() { return runOnce(() => window.SAFI_SYNC.pushOnly()); }
+  };
+
+  let inflight = null;
+  function runOnce(job) {
+    if (!session) return Promise.reject(new Error('Sign in first'));
+    if (!window.SAFI_SYNC) return Promise.reject(new Error('Sync module not loaded'));
+    if (inflight) return inflight;
+    syncing = true; syncError = null; emit();
+    inflight = (async () => {
       try {
         window.SAFI_SYNC.setBranch(cfg.branch);
-        const report = await window.SAFI_SYNC.sync();
+        const report = await job();
         syncError = null;
         return report;
       } catch (e) {
         syncError = e.message || String(e);
         throw e;
-      } finally { syncing = false; emit(); }
-    }
-  };
+      } finally { syncing = false; inflight = null; emit(); }
+    })();
+    return inflight;
+  }
 
   // ── Debounced background push ──────────────────────────────────────
   let timer = null;
+  let dueAt = 0;
+  let modalSince = 0;
+  let lastPushAt = 0;
   let retryStep = 0;
   function schedule(ms) {
     if (!cfg.liveSync || !session || !navigator.onLine) return;
     clearTimeout(timer);
+    dueAt = Date.now() + ms;
     // A failed attempt (Wi-Fi still connecting at start-up, a dropped line) retries
     // on its own after 30 s, then 1, 2 and 5 minutes, instead of waiting for a change.
     timer = setTimeout(() => {
-      // Never pull while someone is filling a form; a refresh mid-typing made the screen jump.
-      if (document.querySelector('.safi-modal')) { schedule(20000); return; }
+      dueAt = 0;
+      // While a window is open (a form, the Closing check), fetching other laptops' changes
+      // waits, because a refresh mid-typing made the screen jump. Uploading does not wait:
+      // it never touches the screen. After 10 minutes of a window left open, sync fully anyway.
+      if (document.querySelector('.safi-modal')) {
+        if (!modalSince) modalSince = Date.now();
+        if (Date.now() - modalSince < 10 * 60e3) {
+          const go = Date.now() - lastPushAt > 55000;
+          if (go) lastPushAt = Date.now();
+          (go ? API.pushNow() : Promise.resolve()).catch(() => {}).finally(() => schedule(20000));
+          return;
+        }
+      }
+      modalSince = 0;
       API.syncNow().then(() => { retryStep = 0; }).catch(() => {
         const waits = [30000, 60000, 120000, 300000];
         schedule(waits[Math.min(retryStep++, waits.length - 1)]);
@@ -264,8 +291,16 @@
   // Subscribe once the store exists.
   setTimeout(() => {
     // Changes are saved on this computer straight away (they survive a power cut) and go
-    // up with the next 5-minute sync.
+    // up within a minute: a change starts a 60-second countdown, and more changes in that
+    // minute ride along instead of restarting it. Writes made by the sync itself are ignored.
     if (window.SAFI_SYNC) window.SAFI_SYNC.setBranch(cfg.branch);
+    try {
+      // (A change made while a sync is running is caught too; at worst one extra quick sync.)
+      window.SAFI_STORE.subscribe(() => {
+        if (timer && dueAt && dueAt - Date.now() <= 60000) return;
+        schedule(60000);
+      });
+    } catch (e) {}
   }, 0);
 
   // Fetch other laptops' changes even when nobody is typing here.

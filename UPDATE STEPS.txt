@@ -1,13 +1,33 @@
-VAZI SAFI LMS v2.5.5
-FRONT DESK
-- Closing check: from 19:35 (Sun 16:35) a window lists orders still in Washing/Drying with
-  stage-coloured buttons (Holding, Drying, Final Hold, Ready). Final Hold is allowed overnight.
-  Thin purple throbbing ring, chime, "Remind me in" 10 / 15 min, scroll bar on the left.
-- Orders search: client name / phone / order # shows this month + last 30 days + anything
-  still open or owing; unpaid/uncollected first; scrolls.
-- Final Hold badge now flashes like Holding.
-MANAGEMENT
-- Settings → Closing check: on/off, closing times (Mon–Sat, Sunday), minutes before,
-  chime every (2–15 min), quiet after, the two "Remind me" values.
-- Payments & Audit: tick payments (or "Select all shown") and Delete selected with the PIN
-  (for test data). Orders go back to owing the deleted amount.
+VAZI SAFI LMS v2.5.6
+
+BEFORE INSTALLING (Supabase → SQL Editor, once each, safe to re-run)
+- supabase/09_finalhold.sql  — the cloud did not know the Final Hold stage, so it refused
+  any order in Final Hold and the orders sent with it (the shop laptop's missing orders).
+- supabase/08_tracking_points.sql — tracking link + loyalty points columns.
+
+SYNC (the shop laptop's missing / late orders)
+- One refused order no longer holds back the rest: the batch is retried one order at a time,
+  the good ones go up, and Cloud & Updates names each refused order with the reason and fix.
+- An order whose attendant or customer is not in the cloud yet still uploads (filled in later).
+- New work goes up within about a minute (was: next 5-minute sync).
+- Uploading no longer waits for an open window. The evening Closing check used to stop all
+  uploads for as long as it was on screen.
+- Only one sync runs at a time (button + timer no longer send everything twice).
+- Top-right pill says "N orders waiting to send" until the cloud really has them; hover for the
+  order numbers and the reason; tap it to send now.
+- Cloud & Updates: refusals listed one per line, list of orders not in the cloud yet, and how full
+  this laptop's storage is. If storage is ever full, a red warning now appears (it was silent).
+
+ALSO SINCE 2.5.5
+- Navy / Sky theme switch at the top of the sidebar.
+- Payments & Audit: Today · Yesterday · Nov · Oct · Custom.
+- Orders: Attendant on duty shows every attendant's times for the day; after sign-out it shows
+  "Awaiting sign-in" (today) / "Off duty" (past days); no carry-over from yesterday.
+  Duty logs from different laptops are merged instead of overwriting each other.
+- Loyalty points (Settings → Loyalty points) replace the every-10th-order discount.
+- Order tracking link (Settings → Order tracking link).
+
+FILES CHANGED
+app.jsx, components.jsx, styles.css, store.js, sync.js, cloud.js, screens-frontdesk.jsx,
+screens-extra.jsx, screens-lock.jsx, screens-cloud.jsx, package.json,
+supabase/08_tracking_points.sql, supabase/09_finalhold.sql

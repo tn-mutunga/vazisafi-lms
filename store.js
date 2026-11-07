@@ -16,7 +16,7 @@ window.SAFI_PHONE = (prefix, phone) => {
 window.firstName = (name) => { const p = String(name || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return ''; return p.length > 1 && p[0].replace(/\./g, '').length === 1 ? p[0] + ' ' + p[1] : p[0]; };
 // Short month name in caps from the computer's clock: 0 = this month, -1 = last month. SEPT kept as 4 letters.
 window.monthTag = (off = 0) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + off); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sept','Oct','Nov','Dec'][d.getMonth()]; };
-window.orderNo = (id) => String(id || '').replace(/-[A-Z]{2}$/, '');
+window.orderNo = (id) => String(id || '').replace(/-[A-Z]{2}(-RW\d*)$/, '$1').replace(/-(?!RW\d*$)[A-Z]{2}$/, '');
 // One date style on every computer: dd-mm HH:MM (or dd-mm-yy). Input "YYYY-MM-DD[ HH:MM]".
 window.dmy = (v, o = {}) => {
   const x = String(v || ''); if (x.length < 10 || x[4] !== '-') return x;
@@ -88,6 +88,9 @@ window.SAFI_STORE = (() => {
   // installs; the owner can switch it back on in Settings and it will stay on.
   if (!state.settings.tagOptionalV014) { state.settings.requireTag = false; state.settings.tagOptionalV014 = true; }
   if (state.settings.requireIntakeSms === undefined) state.settings.requireIntakeSms = true;
+  // Loyalty points replace the every-Nth-order discount. Points count from the day this
+  // version first ran, so past orders do not all turn into points at once.
+  if (state.settings.pointsOn === undefined) { state.settings.pointsOn = true; state.settings.pointsStart = SAFI_TIME.day(); }
   if (state.settings.varianceLimit === undefined)    state.settings.varianceLimit = 100;
   if (!state.smsTemplates || !state.smsTemplates.intake) {
     state.smsTemplates = { ...(state.smsTemplates || {}),
@@ -111,6 +114,12 @@ window.SAFI_STORE = (() => {
     drycleaning: 'Hi {name}, your order {id} is now being dry cleaned. We will text you when it is ready.',
     ...Object.fromEntries(Object.entries(state.smsTemplates || {}).filter(([, v]) => String(v || '').trim())),
   };
+  // Tracking link goes on the order-received SMS (once; the owner can move or remove it).
+  // It only appears when a tracking page address is set in Settings.
+  if (!state.settings.trackTplV1) {
+    state.settings.trackTplV1 = true;
+    if (state.smsTemplates.intake && !state.smsTemplates.intake.includes('{track}')) state.smsTemplates.intake = state.smsTemplates.intake.trim() + ' Track: {track}';
+  }
   // Backfill category on services from older saves
   for (const s of state.services) {
     if (!s.category) {
@@ -184,7 +193,18 @@ window.SAFI_STORE = (() => {
   }
   const listeners = new Set();
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn('Safi: storage full', e); }
+    try { localStorage.setItem(KEY, JSON.stringify(state)); window.__safiStorageFull = 0; }
+    catch (e) {
+      // Was silent before: the laptop kept working from memory and anything new was lost
+      // on restart. Now it says so, loudly, every 5 minutes until fixed.
+      console.warn('Safi: storage full', e);
+      const now = Date.now();
+      if (!window.__safiStorageFull || now - (window.__safiStorageWarned || 0) > 5 * 60e3) {
+        window.__safiStorageWarned = now;
+        try { typeof toast === 'function' && toast('This laptop could not save the last change (storage full). Do NOT close the app — tell Management now.', 'error', 20000); } catch (e2) {}
+      }
+      window.__safiStorageFull = now;
+    }
     listeners.forEach(fn => fn(state));
   }
   // One-time fix (v2.1.4): the shop PC's clock ran a day ahead on 2–3 Oct 2026.
@@ -328,6 +348,13 @@ window.SAFI_STORE = (() => {
   };
   // Counter + random so ids made in the same millisecond (bulk imports) never collide.
   let idSeq = 0;
+  // 10 characters from an alphabet with no look-alikes (0/O, 1/I/L): hard to guess, easy to read.
+  const newTrackCode = () => {
+    const A = '23456789abcdefghjkmnpqrstuvwxyz';
+    const r = new Uint8Array(10);
+    try { crypto.getRandomValues(r); } catch (e) { for (let i = 0; i < 10; i++) r[i] = Math.floor(Math.random() * 256); }
+    return Array.from(r, b => A[b % A.length]).join('');
+  };
   const nextId = (prefix) => `${prefix}-${Date.now().toString(36)}${(idSeq++ % 1296).toString(36).padStart(2, '0')}${Math.random().toString(36).slice(2, 6)}`;
 
   // Client number: position in today's queue. Resets each morning, so "client 7" means
@@ -380,16 +407,17 @@ window.SAFI_STORE = (() => {
     // Receipt and delivery note print once. Management can silently allow one more for a
     // given order (each grant = one extra print). Job card: five prints.
     printsAllowed(kind, orderId) {
-      if (kind === 'jobcard') return 5;
       const g = (((state.settings || {}).printGrants || {})[kind] || {})[orderId] || 0;
+      if (kind === 'jobcard') return 5 + g;
       const legacy = kind === 'receipt' ? (((state.settings || {}).reprintGrants || {})[orderId] || 0) : 0;
       return 1 + g + legacy;
     },
-    grantPrint(kind, orderId) {
+    grantPrint(kind, orderId, n = 1) {
+      n = Math.max(1, Math.min(20, Math.round(Number(n) || 1)));
       const all = { ...((state.settings || {}).printGrants || {}) };
-      const k = { ...(all[kind] || {}) }; k[orderId] = (k[orderId] || 0) + 1; all[kind] = k;
+      const k = { ...(all[kind] || {}) }; k[orderId] = (k[orderId] || 0) + n; all[kind] = k;
       state.settings = { ...(state.settings || {}), printGrants: all };
-      audit('print.grant', orderId, kind + ' reprint allowed');
+      audit('print.grant', orderId, kind + ' reprint allowed ×' + n);
       save();
     },
     receiptPrintsAllowed(orderId) { return this.printsAllowed('receipt', orderId); },
@@ -671,8 +699,8 @@ window.SAFI_STORE = (() => {
     },
 
     // ── Orders ─────────────────────────────────────────────
-    createOrder({ customerId, items, total, discount, discountPct, paid, method, txn, notes, due, rewashOf, tag }) {
-      const id = nextOrderId();
+    createOrder({ customerId, items, total, discount, discountPct, paid, method, txn, notes, due, rewashOf, tag, forceId, rewashNote, pointsRedeemed }) {
+      const id = forceId || nextOrderId();
       const now = new Date();
       const fmt = (d) => SAFI_TIME.stamp(d);
 
@@ -720,9 +748,13 @@ window.SAFI_STORE = (() => {
         due: due || fmt(new Date(now.getTime() + 24 * 3600 * 1000)),
         notes: notes || '',
         rewashOf: rewashOf || '',
+        rewashNote: rewashNote || '',
         tag: tag || '',
         queueNo: nextQueueNo(),
         shift: (state.shifts || []).find(s => !s.closedAt)?.id || '',
+        // Secret code for the customer's tracking link (only this laptop makes it, so it never clashes).
+        track: newTrackCode(),
+        pointsRedeemed: Math.max(0, Math.round(pointsRedeemed || 0)),
       };
       state.orders = [order, ...state.orders];
 
@@ -840,9 +872,12 @@ window.SAFI_STORE = (() => {
     },
 
     // ── Rewash (free redo) ─────────────────────────────────
-    createRewash(originalOrderId, itemSelections) {
+    createRewash(originalOrderId, itemSelections, note) {
       const orig = state.orders.find(o => o.id === originalOrderId);
       if (!orig) return null;
+      // Rewash number = the original's number + -RW (then -RW2, -RW3 …), so they read as a pair.
+      let rid = orig.id + '-RW', k = 2;
+      while (state.orders.some(o => o.id === rid)) rid = orig.id + '-RW' + (k++);
       // itemSelections is array of indices into orig.items, or null = all
       const selected = itemSelections && itemSelections.length
         ? itemSelections.map(i => orig.items[i]).filter(Boolean)
@@ -851,8 +886,8 @@ window.SAFI_STORE = (() => {
       return this.createOrder({
         customerId: orig.customer,
         items, total: 0, discount: 0, discountPct: 0,
-        paid: 0, method: '—', txn: '', notes: `Rewash of ${originalOrderId}`,
-        rewashOf: originalOrderId,
+        paid: 0, method: '—', txn: '', notes: `Rewash of ${orderNo(originalOrderId)}${note ? ' — ' + note : ''}`,
+        rewashOf: originalOrderId, forceId: rid, rewashNote: note || '',
       });
     },
 
@@ -893,7 +928,7 @@ window.SAFI_STORE = (() => {
       ap.decisionNote = note || '';
       if (decision === 'approved') {
         if (ap.action === 'delete_order')      this.deleteOrder(ap.target);
-        else if (ap.action === 'rewash_order') this.createRewash(ap.target, ap.payload?.itemIndices);
+        else if (ap.action === 'rewash_order') this.createRewash(ap.target, ap.payload?.itemIndices, ap.payload?.note || ap.reason);
         else if (ap.action === 'edit_order')   this.updateOrder(ap.target, ap.payload || {});
         else if (ap.action === 'refund_order') this.updateOrder(ap.target, { status: 'collected', paid: 0, refunded: true });
         else if (ap.action === 'reprint_receipt') { const g = { ...((state.settings || {}).reprintGrants || {}) }; g[ap.target] = 1; state.settings = { ...(state.settings || {}), reprintGrants: g }; }
@@ -1164,7 +1199,118 @@ window.SAFI_STORE = (() => {
       save();
     },
 
+    // Give an older order a tracking code the first time a link is needed for it.
+    ensureTrack(id) {
+      const o = state.orders.find(x => x.id === id);
+      if (!o) return '';
+      if (o.track) return o.track;
+      const code = newTrackCode();
+      state.orders = state.orders.map(x => x.id === id ? { ...x, track: code } : x);
+      save();
+      return code;
+    },
+
     // Stage constants (for screens)
     STAGES, stagesFor, DC_STAGES,
   };
 })();
+
+// ── Loyalty points ─────────────────────────────────────────────────────
+// Nothing is stored as a running balance: it is worked out from the customer's orders
+// every time, so laptops can never disagree about it. An order earns points once it is
+// fully paid (on what was actually charged, after discounts); points used on an order
+// are saved on that order (pointsRedeemed). A gap of more than N months between visits
+// (default 12) wipes the balance.
+window.SAFI_POINTS = (() => {
+  const S = () => window.SAFI_STORE.get();
+  function cfg() {
+    const st = S().settings || {};
+    return {
+      on: st.pointsOn !== false,
+      perKes: Math.max(1, Number(st.pointsPerKes) || 100),      // KES spent for 1 point
+      value: Math.max(0.01, Number(st.pointValue) || 1),         // KES off for 1 point
+      minRedeem: Math.max(0, Number(st.pointsMinRedeem ?? 100)), // points needed before any can be used
+      expiryMonths: Math.max(0, Number(st.pointsExpiryMonths ?? 12)), // 0 = never
+      groups: Array.isArray(st.pointsGroups) ? st.pointsGroups : ['normal', 'student'],
+      start: String(st.pointsStart || ''),
+    };
+  }
+  const t = (s) => new Date(String(s || '').replace(' ', 'T')).getTime();
+  const gapOver = (a, b, months) => {
+    if (!months || !a || !b) return false;
+    const d = new Date(t(a)); d.setMonth(d.getMonth() + months);
+    return t(b) > d.getTime();
+  };
+  function eligible(cust) { const c = cfg(); return !!(c.on && cust && c.groups.includes(cust.group || 'normal')); }
+  function earnedFor(o) {
+    const c = cfg();
+    if (!o || o.rewashOf || o.refunded || !(o.total > 0) || (o.paid || 0) < o.total) return 0;
+    if (c.start && String(o.in || '').slice(0, 10) < c.start) return 0;
+    return Math.floor(o.total / c.perKes);
+  }
+  function pendingFor(o) {
+    const c = cfg();
+    if (!o || o.rewashOf || o.refunded || !(o.total > 0) || (o.paid || 0) >= o.total) return 0;
+    if (c.start && String(o.in || '').slice(0, 10) < c.start) return 0;
+    return Math.floor(o.total / c.perKes);
+  }
+  // Balance and a line-by-line history. excludeId leaves one order out (the one being edited).
+  function account(customerId, excludeId) {
+    const D = S(), c = cfg();
+    const cust = (D.customers || []).find(x => x.id === customerId);
+    const out = { balance: 0, pending: 0, earned: 0, used: 0, expired: 0, history: [], eligible: eligible(cust), lastVisit: '' };
+    if (!cust) return out;
+    const orders = (D.orders || []).filter(o => o.customer === customerId && o.id !== excludeId && !o.rewashOf)
+      .slice().sort((a, b) => String(a.in).localeCompare(String(b.in)));
+    let bal = 0, last = '';
+    for (const o of orders) {
+      if (last && bal > 0 && gapOver(last, o.in, c.expiryMonths)) { out.expired += bal; out.history.push({ at: o.in, kind: 'expired', pts: -bal }); bal = 0; }
+      const used = Math.max(0, Number(o.pointsRedeemed) || 0);
+      if (used) { const u = Math.min(used, bal); bal -= u; out.used += u; out.history.push({ at: o.in, order: o.id, kind: 'used', pts: -u }); }
+      const e = out.eligible ? earnedFor(o) : 0;
+      if (e) { bal += e; out.earned += e; out.history.push({ at: o.in, order: o.id, kind: 'earned', pts: e }); }
+      if (out.eligible) out.pending += pendingFor(o);
+      last = o.in;
+    }
+    if (last && bal > 0 && gapOver(last, SAFI_TIME.stamp(), c.expiryMonths)) { out.expired += bal; out.history.push({ at: SAFI_TIME.stamp(), kind: 'expired', pts: -bal }); bal = 0; }
+    out.balance = bal; out.lastVisit = last;
+    return out;
+  }
+  const balance = (customerId) => account(customerId).balance;
+  // Most points usable on an order worth `amount` (after other discounts).
+  function usable(customerId, amount) {
+    const c = cfg(), a = account(customerId);
+    if (!c.on || !a.eligible || a.balance < c.minRedeem || !(amount > 0)) return { pts: 0, kes: 0, balance: a.balance };
+    const pts = Math.min(a.balance, Math.floor(amount / c.value));
+    return { pts, kes: Math.round(pts * c.value), balance: a.balance };
+  }
+  return { cfg, eligible, earnedFor, pendingFor, account, balance, usable };
+})();
+
+// ── Order tracking link ────────────────────────────────────────────────
+window.SAFI_TRACK = {
+  base() { return String(((window.SAFI_STORE.get().settings || {}).trackUrl) || '').trim().replace(/\/+$/, ''); },
+  on() { const st = window.SAFI_STORE.get().settings || {}; return st.trackOn !== false && !!this.base(); },
+  link(order) {
+    if (!order || !this.on()) return '';
+    const code = order.track || window.SAFI_STORE.ensureTrack(order.id);
+    return code ? `${this.base()}/?c=${code}` : '';
+  },
+};
+
+// Fills the {track} and {points} tokens in any SMS. A template without them is returned
+// unchanged; a link is only added where the template asks for one.
+window.safiTokens = (body, order, customer) => {
+  let s = String(body || '');
+  if (s.includes('{track}')) {
+    const l = window.SAFI_TRACK.link(order);
+    // With no link, "Track: {track}" disappears as a whole rather than leaving "Track:" behind.
+    s = s.replace(/(\s*)((?:Track(?: your order)?|Fuatilia):?\s*)?\{track\}/gi, (m, sp, pre) => l ? `${sp}${pre || ''}${l}` : '');
+  }
+  if (s.includes('{points}')) {
+    const P = window.SAFI_POINTS;
+    const n = customer && P.eligible(customer) ? P.balance(customer.id) : 0;
+    s = s.replace(/\{points\}/g, String(n));
+  }
+  return s;
+};

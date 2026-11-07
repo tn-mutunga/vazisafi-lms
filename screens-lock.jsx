@@ -56,6 +56,13 @@ function lkLockMinutes(st) { const [h, m] = String(st.lockTime || '20:30').split
 
 window.safiLock = (why) => { localStorage.setItem(LOCK_KEY, JSON.stringify({ locked: true, why: why || '', at: SAFI_TIME.stamp() })); localStorage.removeItem(SESSION_KEY); window.dispatchEvent(new Event('safi-lock')); };
 window.safiSignOut = () => {
+  // An attendant signing out ends their shift: nobody is on duty until the next sign-in
+  // (the duty log records the time, so the Orders page shows when they left).
+  try {
+    const ses0 = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    const duty0 = (window.SAFI_STORE.get().settings || {}).currentStaffId || '';
+    if (ses0 && ses0.kind === 'attendant' && duty0 && (!ses0.staffId || ses0.staffId === duty0)) window.SAFI_STORE.setCurrentStaff('');
+  } catch (e) {}
   localStorage.removeItem(SESSION_KEY);
   const on = !!((window.SAFI_STORE.get().settings || {}).lockEnabled);
   window.dispatchEvent(new Event('safi-signout'));

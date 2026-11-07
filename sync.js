@@ -41,6 +41,22 @@
   };
   const day = (v) => (v ? String(v).slice(0, 10) : null);
 
+  // Tracking code and points used live in two order columns added by
+  // supabase/08_tracking_points.sql. Until that has been run, they are kept on this
+  // laptop only, so sync never breaks on a column the cloud does not have yet.
+  let V8 = false;
+  try { V8 = localStorage.getItem('safi_cols_v8') === '1'; } catch (e) {}
+  let v8Tried = 0;
+  async function probeV8() {
+    if (V8 || Date.now() - v8Tried < 3600e3) return;
+    v8Tried = Date.now();
+    try {
+      await C().raw('/rest/v1/orders?select=track_code,points_redeemed&limit=1', { method: 'GET' });
+      V8 = true;
+      try { localStorage.setItem('safi_cols_v8', '1'); } catch (e) {}
+    } catch (e) {}
+  }
+
   let BRANCH = 'main';
 
   // ── the map ─────────────────────────────────────────────────────────
@@ -79,12 +95,16 @@
         paid: n(r.paid), method: r.method === '—' ? '' : s(r.method), txn: s(r.txn), notes: s(r.notes),
         rewash_of: r.rewashOf || null, rewashed_by: r.rewashedBy || null,
         cashier_id: r.cashier || null, shift_id: r.shift || null,
-        received_at: tsNow(r.in), due_at: ts(r.due) }),
+        received_at: tsNow(r.in), due_at: ts(r.due),
+        // Sent only once the cloud has the columns (supabase/08_tracking_points.sql).
+        ...(V8 ? { track_code: r.track || null, points_redeemed: n(r.pointsRedeemed) } : {}) }),
       down: (r) => ({ id: r.id, customer: r.customer_id || '', status: r.status, queueNo: r.queue_no,
         tag: r.tag, total: Number(r.total), discount: Number(r.discount), discountPct: Number(r.discount_pct),
         paid: Number(r.paid), method: r.method || '—', txn: r.txn, notes: r.notes,
         rewashOf: r.rewash_of || '', rewashedBy: r.rewashed_by || '', cashier: r.cashier_id || '',
-        shift: r.shift_id || '', in: fromTs(r.received_at), due: fromTs(r.due_at), items: [] }),
+        shift: r.shift_id || '', in: fromTs(r.received_at), due: fromTs(r.due_at), items: [],
+        ...(r.track_code ? { track: r.track_code } : {}),
+        ...(Number(r.points_redeemed) ? { pointsRedeemed: Number(r.points_redeemed) } : {}) }),
     },
     {
       key: 'payments', table: 'payments', pk: 'id', branch: true,
@@ -199,8 +219,30 @@
   // The laptop can delete a customer, staff member or service that older rows still
   // point at. The cloud enforces those links, so a dangling one is cleared to null
   // before sending — the row keeps its text copy (customer name etc.) either way.
-  function clearDangling(table, rows, ids) {
+  // What a refusal means and what to do about it, added after the database's own words.
+  function explain(msg) {
+    const m = String(msg || '');
+    if (/status_fkey|order_statuses/i.test(m)) return m + ' → a stage the cloud does not know: run the latest supabase SQL file (09_finalhold.sql)';
+    if (/cashier_id|staff/i.test(m) && /foreign key/i.test(m)) return m + ' → attendant not in the cloud yet: press Sync now on the laptop where they were added';
+    if (/customer_id/i.test(m) && /foreign key/i.test(m)) return m + ' → customer not in the cloud yet';
+    if (/row-level security|42501/i.test(m)) return m + ' → this login may not write here: check "This branch" on Cloud & Updates';
+    if (/PGRST204|does not exist|schema cache/i.test(m)) return m + ' → the cloud is missing a newer SQL file: run the latest file in the supabase folder';
+    return m;
+  }
+
+  // held: orders sent without an attendant or customer the cloud does not have yet. They
+  // go up anyway (one missing staff record used to block every order in the batch) and are
+  // sent again on each sync until that person reaches the cloud, then fill in.
+  function clearDangling(table, rows, ids, b, held) {
     const keep = (field, set) => rows.forEach(r => { if (r[field] && !set.has(r[field])) r[field] = null; });
+    if (table === 'orders' && b && held) {
+      const inCloud = (tbl, local) => new Set(Object.keys((b.h && b.h[tbl]) || {}).filter(id => local.has(id)));
+      const staffOk = inCloud('staff', ids.staff), custOk = inCloud('customers', ids.customers);
+      rows.forEach(r => {
+        if (r.cashier_id && !staffOk.has(r.cashier_id)) { r.cashier_id = null; held.add(r.id); }
+        if (r.customer_id && !custOk.has(r.customer_id)) { r.customer_id = null; held.add(r.id); }
+      });
+    }
     if (table === 'orders')         { keep('customer_id', ids.customers); keep('cashier_id', ids.staff); }
     if (table === 'payments')       keep('order_id', ids.orders);
     if (table === 'expenses')       keep('category_id', ids.expenseCategories);
@@ -283,6 +325,15 @@
   function saveBase(b) { try { localStorage.setItem(BASE_KEY(), JSON.stringify(b)); } catch (e) {} }
   const newBase = () => ({ setup: true, h: {}, cur: {} });
   const tick = (b, table, rows) => { for (const r of rows) if (r.updated_at && (!b.cur[table] || r.updated_at > b.cur[table])) b.cur[table] = r.updated_at; };
+  // The duty log is merged entry by entry, so one laptop's older copy never wipes a
+  // sign-in or sign-out recorded on another.
+  function mergeDutyLog(local, cloud) {
+    const a = Array.isArray(local) ? local : [], b = Array.isArray(cloud) ? cloud : [];
+    const seen = new Set(), out = [];
+    for (const e of [...a, ...b]) { if (!e || !e.at) continue; const k = (e.id || '') + '|' + e.at; if (seen.has(k)) continue; seen.add(k); out.push(e); }
+    return out.sort((x, y) => String(x.at).localeCompare(String(y.at))).slice(-600);
+  }
+  const mergeSetting = (k, local, cloud) => k === 'staffAccounts' ? mergeAccounts(local, cloud) : k === 'dutyLog' ? mergeDutyLog(local, cloud) : cloud;
   // Sign-in accounts are merged one person at a time (newest change wins per username),
   // so two laptops editing accounts never wipe each other's codes, passwords or deletions.
   function mergeAccounts(local, cloud) {
@@ -357,12 +408,24 @@
     return lines.length;
   }
   // Fingerprint an order with its lines, so editing a line counts as a change.
-  const fp = (t, r) => { const u = t.up(r); return u ? H(t.key === 'orders' ? [u, r.items || []] : u) : null; };
+  // An empty tracking code / no points used hashes as if the columns were not there, so
+  // switching them on does not make every old order look changed and re-send.
+  const fp = (t, r) => {
+    let u = t.up(r);
+    if (!u) return null;
+    if (t.key === 'orders') {
+      if ('track_code' in u && !u.track_code) { u = { ...u }; delete u.track_code; }
+      if ('points_redeemed' in u && !u.points_redeemed) { u = { ...u }; delete u.points_redeemed; }
+      return H([u, r.items || []]);
+    }
+    return H(u);
+  };
 
   // Send only rows that changed on this laptop since they last matched the cloud.
   let refusedCount = 0;
   let restore = [];
   async function pushChanged(b) {
+    await probeV8();
     const st = S().get();
     const ids = {};
     for (const k of ['customers', 'orders', 'staff', 'services', 'expenseCategories', 'dispatch'])
@@ -392,19 +455,35 @@
       const hb = b.h[t.table] = b.h[t.table] || {};
       const changed = (st[t.key] || []).filter(r => { const u = t.up(r); return u && hb[u[t.pk]] !== fp(t, r); });
       if (!changed.length) continue;
-      const rows = clearDangling(t.table, changed.map(t.up), ids);
+      const held = new Set();
+      const rows = clearDangling(t.table, changed.map(t.up), ids, b, held);
+      if (held.size) pushErrors.push(`orders: ${held.size} sent without attendant/customer (not in the cloud yet): ${[...held].map(id => orderNo(id)).slice(0, 5).join(', ')}`);
+      const send = (list) => t.appendOnly ? insertIgnore(t.table, list, t.pk) : upsert(t.table, list, t.pk);
+      let okIds = null; // null = the whole batch went through
       try {
-        if (t.appendOnly) await insertIgnore(t.table, rows, t.pk); else await upsert(t.table, rows, t.pk);
+        await send(rows);
       } catch (e) {
         if (OWNER_ONLY.has(t.table) && /row-level security|permission denied|42501|403/i.test(e.message)) {
           changed.forEach(r => { hb[r.id] = fp(t, r); }); continue;
         }
-        // One bad table must not stop the rest (approvals sit near the end of the list).
-        pushErrors.push(`${t.table}: ${e.message}`); continue;
+        // Offline or the server is down: nothing to learn row by row, try again next sync.
+        if (/no internet|failed to fetch|network|timeout|HTTP 5\d\d/i.test(e.message)) { pushErrors.push(`${t.table}: ${e.message}`); continue; }
+        // The cloud refused the batch. One bad row (an order in a stage the cloud does not
+        // know, say) used to hold back every other order until it changed. Send them one at
+        // a time instead: the good ones go up now, and the bad ones are named.
+        okIds = new Set();
+        const bad = [];
+        for (const row of rows) {
+          try { await send([row]); okIds.add(String(row[t.pk])); }
+          catch (e2) { bad.push(`${t.key === 'orders' ? orderNo(row[t.pk]) : row[t.pk]}: ${explain(e2.message)}`); }
+        }
+        if (bad.length) pushErrors.push(`${t.table}: ${bad.length} refused — ${bad.slice(0, 3).join(' | ')}${bad.length > 3 ? ' …' : ''}`);
+        if (!okIds.size) continue;
       }
-      if (t.key === 'orders') await writeItems(st, changed.map(r => r.id), ids);
-      changed.forEach(r => { hb[r.id] = fp(t, r); });
-      sent += changed.length;
+      const went = okIds ? changed.filter(r => okIds.has(String(r.id))) : changed;
+      if (t.key === 'orders') await writeItems(st, went.map(r => r.id), ids);
+      went.forEach(r => { if (!held.has(r.id)) hb[r.id] = fp(t, r); });
+      sent += went.length;
       saveBase(b);
     }
     for (const [table, x] of Object.entries(EXTRA)) {
@@ -443,7 +522,7 @@
         else N.unshift(r);                     // created here during the sync: keep it
       }
     }
-    if (live.settings && snap.settings && JSON.stringify(live.settings) !== JSON.stringify(snap.settings)) next.settings = { ...(next.settings || {}), ...live.settings };
+    if (live.settings && snap.settings && JSON.stringify(live.settings) !== JSON.stringify(snap.settings)) { const dl = mergeDutyLog((next.settings || {}).dutyLog, live.settings.dutyLog); next.settings = { ...(next.settings || {}), ...live.settings, dutyLog: dl }; }
     return next;
   }
   async function pullChanged(b) {
@@ -489,7 +568,7 @@
         const k = x.id(row);
         const local = localNow.get(k);
         if (local && hb[k] !== H(local)) continue;
-        if (table === 'settings') { const v = k === 'staffAccounts' ? mergeAccounts((next.settings || {}).staffAccounts, row.value) : row.value; next.settings = { ...(next.settings || {}), [k]: v }; hb[k] = H({ branch_id: BRANCH, key: k, value: row.value }); }
+        if (table === 'settings') { const v = mergeSetting(k, (next.settings || {})[k], row.value); next.settings = { ...(next.settings || {}), [k]: v }; hb[k] = H({ branch_id: BRANCH, key: k, value: row.value }); }
         if (table === 'sms_templates') { next.smsTemplates = { ...(next.smsTemplates || {}), [k]: row.body }; hb[k] = H({ branch_id: BRANCH, key: k, body: row.body }); }
         if (table === 'void_tags') {
           const v = { tag: row.tag, reason: row.reason, staff: row.staff_id, at: row.at };
@@ -606,6 +685,31 @@
   const API = {
     TABLES,
     isSetup() { return !!(loadBase() || {}).setup; },
+    // True once the cloud has the tracking / points columns (08_tracking_points.sql).
+    trackingReady() { return V8; },
+    async recheckTracking() { v8Tried = 0; await probeV8(); return V8; },
+
+    // Orders on this laptop the cloud has not confirmed yet (new, edited, or refused).
+    unsent() {
+      const b = loadBase();
+      if (!b || !b.setup) return [];
+      const t = TABLES.find(x => x.key === 'orders');
+      const hb = b.h.orders || {};
+      return (S().get().orders || []).filter(o => hb[o.id] !== fp(t, o)).map(o => o.id);
+    },
+
+    // Upload only. Touches nothing on screen, so it runs even while a window is open
+    // (the evening Closing check used to hold every upload until it was dealt with).
+    async pushOnly() {
+      const b = loadBase();
+      if (!b || !b.setup) return 0;
+      refusedCount = 0;
+      pushErrors = [];
+      const sent = await pushChanged(b);
+      C().setConfig({ lastPush: new Date().toISOString(), lastPushErrors: pushErrors.slice() });
+      if (pushErrors.length) throw new Error('Some changes did not send. ' + pushErrors.join(' | '));
+      return sent;
+    },
 
     // Normal cycle: send what changed here, then fetch what changed elsewhere.
     async sync() {
@@ -752,7 +856,7 @@
 
       const settings = await selectAll('settings');
       next.settings = { ...(next.settings || {}) };
-      for (const r of settings.filter(r => r.branch_id === BRANCH)) next.settings[r.key] = r.key === 'staffAccounts' ? mergeAccounts(next.settings.staffAccounts, r.value) : r.value;
+      for (const r of settings.filter(r => r.branch_id === BRANCH)) next.settings[r.key] = mergeSetting(r.key, next.settings[r.key], r.value);
 
       const templates = await selectAll('sms_templates');
       next.smsTemplates = { ...(next.smsTemplates || {}) };

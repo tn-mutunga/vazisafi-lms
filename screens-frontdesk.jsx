@@ -229,6 +229,24 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   const customer = D.customers.find(c => c.id === customerId);
   const effGroup = customer ? customer.group : group;
   const isFirstTime = customer && customer.orders === 0;
+  // Loyalty: every Nth order (default 10) earns a discount on the next one; the count then restarts.
+  const LY = D.settings || {};
+  // Points replace the visit count: with points on, the every-Nth-order discount is off.
+  const PTS = window.SAFI_POINTS;
+  const ptsCfg = PTS.cfg();
+  const lyOn = !ptsCfg.on && LY.loyaltyOn !== false && Number(LY.loyaltyPct) > 0;
+  const [usePts, setUsePts] = useStateFD(false);
+  useEffectFD(() => { setUsePts(false); }, [customerId]);
+  const lyEvery = Math.max(2, Number(LY.loyaltyEvery) || 10);
+  const lyPct = Number(LY.loyaltyPct) || 0;
+  const priorOrders = customer ? D.orders.filter(o => o.customer === customer.id && !o.rewashOf).length : 0;
+  const lyPos = (priorOrders % (lyEvery + 1)) + 1;   // 1..N+1 within the current cycle
+  const isLoyaltyOrder = lyOn && !!customer && lyPos === lyEvery + 1;
+  const lyApplied = useRefFD(false);
+  useEffectFD(() => {
+    if (isLoyaltyOrder) { if (discountPct < lyPct) { setDiscountPct(lyPct); lyApplied.current = true; } }
+    else if (lyApplied.current) { lyApplied.current = false; if (!codeId) setDiscountPct(0); }
+  }, [customerId, isLoyaltyOrder]);
   const freeBagEnabled = D.settings?.firstTimeBagFree;
 
   useEffectFD(() => { if (customer) setGroup(customer.group); }, [customerId]);
@@ -258,7 +276,12 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   }, 0);
   const code = (D.discounts || []).find(x => x.id === codeId && x.active !== false);
   const flatOff = code && code.type === 'flat' ? Number(code.value) || 0 : 0;
-  const discount = Math.min(subtotal, Math.round(subtotal * (discountPct / 100)) + flatOff);
+  const baseDiscount = Math.min(subtotal, Math.round(subtotal * (discountPct / 100)) + flatOff);
+  // Points come off after any % / code discount, up to the whole remaining amount.
+  const ptsAvail = customer ? PTS.usable(customer.id, subtotal - baseDiscount) : { pts: 0, kes: 0, balance: 0 };
+  const ptsUsed = usePts ? ptsAvail.pts : 0;
+  const ptsOff = usePts ? ptsAvail.kes : 0;
+  const discount = Math.min(subtotal, baseDiscount + ptsOff);
   const total = Math.max(0, subtotal - discount);
   const balance = total;
 
@@ -292,7 +315,9 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
       customerId, items: linePriced, total, discount, discountPct, discountCode: code ? code.code : '',
       paid: 0, method: '—', txn: '',
       notes, tag: String(tag).trim(),
+      pointsRedeemed: ptsUsed,
     });
+    if (ptsUsed) window.SAFI_STORE.audit('points.redeem', order.id, `${ptsUsed} pts = ${money(ptsOff)}`, { pts: ptsUsed, kes: ptsOff });
 
     if (code) window.SAFI_STORE.useDiscount(code.id);
     // The customer's copy. This is the control that matters: once they hold a text
@@ -301,7 +326,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
       const st = D.settings || {};
       const tpl = (D.smsTemplates || {}).intake
         || 'Vazi Safi: order {id} received, {items} item(s), total {total}. Tag {tag}. Pay ONLY to {payto}. Queries {owner}.';
-      const body = tpl
+      const body = window.safiTokens(tpl, order, customer)
         .replace(/\{name\}/g, firstName(customer.name))
         .replace(/\{id\}/g, orderNo(order.id))
         .replace(/\{tag\}/g, order.tag || '—')
@@ -315,6 +340,14 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
       });
     }
 
+    if (lyOn && customer && customer.phone && lyPos === lyEvery) {
+      const rounds = Math.floor(priorOrders / (lyEvery + 1));
+      const tplL = (D.smsTemplates || {}).loyalty
+        || 'Hi {name}, thank you for choosing Vazi Safi! This is your {n}th order{since}. Your next order gets {pct}% off. Asante!';
+      const bodyL = tplL.replace(/\{name\}/g, firstName(customer.name)).replace(/\{n\}/g, String(lyEvery)).replace(/\{pct\}/g, String(lyPct))
+        .replace(/\{since\}/g, rounds > 0 ? ' since your last discount' : ' with us');
+      window.SAFI_STORE.logMessage({ to: `${customer.prefix || ''} ${customer.phone}`.trim(), name: customer.name, body: bodyL, orderId: order.id, stage: 'loyalty', method: 'sms', customerId: customer.id });
+    }
     toast(`Order ${orderNo(order.id)} created`, 'success');
     setActiveOrderId(order.id);
     setView(thenPrint ? 'receipt' : 'order-detail');
@@ -333,6 +366,16 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
         </>}
       />
 
+      {isLoyaltyOrder && (
+        <div className="safi-first-banner safi-first-banner--flash safi-loyal-banner">
+          <div className="safi-first-banner__icon"><Icon name="tag" size={26}/></div>
+          <div className="safi-first-banner__body">
+            <b>⭐ LOYALTY REWARD · {customer.name} · order {lyPos} of the cycle</b>
+            <p>{customer.name} has completed {lyEvery} orders. A {lyPct}% discount has been applied to this order. Let them know when handing over.</p>
+          </div>
+          <div className="safi-first-banner__pill">{lyPct}% OFF</div>
+        </div>
+      )}
       {isFirstTime && (
         <div className="safi-first-banner safi-first-banner--flash">
           <div className="safi-first-banner__icon"><Icon name="bag" size={28}/></div>
@@ -515,9 +558,22 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                   )}
                   <input type="number" min="0" max="100" value={discountPct} onChange={e => { setCodeId(''); setDiscountPct(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0))); }}/>
                   <span className="safi-pct">%</span>
-                  <span className="safi-cell-sub safi-mono" style={{ marginLeft: 6 }}>— {money(discount)}</span>
+                  <span className="safi-cell-sub safi-mono" style={{ marginLeft: 6 }}>— {money(baseDiscount)}</span>
                 </div>
               </div>
+              {ptsCfg.on && customer && PTS.eligible(customer) && (
+                ptsAvail.pts > 0 ? (
+                  <label className="safi-sum__row safi-pts-use" style={{ cursor: 'pointer' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" checked={usePts} onChange={e => setUsePts(e.target.checked)}/>
+                      Use points <span className="safi-cell-sub">({ptsAvail.balance} available)</span>
+                    </span>
+                    <span className="safi-mono">{usePts ? `— ${money(ptsOff)}` : `${ptsAvail.pts} pts = ${money(ptsAvail.kes)}`}</span>
+                  </label>
+                ) : (
+                  <div className="safi-sum__row"><span className="safi-cell-sub">Points</span><span className="safi-cell-sub safi-mono">{ptsAvail.balance} pts{ptsAvail.balance < ptsCfg.minRedeem ? ` · usable from ${ptsCfg.minRedeem}` : ''}</span></div>
+                )
+              )}
               <div className="safi-sum__row safi-sum__row--total"><span>{t('total', lang)}</span><span className="safi-mono">{money(total)}</span></div>
 
               <div className="safi-sum__divider"/>
@@ -559,9 +615,19 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
               <div className="safi-mini-cust">
                 <div className="safi-mini-cust__row"><span>Total orders</span><b>{customer.orders}</b></div>
                 <div className="safi-mini-cust__row"><span>Lifetime spend</span><b className="safi-mono">{money(customer.spend)}</b></div>
-                <div className="safi-mini-cust__row"><span>Loyalty</span><b>{customer.loyalty} / 10</b></div>
-                <div className="safi-mini-cust__loy"><div style={{ width: `${customer.loyalty * 10}%` }}/></div>
-                {customer.loyalty >= 9 && <div className="safi-mini-cust__bonus">🎉 Next order: KES 500 off!</div>}
+                {ptsCfg.on ? (() => {
+                  if (!PTS.eligible(customer)) return <div className="safi-mini-cust__row"><span>Points</span><b className="safi-cell-sub">Not for {customer.group} clients</b></div>;
+                  const a = PTS.account(customer.id);
+                  return <>
+                    <div className="safi-mini-cust__row"><span>Points</span><b className="safi-mono">{a.balance} pts · {money(Math.round(a.balance * ptsCfg.value))}</b></div>
+                    {a.pending > 0 && <div className="safi-mini-cust__row"><span className="safi-cell-sub">Pending (unpaid orders)</span><span className="safi-cell-sub safi-mono">+{a.pending} pts</span></div>}
+                    {a.balance >= ptsCfg.minRedeem && a.balance > 0 && <div className="safi-mini-cust__bonus">Can use {a.balance} pts on this order</div>}
+                  </>;
+                })() : <>
+                  <div className="safi-mini-cust__row"><span>Loyalty</span><b>{customer.loyalty} / 10</b></div>
+                  <div className="safi-mini-cust__loy"><div style={{ width: `${customer.loyalty * 10}%` }}/></div>
+                  {customer.loyalty >= 9 && <div className="safi-mini-cust__bonus">🎉 Next order: KES 500 off!</div>}
+                </>}
               </div>
             </Card>
           )}
@@ -935,24 +1001,31 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
   const dutyShifts = (() => {
     if (!dateFilter) return [];
     const log = (((D.settings || {}).dutyLog) || []).slice().sort((x, y) => String(x.at).localeCompare(String(y.at)));
-    const before = log.filter(e => String(e.at).slice(0, 10) < dateFilter).pop();
-    const day = log.filter(e => String(e.at).slice(0, 10) === dateFilter);
-    const isAtt = (id) => { const s = D.staff.find(x => x.id === id); return s && !/director|manager|owner/i.test(s.role || ''); };
-    let seq = (before ? [{ id: before.id, at: dateFilter + ' 00:00', carried: true }] : []).concat(day).filter(e => isAtt(e.id));
-    // Collapse repeats of the same person.
+    const isAtt = (id) => { const s = D.staff.find(x => x.id === id); return !!s && !/director|manager|owner/i.test(s.role || ''); };
+    // Only this day's entries: yesterday's attendant is never carried into today.
+    // A sign-out ('' in the log) is kept, so the time after it shows as Awaiting sign-in (today) or Off duty (past days), not as someone else.
+    let day = log.filter(e => String(e.at).slice(0, 10) === dateFilter).map(e => ({ id: isAtt(e.id) ? e.id : '', at: String(e.at) }));
+    // Anyone who took orders that day but is missing from the log still shows, from their first order.
+    const inLog = new Set(day.map(e => e.id).filter(Boolean));
+    const firstOrder = {};
+    for (const o of dateOrders) { if (o.cashier && isAtt(o.cashier) && !inLog.has(o.cashier)) { const at = String(o.in || ''); if (!firstOrder[o.cashier] || at < firstOrder[o.cashier]) firstOrder[o.cashier] = at; } }
+    day = day.concat(Object.entries(firstOrder).map(([id, at]) => ({ id, at }))).sort((x, y) => x.at.localeCompare(y.at));
+    // Collapse repeats, and drop sign-outs before the first sign-in.
+    let seq = day.filter((e, k) => k === 0 || day[k - 1].id !== e.id);
+    while (seq.length && !seq[0].id) seq.shift();
     seq = seq.filter((e, k) => k === 0 || seq[k - 1].id !== e.id);
     // No log yet (e.g. never switched since updating): show who is on duty now.
     if (!seq.length && dateFilter === todayStr) { const cur = window.SAFI_STORE.getCurrentStaff(); if (cur && cur.id) seq = [{ id: cur.id, at: dateFilter + ' 00:00', carried: true }]; }
-    const nm = (id) => (D.staff.find(x => x.id === id) || {}).name || '—';
+    const nm = (id) => id ? ((D.staff.find(x => x.id === id) || {}).name || '—') : (dateFilter === todayStr ? 'Awaiting sign-in' : 'Off duty');
     const endOfDay = dateFilter === todayStr ? 'now' : '23:59';
-    return seq.map((e, k) => ({ name: nm(e.id), from: e.carried ? 'start of day' : String(e.at).slice(11, 16), to: seq[k + 1] ? String(seq[k + 1].at).slice(11, 16) : endOfDay }));
+    return seq.map((e, k) => ({ name: nm(e.id), system: !e.id, from: e.carried ? 'start of day' : e.at.slice(11, 16), to: seq[k + 1] ? String(seq[k + 1].at).slice(11, 16) : endOfDay }));
   })();
 
   return (
     <>
       <Topbar
         title={t('nav_orders', lang)}
-        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter.split('-').reverse().join('-')} · ` : ''}${activeCount} active · ${tierLine}${dateFilter && dayTellers.length ? ` · Orders taken by: ${dayTellers.join(', ')}` : ''}${dateFilter === SAFI_TIME.day() ? ` · On duty now: ${window.SAFI_STORE.getCurrentStaff().name}` : ''}`}
+        subtitle={`${dateFilter ? `${dateOrders.length} orders on ${dateFilter.split('-').reverse().join('-')} · ` : ''}${activeCount} active · ${tierLine}${dateFilter && dayTellers.length ? ` · Orders taken by: ${dayTellers.join(', ')}` : ''}${dateFilter === SAFI_TIME.day() ? ` · On duty now: ${window.SAFI_STORE.getCurrentStaff().id ? window.SAFI_STORE.getCurrentStaff().name : 'Awaiting sign-in'}` : ''}`}
         right={<>
           {role === 'owner' && <Button kind="ghost" icon="print" onClick={() => window.print()}>{t('print', lang)}</Button>}
           <Button kind="primary" icon="plus" onClick={() => setView('new-order')}>{t('new_order', lang)}</Button>
@@ -963,7 +1036,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
         <div className="safi-duty">
           <Icon name="staff" size={15}/>
           <b>Attendant on duty</b>
-          {dutyShifts.map((d, k) => <span key={k} className="safi-duty__s"><b>{d.name}</b> {d.from} – {d.to}</span>)}
+          {dutyShifts.map((d, k) => <span key={k} className="safi-duty__s" style={d.system ? { opacity: .6 } : undefined} title={d.system ? 'Signed out: nobody on duty' : undefined}><b>{d.name}</b> {d.from} – {d.to}</span>)}
         </div>
       )}
 
@@ -1013,7 +1086,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
         <div className={q ? 'safi-ordscroll' : ''}>
         <Table
           cols={[
-            { label: t('order_id', lang), render: r => <span className="safi-mono safi-cell-strong">{orderNo(r.id)}</span> },
+            { label: t('order_id', lang), render: r => <span className={`safi-mono safi-cell-strong${r.rewashOf ? ' safi-rwid' : ''}`} title={r.rewashOf ? `Rewash of ${orderNo(r.rewashOf)}${r.rewashNote ? ': ' + r.rewashNote : ''}` : undefined}>{orderNo(r.id)}</span> },
             { label: t('customer', lang), render: r => {
                 const c = D.customers.find(x => x.id === r.customer);
                 return <div><div className="safi-cell-strong">{c?.name || orderNo(r.id)}</div><div className="safi-cell-sub">{c?.phone || ''}</div></div>;
@@ -1047,7 +1120,7 @@ function OrdersQueue({ setView, setActiveOrderId, lang, money, role }) {
 }
 
 // ─── Order Detail ─────────────────────────────────────────────────────────
-function OrderDetail({ orderId, setView, lang, money, role }) {
+function OrderDetail({ orderId, setView, setActiveOrderId, lang, money, role }) {
   const D = useStore();
   const o = D.orders.find(x => x.id === orderId) || D.orders[0];
   const [showPay, setShowPay] = useStateFD(false);
@@ -1076,7 +1149,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
     // Mandatory SMS for collection
     if (c && c.phone && (((D.settings && D.settings.smsStages) || {}).collected !== false)) {
       const tpl = (D.smsTemplates || {}).collected || 'Hi {name}, your order {id} has been collected. Asante, karibu tena!';
-      const body = tpl
+      const body = window.safiTokens(tpl, o, c)
         .replace(/\{name\}/g, firstName(c.name))
         .replace(/\{id\}/g, orderNo(o.id))
         .replace(/\{balance\}/g, `KES ${Math.round(o.total - o.paid).toLocaleString('en-KE')}`)
@@ -1096,7 +1169,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
     <>
       <Topbar
         title={<><span className="safi-back" onClick={() => setView('orders')}><Icon name="arrow-l" size={16}/></span> Order <span className="safi-mono">{orderNo(o.id)}</span>{o.rewashOf && <span className="safi-tag safi-tag--violet" style={{ marginLeft: 8 }}>REWASH</span>}{o.rewashedBy && <span className="safi-tag safi-tag--amber" style={{ marginLeft: 8 }}>Has rewash</span>}</>}
-        subtitle={`${c?.name || orderNo(o.id)} · placed ${dm(o.in)} · due ${dm(o.due)}${parent ? ` · rewash of ${parent.id}` : ''}`}
+        subtitle={`${c?.name || orderNo(o.id)} · placed ${dm(o.in)} · due ${dm(o.due)}${parent ? ` · rewash of ${orderNo(parent.id)}` : ''}`}
         right={<>
           <Button kind="ghost" icon="wrench" onClick={() => setShowRewash(true)}>Rewash (free)</Button>
           <Button kind="ghost" icon="pen" onClick={() => setShowEdit(true)}>Edit</Button>
@@ -1108,6 +1181,16 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
           <Button kind="ghost" onClick={() => setShowDelete(true)} icon="alert"><span style={{ color: 'var(--red)' }}>Delete</span></Button>
         </>}
       />
+
+      {(o.rewashOf || o.rewashedBy) && (
+        <div className="safi-rwlink">
+          <Icon name="wrench" size={16}/>
+          {o.rewashOf
+            ? <span><b>Rewash of {orderNo(o.rewashOf)}</b>{o.rewashNote ? <> · {o.rewashNote}</> : null}</span>
+            : <span><b>Rewashed as {orderNo(o.rewashedBy)}</b>{(rewashChild && rewashChild.rewashNote) ? <> · {rewashChild.rewashNote}</> : null}</span>}
+          <button className="safi-rowlink" onClick={() => { setActiveOrderId && setActiveOrderId(o.rewashOf || o.rewashedBy); }}>Open {orderNo(o.rewashOf || o.rewashedBy)} ›</button>
+        </div>
+      )}
 
       <Card>
         <div className={`safi-stepper${(o.status === 'holding' || o.status === 'finalhold' || window.SAFI_STORE.stageTimes(o.id).holding || window.SAFI_STORE.stageTimes(o.id).finalhold) ? ' has-hold' : ''}${holdFront === 'h' ? ' front-h' : ''}`} onClick={e => { const h = e.target.closest && e.target.closest('.safi-stepper__hold'); if (!h) return; setHoldFront(h.classList.contains('safi-stepper__hold--fh') ? 'fh' : 'h'); }}>
@@ -1186,6 +1269,7 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
                 <div className="safi-cust-card__meta">
                   {c && <GroupBadge group={c.group}/>}
                   {c && <span className="safi-cell-sub">· {c.orders} orders · {money(c.spend)} lifetime</span>}
+                  {c && window.SAFI_POINTS.cfg().on && window.SAFI_POINTS.eligible(c) && <span className="safi-cell-sub">· {window.SAFI_POINTS.balance(c.id)} pts</span>}
                 </div>
               </div>
             </div>
@@ -1213,18 +1297,8 @@ function OrderDetail({ orderId, setView, lang, money, role }) {
         orderId={o.id} suggested={o.total - o.paid}
         customerName={c?.name || orderNo(o.id)}/>
 
-      <ApprovalRequestModal
-        open={showRewash} onClose={() => setShowRewash(false)}
-        action="rewash_order" target={o.id}
-        title="Rewash items free of charge"
-        description={`Items from ${orderNo(o.id)} will be re-processed at no charge as a new linked order.`}
-        confirmLabel={isManagement ? 'Create rewash now' : 'Request approval'}
-        isManagement={isManagement}
-        onDirectApprove={() => {
-          const r = window.SAFI_STORE.createRewash(o.id);
-          toast(`Rewash ${orderNo(r.id)} created (free)`);
-          setView('orders');
-        }}/>
+      <RewashModal open={showRewash} onClose={() => setShowRewash(false)} order={o} isManagement={isManagement}
+        onDone={(r) => { toast(`Rewash ${orderNo(r.id)} created (free)`); setActiveOrderId && setActiveOrderId(r.id); setView('order-detail'); }}/>
 
       <ApprovalRequestModal
         open={showDelete} onClose={() => setShowDelete(false)}
@@ -1513,7 +1587,7 @@ function AdvanceModal({ open, onClose, order, customer, stages, curIdx }) {
   function renderTpl(key) {
     const tpl = templates[key] || '';
     if (!customer) return tpl;
-    return tpl
+    return window.safiTokens(tpl, order, customer)
       .replace(/\{name\}/g, firstName(customer.name))
       .replace(/\{id\}/g, orderNo(order.id))
       .replace(/\{balance\}/g, `KES ${Math.round(order.total - order.paid).toLocaleString('en-KE')}`)
@@ -1616,6 +1690,35 @@ function MgmtPinField({ value, onChange }) {
       <input className="safi-input safi-mono" type="password" inputMode="numeric" maxLength={6} autoComplete="off"
         value={value} onChange={e => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="••••••"/>
     </label>
+  );
+}
+
+// ─── Rewash: what is being rewashed and why (required) ─────────────────────
+function RewashModal({ open, onClose, order, isManagement, onDone }) {
+  const [note, setNote] = useStateFD('');
+  const [pin, setPin] = useStateFD('');
+  useEffectFD(() => { if (open) { setNote(''); setPin(''); } }, [open]);
+  function submit() {
+    const n = note.trim();
+    if (n.length < 8) { toast('Say what is being rewashed and why', 'error'); return; }
+    if (isManagement) {
+      if (window.__safiOwnerPin && pin !== window.__safiOwnerPin) { toast('Wrong Management PIN', 'error'); return; }
+      const r = window.SAFI_STORE.createRewash(order.id, null, n);
+      onClose(); onDone && onDone(r); return;
+    }
+    window.SAFI_STORE.requestApproval({ action: 'rewash_order', target: order.id, reason: n, payload: { note: n } });
+    toast('Sent to Management for approval'); onClose();
+  }
+  return (
+    <Modal open={open} onClose={onClose} title={`Rewash ${orderNo(order.id)} free of charge`} width={500}
+      footer={<><Button kind="ghost" onClick={onClose}>Cancel</Button><Button kind="primary" icon="check" onClick={submit}>{isManagement ? 'Create rewash' : 'Request approval'}</Button></>}>
+      <div className="safi-form">
+        <label>What is being rewashed, and why? <span style={{ color: 'var(--red)' }}>required</span>
+          <textarea className="safi-textarea" rows="3" value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Two white T-shirts had visible stains on the collars. / Whole lot smelt damp."/>
+        </label>
+        {isManagement ? <MgmtPinField value={pin} onChange={setPin}/> : <div className="safi-callout"><Icon name="lock" size={14}/><span>Management confirms this in Approvals.</span></div>}
+      </div>
+    </Modal>
   );
 }
 
@@ -1812,6 +1915,7 @@ function EditOrderModal({ open, onClose, order, isManagement }) {
 
 // One print per receipt. A second needs Management approval (Approvals queue); never more than two.
 function ReceiptPrintButton({ D, o, lang }) {
+  if (o.rewashOf) return <Button kind="ghost" icon="print" disabled title="Rewash orders are free and have no receipt">{t('print', lang)}</Button>;
   const used = window.SAFI_STORE.printCount('receipt', o.id);
   const allowed = window.SAFI_STORE.printsAllowed('receipt', o.id);
   const can = used < allowed;
@@ -1822,16 +1926,21 @@ function ReceiptPrintButton({ D, o, lang }) {
 // Management only: allow one more print of this order's receipt or delivery note.
 function PrintPermissions({ o }) {
   useStore();
+  const [nx, setNx] = useStateFD({ receipt: 1, delivery: 1, jobcard: 1 });
   const row = (kind, label) => {
     const used = window.SAFI_STORE.printCount(kind, o.id);
     const allowed = window.SAFI_STORE.printsAllowed(kind, o.id);
+    const n = nx[kind];
     return (
       <div className="safi-printperm__row">
         <span>{label}</span>
-        <span className="safi-cell-sub">printed {used} · allowed {allowed}</span>
-        {kind !== 'jobcard' && used >= allowed
-          ? <Button kind="ghost" size="sm" onClick={() => { window.SAFI_STORE.grantPrint(kind, o.id); toast(`One more ${label.toLowerCase()} print allowed`); }}>Allow 1 more</Button>
-          : <span className="safi-cell-sub">{used < allowed ? 'can print' : 'max reached'}</span>}
+        <span className="safi-cell-sub">printed {used} · allowed {allowed}{used < allowed ? ` · ${allowed - used} left` : ' · max reached'}</span>
+        <span className="safi-printperm__add">
+          Allow
+          <input type="number" min="1" max="20" className="safi-input safi-mono" value={n} onChange={e => setNx({ ...nx, [kind]: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })}/>
+          more
+          <Button kind="ghost" size="sm" onClick={() => { window.SAFI_STORE.grantPrint(kind, o.id, n); toast(`${n} more ${label.toLowerCase()} print${n === 1 ? '' : 's'} allowed`); }}>Allow</Button>
+        </span>
       </div>
     );
   };
@@ -1942,12 +2051,33 @@ function Receipt({ orderId, setView, lang, money, shop }) {
 
           <dl className="safi-receipt__totals">
             <div><dt>Subtotal</dt><dd className="safi-mono">{money(o.total + (o.discount || 0))}</dd></div>
-            <div><dt>Discount</dt><dd className="safi-mono">— {money(o.discount || 0)}</dd></div>
+            {(() => {
+              const pts = Number(o.pointsRedeemed) || 0;
+              const ptsKes = pts ? Math.round(pts * window.SAFI_POINTS.cfg().value) : 0;
+              const other = Math.max(0, (o.discount || 0) - ptsKes);
+              return <>
+                {(other > 0 || !pts) && <div><dt>Discount</dt><dd className="safi-mono">— {money(other)}</dd></div>}
+                {pts > 0 && <div><dt>Points used ({pts} pts)</dt><dd className="safi-mono">— {money(ptsKes)}</dd></div>}
+              </>;
+            })()}
             <div className="safi-receipt__grand"><dt>TOTAL</dt><dd className="safi-mono">{money(o.total)}</dd></div>
             <div><dt>Paid ({(o.method || '—').toUpperCase()})</dt><dd className="safi-mono">{money(o.paid)}</dd></div>
             {o.txn && <div><dt>Txn code</dt><dd className="safi-mono">{o.txn}</dd></div>}
             <div><dt>Balance</dt><dd className="safi-mono">{money(o.total - o.paid)}</dd></div>
+            {c && window.SAFI_POINTS.cfg().on && window.SAFI_POINTS.eligible(c) && (() => {
+              const P = window.SAFI_POINTS, a = P.account(c.id);
+              const fromThis = P.earnedFor(o) || P.pendingFor(o);
+              return <>
+                {fromThis > 0 && <div><dt>{P.earnedFor(o) ? 'Points earned' : 'Points on payment'}</dt><dd className="safi-mono">+{fromThis}</dd></div>}
+                <div><dt>Points balance</dt><dd className="safi-mono">{a.balance} pts</dd></div>
+              </>;
+            })()}
           </dl>
+          {window.SAFI_TRACK.on() && o.track && (
+            <div className="safi-receipt__pay-line safi-receipt__pay-line--sub" style={{ textAlign: 'center', marginTop: 4 }}>
+              Track your order: <span className="safi-mono">{window.SAFI_TRACK.link(o).replace(/^https?:\/\//, '')}</span>
+            </div>
+          )}
 
           <div className="safi-receipt__rule"/>
 
@@ -2083,6 +2213,11 @@ function CustomersScreen({ lang, money, setView, role }) {
   const joinedTs = c => { const t = Date.parse(c.joined); return isNaN(t) ? 0 : t; };
   const ordersOf = c => Number(c.orders) || 0;
   const spendOf = c => Number(c.spend) || 0;
+  // Loyalty column: points balance when points are on, the old visit count otherwise.
+  const ptsOn = window.SAFI_POINTS.cfg().on;
+  const ptsCache = new Map();
+  const ptsOf = c => { if (!ptsCache.has(c.id)) ptsCache.set(c.id, window.SAFI_POINTS.eligible(c) ? window.SAFI_POINTS.balance(c.id) : -1); return ptsCache.get(c.id); };
+  const loyOf = c => ptsOn ? ptsOf(c) : (c.loyalty || 0);
   const rows = D.customers.filter(c => {
     if (group !== 'all' && c.group !== group) return false;
     if (q && !(c.name.toLowerCase().includes(q.toLowerCase()) || c.phone.includes(q))) return false;
@@ -2095,8 +2230,8 @@ function CustomersScreen({ lang, money, setView, role }) {
     : sort === 'orders-low' ? ordersOf(a) - ordersOf(b)
     : sort === 'spend-high' ? spendOf(b) - spendOf(a)
     : sort === 'spend-low' ? spendOf(a) - spendOf(b)
-    : sort === 'loyalty-high' ? (b.loyalty || 0) - (a.loyalty || 0)
-    : sort === 'loyalty-low' ? (a.loyalty || 0) - (b.loyalty || 0)
+    : sort === 'loyalty-high' ? loyOf(b) - loyOf(a)
+    : sort === 'loyalty-low' ? loyOf(a) - loyOf(b)
     : a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
   function handleImport(file) {
@@ -2158,9 +2293,9 @@ function CustomersScreen({ lang, money, setView, role }) {
                 <option value="spend-high">Highest spend</option>
                 <option value="spend-low">Lowest spend</option>
               </optgroup>
-              <optgroup label="Loyalty">
-                <option value="loyalty-high">Most loyal</option>
-                <option value="loyalty-low">Least loyal</option>
+              <optgroup label={ptsOn ? 'Points' : 'Loyalty'}>
+                <option value="loyalty-high">{ptsOn ? 'Most points' : 'Most loyal'}</option>
+                <option value="loyalty-low">{ptsOn ? 'Fewest points' : 'Least loyal'}</option>
               </optgroup>
             </select>
           </label>
@@ -2182,7 +2317,9 @@ function CustomersScreen({ lang, money, setView, role }) {
             { label: 'Joined', render: r => <span className="safi-cell-sub">{r.joined}</span> },
             { label: 'Orders', render: r => <b>{r.orders}</b> },
             { label: 'Lifetime spend', render: r => <span className="safi-mono safi-cell-strong">{money(r.spend)}</span> },
-            { label: 'Loyalty', render: r => (
+            { label: ptsOn ? 'Points' : 'Loyalty', render: r => ptsOn ? (
+              ptsOf(r) < 0 ? <span className="safi-cell-sub">—</span> : <span className="safi-mono">{ptsOf(r)} pts</span>
+            ) : (
               <div className="safi-loy">
                 <div className="safi-loy__bar"><div style={{ width: `${r.loyalty * 10}%` }}/></div>
                 <span>{r.loyalty}/10</span>
@@ -2578,7 +2715,7 @@ function PaymentsScreen({ lang, money, role }) {
   const [pFrom, setPFrom] = useStateFD(SAFI_TIME.day().slice(0, 8) + '01');
   const [pTo, setPTo] = useStateFD(SAFI_TIME.day());
   const [q, setQ] = useStateFD('');
-  const range = (() => { const d = new Date(); const ym = (y, m) => `${y}-${String(m + 1).padStart(2, '0')}`; if (per === 'last') { const x = new Date(d.getFullYear(), d.getMonth() - 1, 1); const k = ym(x.getFullYear(), x.getMonth()); const end = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate(); return [k + '-01', k + '-' + String(end).padStart(2, '0')]; } if (per === 'custom') return [pFrom, pTo]; return [SAFI_TIME.day().slice(0, 8) + '01', SAFI_TIME.day()]; })();
+  const range = (() => { const d = new Date(); const ym = (y, m) => `${y}-${String(m + 1).padStart(2, '0')}`; if (per === 'last') { const x = new Date(d.getFullYear(), d.getMonth() - 1, 1); const k = ym(x.getFullYear(), x.getMonth()); const end = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate(); return [k + '-01', k + '-' + String(end).padStart(2, '0')]; } if (per === 'custom') return [pFrom, pTo]; if (per === 'today') return [SAFI_TIME.day(), SAFI_TIME.day()]; if (per === 'yesterday') return [SAFI_TIME.daysAgo(1), SAFI_TIME.daysAgo(1)]; return [SAFI_TIME.day().slice(0, 8) + '01', SAFI_TIME.day()]; })();
   const inPer = (p) => { const d = String(p.date || '').slice(0, 10); return preset ? true : (d >= range[0] && d <= range[1]); };
   const qq = q.trim().toLowerCase();
   const hit = (p) => { if (!qq) return true; const o = D.orders.find(x => x.id === p.order); const c = o && D.customers.find(x => x.id === o.customer); return [p.customer, c && c.name, orderNo(p.order), p.order, p.txn].some(v => String(v || '').toLowerCase().includes(qq)); };
@@ -2696,7 +2833,7 @@ function PaymentsScreen({ lang, money, role }) {
               <Icon name={m === 'mpesa' ? 'mpesa' : 'wallet'} size={16}/>
             </div>
             <div className="safi-stat__value">{money(total)}</div>
-            <div className="safi-stat__delta">{count} transactions · {preset ? 'collected today' : per === 'last' ? 'last month' : per === 'custom' ? 'custom period' : 'this month'}</div>
+            <div className="safi-stat__delta">{count} transactions · {preset ? 'collected today' : per === 'today' ? 'today' : per === 'yesterday' ? 'yesterday' : per === 'last' ? 'last month' : per === 'custom' ? 'custom period' : 'this month'}</div>
           </div>
         ))}
         <div className="safi-stat safi-stat--accent">
@@ -2740,7 +2877,7 @@ function PaymentsScreen({ lang, money, role }) {
         <Button kind="ghost" size="sm" icon="box" onClick={() => exportLedger(ledgerRows(rows), 'csv')}>CSV</Button>
         <Button kind="ghost" size="sm" icon="box" onClick={() => exportLedger(ledgerRows(rows), 'xlsx')}>Excel</Button>
         <div className="safi-cust-pick__search safi-cust-pick__search--inline" style={{ minWidth: 240 }}><Icon name="search" size={15}/><input placeholder="Search name, order no. or txn code" value={q} onChange={e => setQ(e.target.value)}/>{q && <button className="safi-rowlink" onClick={() => setQ('')}>×</button>}</div>
-        {!preset && <div className="safi-seg">{[['last', monthTag(-1)], ['this', monthTag(0)], ['custom', 'Custom']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${per === k ? 'is-active' : ''}`} onClick={() => setPer(k)}>{l}</button>)}</div>}
+        {!preset && <div className="safi-seg">{[['today', 'Today'], ['yesterday', 'Yesterday'], ['this', monthTag(0)], ['last', monthTag(-1)], ['custom', 'Custom']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${per === k ? 'is-active' : ''}`} onClick={() => setPer(k)}>{l}</button>)}</div>}
         {!preset && per === 'custom' && <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="date" className="safi-input safi-input--inline" value={pFrom} max={pTo} onChange={e => setPFrom(e.target.value)}/><span className="safi-cell-sub">to</span><input type="date" className="safi-input safi-input--inline" value={pTo} min={pFrom} onChange={e => setPTo(e.target.value)}/></span>}
         <div className="safi-tabs">
           {['all', 'mpesa', 'bank'].map(x => (

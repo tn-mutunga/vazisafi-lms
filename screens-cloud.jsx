@@ -156,6 +156,14 @@ function CloudCard() {
           <div><span>Internet</span><b>{st.online ? 'Online' : 'Offline — the app still works'}</b></div>
           <div><span>Last cloud backup</span><b>{st.lastBackup ? dmyT(st.lastBackup) : 'Never'}</b></div>
           <div><span>Last live sync</span><b>{st.lastSync ? dmyT(st.lastSync) : 'Never'}</b></div>
+          {(() => {
+            // The app keeps everything in the browser's local storage, which holds about
+            // 5 million characters. Near the limit, saving starts to fail.
+            let used = 0;
+            try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); used += k.length + (localStorage.getItem(k) || '').length; } } catch (e) {}
+            const pct = Math.round(used / 5e6 * 100);
+            return <div><span>Storage used on this laptop</span><b style={pct >= 80 || window.__safiStorageFull ? { color: 'var(--danger, #b42318)' } : undefined}>{(used / 1e6).toFixed(1)} of about 5 million characters ({pct}%){window.__safiStorageFull ? ' — FULL, last save failed' : pct >= 80 ? ' — nearly full' : ''}</b></div>;
+          })()}
           {st.lastCloudOrders != null && <div><span>Orders: cloud / this laptop</span><b>{st.lastCloudOrders} / {(window.SAFI_STORE.get().orders || []).length}{st.lastCloudOrders === (window.SAFI_STORE.get().orders || []).length ? ' ✓ matching' : ''}</b></div>}
         </div>
       </Card>
@@ -225,8 +233,9 @@ function CloudCard() {
       {st.signedIn && (
         <Card title="Live sync">
           <p className="safi-cell-sub" style={{ marginTop: 0 }}>
-            Two-way sync: changes made on this laptop go up within seconds, and changes made on
-            other laptops come down every two minutes. Needs supabase/05_two_way_sync.sql run once.
+            Two-way sync: changes made on this laptop go up within about a minute (even while a
+            window such as the Closing check is open), and changes made on other laptops come down
+            every 5 minutes. Needs supabase/05_two_way_sync.sql run once.
           </p>
           {st.needsSetup && (
             <div className="safi-hint" style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 12 }}>
@@ -248,7 +257,7 @@ function CloudCard() {
             <input type="checkbox" checked={!!st.liveSync}
               onChange={e => { window.SAFI_CLOUD.setLiveSync(e.target.checked); }}/>
             <span><b>Keep the cloud up to date automatically</b><br/>
-              <span className="safi-cell-sub">Changes are sent a few seconds after they are made, and again whenever the internet comes back.</span></span>
+              <span className="safi-cell-sub">Changes are sent within about a minute of being made, and again whenever the internet comes back.</span></span>
           </label>
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
             <Button kind="primary" icon="refresh" disabled={busy === 'sync' || st.syncing || st.needsSetup}
@@ -265,7 +274,19 @@ function CloudCard() {
                 run('pullall', () => window.SAFI_SYNC.pull(), 'Pulled down from the cloud');
               }}>Pull cloud → this laptop</Button>
           </div>
-          {st.syncError && <p className="safi-hint" style={{ color: 'var(--danger, #b42318)' }}>Last attempt failed: {st.syncError}</p>}
+          {st.syncError && (
+            <div className="safi-hint" style={{ color: 'var(--danger, #b42318)' }}>
+              <b>Last attempt failed</b>
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                {String(st.syncError).replace(/^Some changes did not send\.\s*/, '').split(' | ').map((line, i) => <li key={i} style={{ wordBreak: 'break-word' }}>{line}</li>)}
+              </ul>
+            </div>
+          )}
+          {(() => {
+            const un = window.SAFI_SYNC && window.SAFI_SYNC.unsent ? window.SAFI_SYNC.unsent() : [];
+            if (!un.length) return st.lastSync ? <p className="safi-hint">Every order on this laptop is in the cloud.</p> : null;
+            return <p className="safi-hint"><b>{un.length} order{un.length === 1 ? '' : 's'} not in the cloud yet:</b> <span className="safi-mono">{un.slice(0, 20).map(id => orderNo(id)).join(', ')}{un.length > 20 ? ' …' : ''}</span>. New ones normally go within a minute; if this list stays, the red lines above say why.</p>;
+          })()}
           {st.refusedDeletes > 0 && <p className="safi-hint">{st.refusedDeletes} deletion(s) were refused because this laptop uses the shop login, so those records were put back. Delete them from the owner's laptop.</p>}
           {schema && (
             <p className="safi-hint" style={{ marginBottom: 0 }}>
