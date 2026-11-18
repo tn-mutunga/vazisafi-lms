@@ -168,8 +168,9 @@ function JobCardSheet({ orderId, setView, shop, lang }) {
   // Paper size is per laptop: the shop's thermal printer uses the 80mm roll.
   const [paper, setPaper] = useStateDC('80') /* always opens on the 80mm roll; A4 only for this one print */;
   const pick = (p) => setPaper(p);
-  // Job card: up to 5 prints. Delivery note: once only (it is the rider's cash record).
+  // Job card: up to 10 prints (plus any Management allows). Delivery note: once only (it is the rider's cash record).
   const jcUsed = window.SAFI_STORE.printCount('jobcard', order.id);
+  const jcMax = window.SAFI_STORE.printsAllowed('jobcard', order.id);
   const dnDone = window.SAFI_STORE.printCount('delivery', order.id) >= window.SAFI_STORE.printsAllowed('delivery', order.id);
 
   return (
@@ -181,9 +182,9 @@ function JobCardSheet({ orderId, setView, shop, lang }) {
           <div className="safi-seg">{[['80', '80mm roll'], ['a4', 'A4 sheet']].map(([k, l]) => <button key={k} className={`safi-seg__btn ${paper === k ? 'is-active' : ''}`} onClick={() => pick(k)}>{l}</button>)}</div>
           <Button kind="ghost" onClick={() => setView('receipt')}>← Receipt</Button>
           <Button kind="ghost" onClick={() => setView('order-detail')}>Order</Button>
-          {jcUsed >= 5
-            ? <Button kind="ghost" icon="lock" onClick={() => toast('The job card has been printed 5 times, the maximum.', 'error')}>Printed 5 of 5</Button>
-            : <Button kind="primary" icon="print" onClick={() => { window.SAFI_STORE.logPrint('jobcard', order.id); if (!dnDone) window.SAFI_STORE.logPrint('delivery', order.id); if (paper === '80') window.fitRollPages(); else { const o = document.getElementById('safi-roll-pages'); if (o) o.remove(); } window.print(); }}>Print {jcUsed ? `(${jcUsed + 1} of 5)` : ''}</Button>}
+          {jcUsed >= jcMax
+            ? <Button kind="ghost" icon="lock" onClick={() => toast(`The job card has been printed ${jcUsed} times, the maximum. Management can allow more on the order page (Print permissions).`, 'error')}>Printed {jcUsed} of {jcMax}</Button>
+            : <Button kind="primary" icon="print" onClick={() => { window.SAFI_STORE.logPrint('jobcard', order.id); if (!dnDone) window.SAFI_STORE.logPrint('delivery', order.id); if (paper === '80') window.fitRollPages(); else { const o = document.getElementById('safi-roll-pages'); if (o) o.remove(); } window.print(); }}>Print {jcUsed ? `(${jcUsed + 1} of ${jcMax})` : ''}</Button>}
         </>}
       />
       <div className={`safi-jcsheet ${paper === '80' ? 'safi-jcsheet--roll' : ''}`} id="safi-print-area">

@@ -210,6 +210,26 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   const [customerId, setCustomerId] = useStateFD('');
   const [group, setGroup] = useStateFD('normal');
   const [items, setItems] = useStateFD([]);
+  // Items & services shows either the service buttons or the order's lines, in the same space.
+  // Adding something opens the order view; "Add more" goes back to the buttons.
+  // "Done" keeps the buttons up: anything added after it goes straight onto the order
+  // without the pop-up (for the thing you forgot); "View order" brings the pop-up back.
+  const [showTiles, setShowTiles] = useStateFD(true);
+  const [pinTiles, setPinTiles] = useStateFD(false);
+  const prevCount = useRefFD(0);
+  useEffectFD(() => {
+    if (items.length > prevCount.current && !pinTiles) setShowTiles(false);
+    if (!items.length) { setShowTiles(true); setPinTiles(false); }
+    prevCount.current = items.length;
+  }, [items.length]);
+  const tilesVisible = items.length === 0 || showTiles;
+  // While an order is being keyed in, the ring around the shop logo spins (styles.css: data-keying).
+  const keying = !!customerId || items.length > 0;
+  useEffectFD(() => {
+    const el = document.documentElement;
+    if (keying) el.dataset.keying = '1'; else delete el.dataset.keying;
+    return () => { delete el.dataset.keying; };
+  }, [keying]);
   const [discountPct, setDiscountPct] = useStateFD(0);
   const [codeId, setCodeId] = useStateFD('');
   const [deposit, setDeposit] = useStateFD(0);
@@ -247,6 +267,14 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
     if (isLoyaltyOrder) { if (discountPct < lyPct) { setDiscountPct(lyPct); lyApplied.current = true; } }
     else if (lyApplied.current) { lyApplied.current = false; if (!codeId) setDiscountPct(0); }
   }, [customerId, isLoyaltyOrder]);
+  // QR sign-up welcome offer: a one-time % on the customer's first order, until offerUntil.
+  const offer = window.SAFI_OFFER.of(customer);
+  const isWelcomeOrder = !!offer && offer.state === 'ok';
+  const wcApplied = useRefFD(false);
+  useEffectFD(() => {
+    if (isWelcomeOrder) { if (discountPct < offer.pct) { setDiscountPct(offer.pct); wcApplied.current = true; } }
+    else if (wcApplied.current) { wcApplied.current = false; if (!codeId && !isLoyaltyOrder) setDiscountPct(0); }
+  }, [customerId, isWelcomeOrder]);
   const freeBagEnabled = D.settings?.firstTimeBagFree;
 
   useEffectFD(() => { if (customer) setGroup(customer.group); }, [customerId]);
@@ -264,12 +292,30 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
     const i = items.findIndex(it => it.svc === 'express');
     if (i < 0) return;
     const want = Math.round(expressBase * expressPct / 100);
-    const last = i === items.length - 1;
+    // "Last" = only the other Express line may follow it (so the two never swap back and forth).
+    const last = items.slice(i + 1).every(it => it.svc === 'dc-express');
     if (items[i].customPrice !== want || items[i].qty !== 1 || !last) {
       const ex = { ...items[i], qty: 1, customPrice: want, note: `${expressPct}% of laundry value` };
       setItems([...items.filter((_, j) => j !== i), ex]);
     }
   }, [expressBase, items, expressPct]);
+  // Dry Cleaning Express = dcExpressPct% (default 75) of the dry cleaning lines only.
+  const dcExpressBase = items.reduce((s, it) => {
+    if (it.svc === 'dc-express') return s;
+    const sv = D.services.find(x => x.id === it.svc);
+    return sv && sv.category === 'drycleaning' ? s + P.line(sv, it.qty, effGroup, it.customPrice) : s;
+  }, 0);
+  const dcExpressPct = Number((D.settings && D.settings.dcExpressPct) ?? 75);
+  useEffectFD(() => {
+    const i = items.findIndex(it => it.svc === 'dc-express');
+    if (i < 0) return;
+    const want = Math.round(dcExpressBase * dcExpressPct / 100);
+    const last = items.slice(i + 1).every(it => it.svc === 'express');
+    if (items[i].customPrice !== want || items[i].qty !== 1 || !last) {
+      const ex = { ...items[i], qty: 1, customPrice: want, note: `${dcExpressPct}% of dry cleaning value` };
+      setItems([...items.filter((_, j) => j !== i), ex]);
+    }
+  }, [dcExpressBase, items, dcExpressPct]);
   const subtotal = items.reduce((s, it) => {
     const svc = D.services.find(x => x.id === it.svc);
     return s + P.line(svc, it.qty, effGroup, it.customPrice);
@@ -312,11 +358,13 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
       return { svc: it.svc, subtype: it.subtype || '', qty: it.qty, price: P.line(svc, it.qty, effGroup, it.customPrice), ...(it.unit ? { unit: it.unit } : {}) };
     });
     const order = window.SAFI_STORE.createOrder({
-      customerId, items: linePriced, total, discount, discountPct, discountCode: code ? code.code : '',
+      customerId, items: linePriced, total, discount, discountPct,
+      discountCode: code ? code.code : (isWelcomeOrder && discountPct >= offer.pct ? 'WELCOME-' + String(offer.campaign).toUpperCase() : ''),
       paid: 0, method: '—', txn: '',
       notes, tag: String(tag).trim(),
       pointsRedeemed: ptsUsed,
     });
+    if (isWelcomeOrder && discountPct >= offer.pct) window.SAFI_STORE.audit('offer.welcome', order.id, `${offer.pct}% welcome (${window.SAFI_OFFER.nameOf(offer.campaign)})`, { campaign: offer.campaign, pct: offer.pct, kes: baseDiscount });
     if (ptsUsed) window.SAFI_STORE.audit('points.redeem', order.id, `${ptsUsed} pts = ${money(ptsOff)}`, { pts: ptsUsed, kes: ptsOff });
 
     if (code) window.SAFI_STORE.useDiscount(code.id);
@@ -376,6 +424,18 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
           <div className="safi-first-banner__pill">{lyPct}% OFF</div>
         </div>
       )}
+      {offer && offer.state !== 'used' && (
+        <div className={`safi-first-banner ${isWelcomeOrder ? 'safi-first-banner--flash safi-loyal-banner' : ''}`}>
+          <div className="safi-first-banner__icon"><Icon name="tag" size={26}/></div>
+          <div className="safi-first-banner__body">
+            <b>{isWelcomeOrder ? '🎉 WELCOME OFFER' : 'Welcome offer expired'} · {customer.name} · signed up at {window.SAFI_OFFER.nameOf(offer.campaign)}</b>
+            <p>{isWelcomeOrder
+              ? <>{offer.pct}% off this first order has been applied (valid until {offer.until}). Let them know when handing over.</>
+              : <>Their {offer.pct}% first-order offer ended on {offer.until}. No discount applies.</>}</p>
+          </div>
+          {isWelcomeOrder && <div className="safi-first-banner__pill">{offer.pct}% OFF</div>}
+        </div>
+      )}
       {isFirstTime && (
         <div className="safi-first-banner safi-first-banner--flash">
           <div className="safi-first-banner__icon"><Icon name="bag" size={28}/></div>
@@ -428,12 +488,25 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
           </Card>
 
           <Card title="2 · Items & services" action={<button className="safi-rowlink" onClick={() => setItems([...items, { svc: D.services[0]?.id, qty: 1 }])}>+ Add line</button>}>
-            <div className="safi-svc-grid">
+            {/* Two views in the same space: the service buttons, and (once something is on the
+                order) the order's lines with an "Add more" button that brings the buttons back. */}
+            {tilesVisible && items.length > 0 && (
+              <div className="safi-tiles-back">
+                <span className="safi-cell-sub">{pinTiles ? `${items.length} item${items.length === 1 ? '' : 's'} on this order. Tap a service to add another.` : 'Tap a service to add it.'}</span>
+                <Button kind="primary" icon="bag" onClick={() => { setPinTiles(false); setShowTiles(false); }}>View Order Cart ({items.length})</Button>
+              </div>
+            )}
+            <div className="safi-items-stage">
+            <div className={`safi-svc-grid ${tilesVisible ? '' : 'is-behind'}`} aria-hidden={!tilesVisible}>
               {D.services.map(s => (
                 <button key={s.id} className="safi-svc-tile" onClick={() => {
                   if (s.id === 'express') {
                     if (items.some(it => it.svc === 'express')) { toast('Express is already on this order'); return; }
                     setItems([...items, { svc: 'express', qty: 1, customPrice: Math.round(expressBase * expressPct / 100), note: `${expressPct}% of laundry value` }]);
+                  } else if (s.id === 'dc-express') {
+                    if (items.some(it => it.svc === 'dc-express')) { toast('Dry Cleaning Express is already on this order'); return; }
+                    if (!dcExpressBase) toast('Add the dry cleaning items too: Express is worked out from them', 'success');
+                    setItems([...items, { svc: 'dc-express', qty: 1, customPrice: Math.round(dcExpressBase * dcExpressPct / 100), note: `${dcExpressPct}% of dry cleaning value` }]);
                   } else if (s.id === 'other') {
                     setOtherForm({ desc: '', unit: 'piece', qty: 1, price: '' });
                   } else if (s.id === 'delivery') {
@@ -447,20 +520,23 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                 }}>
                   <span className="safi-svc-tile__ico"><Icon name={s.id === 'wash-piece' ? 'washpiece' : s.icon} size={20}/></span>
                   <span className="safi-svc-tile__lbl">{s.id === 'wash-piece' ? 'Wash & Fold (per piece)' : (s.tileName || s.name)}</span>
-                  <span className="safi-svc-tile__price">{s.id === 'other' ? 'Any item · kg or pieces' : s.id === 'delivery' ? 'Price set by attendant' : s.id === 'express' ? `${expressPct}% of order value` : s.tellerPrice ? 'Price set by attendant' : P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
+                  <span className="safi-svc-tile__price">{s.id === 'other' ? 'Any item · kg or pieces' : s.id === 'delivery' ? 'Price set by attendant' : s.id === 'express' ? `${expressPct}% of order value` : s.id === 'dc-express' ? `${dcExpressPct}% of dry cleaning value` : s.tellerPrice ? 'Price set by attendant' : P.ruleFor(s, effGroup) ? P.describe(P.ruleFor(s, effGroup)) : <>{money(s.tiers[effGroup])} / {s.unit}</>}</span>
                   {s.subtypes && s.subtypes.length > 0 && <span className="safi-svc-tile__sub">Pick from {s.subtypes.length} types →</span>}
                 </button>
               ))}
             </div>
 
-            <div className="safi-items">
-              {items.length === 0 ? (
-                <p className="safi-cell-sub" style={{ margin: 0, padding: '18px 4px', textAlign: 'center' }}>No items yet. Tap a service above to add it.</p>
-              ) : (
+            {!tilesVisible && <div className="safi-items-overlay"><div className="safi-items safi-items--panel" role="dialog" aria-label="Items on this order">
+              <div className="safi-items__bar">
+                <b>On this order · {items.length} item{items.length === 1 ? '' : 's'}</b>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button kind="ghost" icon="plus" onClick={() => { setPinTiles(false); setShowTiles(true); }}>Add more</Button>
+                  <Button kind="primary" icon="check" onClick={() => { setPinTiles(true); setShowTiles(true); }}>Done</Button>
+                </div>
+              </div>
               <div className="safi-items__hd">
                 <span>Service / Type</span><span>Qty</span><span>Unit price</span><span>Line total</span><span></span>
               </div>
-              )}
               {items.map((it, i) => {
                 const svc = D.services.find(x => x.id === it.svc);
                 const isOther = it.svc === 'other';
@@ -520,6 +596,11 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                   </div>
                 );
               })}
+              <div className="safi-items__foot">
+                <Button kind="ghost" icon="plus" onClick={() => { setPinTiles(false); setShowTiles(true); }}>Add more</Button>
+                <Button kind="primary" icon="check" onClick={() => { setPinTiles(true); setShowTiles(true); }}>Done</Button>
+              </div>
+            </div></div>}
             </div>
           </Card>
 
@@ -2210,7 +2291,11 @@ function CustomersScreen({ lang, money, setView, role }) {
     });
   }
 
-  const joinedTs = c => { const t = Date.parse(c.joined); return isNaN(t) ? 0 : t; };
+  // Joining time: recorded when the customer is added (joinedAt), or the time the record first
+  // reached the cloud (joinedCloud) for customers added on another laptop. Shown only when it is
+  // on the joining day itself (older imported customers have a date only).
+  const joinedAtOf = c => { const t = c.joinedAt || c.joinedCloud || ''; return String(t).slice(0, 10) === String(c.joined || '') ? String(t).slice(0, 16) : ''; };
+  const joinedTs = c => { const t = Date.parse(String(joinedAtOf(c) || c.joined).replace(' ', 'T')); return isNaN(t) ? 0 : t; };
   const ordersOf = c => Number(c.orders) || 0;
   const spendOf = c => Number(c.spend) || 0;
   // Loyalty column: points balance when points are on, the old visit count otherwise.
@@ -2219,7 +2304,7 @@ function CustomersScreen({ lang, money, setView, role }) {
   const ptsOf = c => { if (!ptsCache.has(c.id)) ptsCache.set(c.id, window.SAFI_POINTS.eligible(c) ? window.SAFI_POINTS.balance(c.id) : -1); return ptsCache.get(c.id); };
   const loyOf = c => ptsOn ? ptsOf(c) : (c.loyalty || 0);
   const rows = D.customers.filter(c => {
-    if (group !== 'all' && c.group !== group) return false;
+    if (group === 'qr' ? !c.source : (group !== 'all' && c.group !== group)) return false;
     if (q && !(c.name.toLowerCase().includes(q.toLowerCase()) || c.phone.includes(q))) return false;
     return true;
   }).sort((a, b) =>
@@ -2268,6 +2353,8 @@ function CustomersScreen({ lang, money, setView, role }) {
         <StatCard label="Corporate accounts" value={D.customers.filter(c => c.group === 'corporate').length}/>
       </div>
 
+      {group === 'qr' && window.CampaignStats && <window.CampaignStats/>}
+
       <Card pad={false}>
         <div className="safi-toolbar">
           <div className="safi-cust-pick__search safi-cust-pick__search--inline">
@@ -2278,6 +2365,9 @@ function CustomersScreen({ lang, money, setView, role }) {
             {['all', 'student', 'normal', 'corporate'].map(g => (
               <button key={g} className={`safi-chip ${group === g ? 'is-active' : ''}`} onClick={() => setGroup(g)}>{g === 'all' ? 'All' : t(g, lang)}</button>
             ))}
+            {D.customers.some(c => c.source) && (
+              <button className={`safi-chip ${group === 'qr' ? 'is-active' : ''}`} onClick={() => setGroup('qr')}>QR sign-ups</button>
+            )}
           </div>
           <label className="safi-sort">Sort
             <select className="safi-input" value={sort} onChange={e => { setSort(e.target.value); localStorage.setItem('safi_cust_sort', e.target.value); }}>
@@ -2310,11 +2400,11 @@ function CustomersScreen({ lang, money, setView, role }) {
             { label: 'Name', render: r => (
               <div className="safi-cell-cust">
                 <span className="safi-cust-pick__avatar">{r.name.split(' ').map(s => s[0]).slice(0, 2).join('')}</span>
-                <div><div className="safi-cell-strong">{r.name}</div><div className="safi-cell-sub">{r.phone}</div></div>
+                <div><div className="safi-cell-strong">{r.name}{r.source ? <span className="safi-src-pill" title="Signed up by QR code">{window.SAFI_OFFER.nameOf(r.source)}</span> : null}</div><div className="safi-cell-sub">{r.phone}</div></div>
               </div>
             )},
             { label: 'Tier', render: r => <TierCell customer={r} lang={lang}/> },
-            { label: 'Joined', render: r => <span className="safi-cell-sub">{r.joined}</span> },
+            { label: 'Joined', render: r => { const at = joinedAtOf(r); return <span className="safi-cell-sub">{r.joined}{at ? <span className="safi-mono"> · {at.slice(11, 16)}</span> : null}</span>; } },
             { label: 'Orders', render: r => <b>{r.orders}</b> },
             { label: 'Lifetime spend', render: r => <span className="safi-mono safi-cell-strong">{money(r.spend)}</span> },
             { label: ptsOn ? 'Points' : 'Loyalty', render: r => ptsOn ? (

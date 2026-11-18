@@ -16,6 +16,8 @@ window.SAFI_DATA = (() => {
     { id: 'wash-piece', name: 'Wash & Fold (per pc)', tileName: 'Per piece', unit: 'piece', icon: 'washpiece', category: 'laundry', tiers: { student: 200, normal: 200, corporate: 200 }, subtypes: [{name:'Shirt', price:200},{name:'Blouse', price:200},{name:'Trouser', price:200},{name:'T-shirt', price:200},{name:'Jeans', price:200},{name:'Dress', price:200},{name:'Skirt', price:200},{name:'Sweater', price:200},{name:'Other', price:200},{name:'Cloth jacket', price:400},{name:'Hoodie', price:400},{name:'Trench coat (s/m)', price:450},{name:'Trench coat (large)', price:500},{name:'Maasai shuka', price:150},{name:'Shawl', price:200},{name:'Fleece blanket', price:200}] },
     { id: 'express', name: 'Laundry Express Service', unit: 'order', icon: 'clock', category: 'laundry', tiers: { student: 0, normal: 0, corporate: 0 } },
     { id: 'dryclean-bag', name: 'Dry Cleaning Bag', unit: 'piece', icon: 'bag', category: 'supplies', tiers: { student: 0, normal: 0, corporate: 0 } },
+    // Priced as a % of the dry cleaning lines (Settings → Dry Cleaning Express, default 75%).
+    { id: 'dc-express', name: 'Dry Cleaning Express', tileName: 'Dry Cleaning Express', unit: 'order', icon: 'clock', category: 'drycleaning', tiers: { student: 0, normal: 0, corporate: 0 } },
   ];
 
   const expenseCategories = [

@@ -85,7 +85,12 @@
         segment: r.group || 'normal', location: s(r.location), joined: day(r.joined),
         orders_count: n(r.orders), spend: n(r.spend), loyalty: n(r.loyalty) }),
       down: (r) => ({ id: r.id, name: r.name, prefix: r.prefix, phone: r.phone, group: r.segment,
-        location: r.location, joined: r.joined, orders: r.orders_count, spend: Number(r.spend), loyalty: r.loyalty }),
+        location: r.location, joined: r.joined, orders: r.orders_count, spend: Number(r.spend), loyalty: r.loyalty,
+        // When the record reached the cloud: gives other laptops a joining time (shown only on the joining day).
+        ...(r.created_at ? { joinedCloud: fromTs(r.created_at) } : {}),
+        // QR sign-up (supabase/11_qr_signup.sql): which campaign brought them, and their one-time welcome %.
+        ...(r.source ? { source: r.source } : {}),
+        ...(r.offer_pct ? { offerPct: Number(r.offer_pct), offerUntil: r.offer_until || '' } : {}) }),
     },
     {
       key: 'orders', table: 'orders', pk: 'id', branch: true,
@@ -223,6 +228,7 @@
   function explain(msg) {
     const m = String(msg || '');
     if (/status_fkey|order_statuses/i.test(m)) return m + ' → a stage the cloud does not know: run the latest supabase SQL file (09_finalhold.sql)';
+    if (/service_id|services/i.test(m) && /foreign key/i.test(m)) return m + ' → a service the cloud does not know: run the latest supabase SQL file (10_dc_express.sql)';
     if (/cashier_id|staff/i.test(m) && /foreign key/i.test(m)) return m + ' → attendant not in the cloud yet: press Sync now on the laptop where they were added';
     if (/customer_id/i.test(m) && /foreign key/i.test(m)) return m + ' → customer not in the cloud yet';
     if (/row-level security|42501/i.test(m)) return m + ' → this login may not write here: check "This branch" on Cloud & Updates';
@@ -481,7 +487,12 @@
         if (!okIds.size) continue;
       }
       const went = okIds ? changed.filter(r => okIds.has(String(r.id))) : changed;
-      if (t.key === 'orders') await writeItems(st, went.map(r => r.id), ids);
+      if (t.key === 'orders') {
+        // A refused line (a service the cloud does not know yet, say) must not stop the
+        // whole sync. The orders stay "waiting to send" and their lines are sent again next time.
+        try { await writeItems(st, went.map(r => r.id), ids); }
+        catch (e) { pushErrors.push(`order lines: ${explain(e.message)}`); went.forEach(r => held.add(r.id)); }
+      }
       went.forEach(r => { if (!held.has(r.id)) hb[r.id] = fp(t, r); });
       sent += went.length;
       saveBase(b);

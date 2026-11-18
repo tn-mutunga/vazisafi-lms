@@ -429,11 +429,15 @@ const Sidebar = ({ role, setRole, view, setView, lang, shop, direction, setDirec
   return (
     <aside className="safi-side">
       <div className="safi-side__brand">
-        <div className="safi-side__logo">
-          <image-slot id="shop-logo" shape="circle" src={window.VAZI_LOGO_ICON || 'assets/vazi-logo-icon.png'}
-                      placeholder="Drop logo"
-                      style={{ width: '44px', height: '44px' }}>
-          </image-slot>
+        <div className="safi-side__logo-wrap">
+          {/* Spins while an order is being keyed in (New Order with a customer or items). */}
+          <i className="safi-side__logo-spin" aria-hidden="true"/>
+          <div className="safi-side__logo">
+            <image-slot id="shop-logo" shape="circle" src={window.VAZI_LOGO_ICON || 'assets/vazi-logo-icon.png'}
+                        placeholder="Drop logo"
+                        style={{ width: '44px', height: '44px' }}>
+            </image-slot>
+          </div>
         </div>
         <div>
           <div className="safi-side__name">{shop?.name || 'Vazi Safi'}</div>

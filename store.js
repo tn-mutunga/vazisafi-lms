@@ -405,10 +405,10 @@ window.SAFI_STORE = (() => {
     // Print counts come from the (synced) audit log, so every laptop sees the same number.
     printCount(kind, orderId) { return (state.auditLog || []).filter(a => a.action === 'print.' + kind && a.target === orderId).length; },
     // Receipt and delivery note print once. Management can silently allow one more for a
-    // given order (each grant = one extra print). Job card: five prints.
+    // given order (each grant = one extra print). Job card: ten prints.
     printsAllowed(kind, orderId) {
       const g = (((state.settings || {}).printGrants || {})[kind] || {})[orderId] || 0;
-      if (kind === 'jobcard') return 5 + g;
+      if (kind === 'jobcard') return 10 + g;
       const legacy = kind === 'receipt' ? (((state.settings || {}).reprintGrants || {})[orderId] || 0) : 0;
       return 1 + g + legacy;
     },
@@ -959,7 +959,7 @@ window.SAFI_STORE = (() => {
     addCustomer({ name, phone, prefix, group, location }) {
       const id = nextId('c');
       const today = SAFI_TIME.day();
-      const c = { id, name, phone: SAFI_PHONE(prefix || '+254', phone), prefix: prefix || '+254', group: group || 'normal', location: location || '', joined: today, orders: 0, spend: 0, loyalty: 0 };
+      const c = { id, name, phone: SAFI_PHONE(prefix || '+254', phone), prefix: prefix || '+254', group: group || 'normal', location: location || '', joined: today, joinedAt: SAFI_TIME.stamp(), orders: 0, spend: 0, loyalty: 0 };
       state.customers = [c, ...state.customers];
       save();
       return c;
@@ -1334,4 +1334,23 @@ window.safiCounter = {
     return ((window.SAFI_STORE.get() || {}).orders || []).some(o => re.test(String(o.id)) && String(o.in || '').slice(0, 10) >= since);
   },
   is() { const m = this.mode(); return m === 'on' ? true : m === 'off' ? false : this.tookOrdersRecently(); },
+};
+
+// ── QR sign-up campaigns (Management → Settings → QR sign-up) ──────────────
+// settings.campaigns = [{ code, name, pct, days, on }]. The cloud's public_signup() reads the
+// same setting, so the % and validity are always the shop's own, never the sign-up page's.
+// A signed-up customer carries source (campaign code), offerPct and offerUntil (last valid day).
+window.SAFI_OFFER = {
+  campaigns() { const st = window.SAFI_STORE.get(); return Array.isArray(st.settings && st.settings.campaigns) ? st.settings.campaigns : []; },
+  nameOf(code) { const c = this.campaigns().find(x => x.code === code); return c ? c.name : String(code || ''); },
+  // { pct, until, state: 'ok' | 'expired' | 'used' } for a customer with a welcome offer, else null.
+  of(customer) {
+    if (!customer || !(Number(customer.offerPct) > 0)) return null;
+    const st = window.SAFI_STORE.get();
+    const used = (st.orders || []).some(o => o.customer === customer.id && !o.rewashOf);
+    const until = customer.offerUntil || '';
+    const state = used ? 'used' : (until && SAFI_TIME.day() > until) ? 'expired' : 'ok';
+    return { pct: Number(customer.offerPct), until, state, campaign: customer.source || '' };
+  },
+  slug(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30); },
 };

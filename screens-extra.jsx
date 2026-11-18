@@ -270,6 +270,8 @@ function SettingsScreen({ lang, shop, setShop }) {
 
       <TrackingCard/>
 
+      <QrSignupCard/>
+
       {(D.settings || {}).pointsOn === false && <Card title="Loyalty discount" action={<span className="safi-cell-sub">Every Nth order earns a discount on the next one</span>}>
         <div className="safi-form" style={{ maxWidth: 560 }}>
           <label className="safi-toggle safi-toggle--lg">
@@ -334,6 +336,16 @@ function SettingsScreen({ lang, shop, setShop }) {
               onBlur={e => { const v = Math.max(0, Math.min(200, Number(e.target.value) || 0)); window.SAFI_STORE.setSetting('expressPct', v); toast(`Express set to ${v}%`); }}/>
           </label>
           <p className="safi-hint">Saved to the cloud; every laptop uses it on the next sync.</p>
+        </div>
+      </Card>
+
+      <Card title="Dry Cleaning Express" action={<span className="safi-cell-sub">Charged on dry cleaning items only. Laundry, duvets and shoes excluded.</span>}>
+        <div className="safi-form" style={{ maxWidth: 320 }}>
+          <label>Express charge (% of dry cleaning value)
+            <input type="number" min="0" max="200" className="safi-input safi-mono" defaultValue={Number((D.settings && D.settings.dcExpressPct) ?? 75)}
+              onBlur={e => { const v = Math.max(0, Math.min(200, Number(e.target.value) || 0)); window.SAFI_STORE.setSetting('dcExpressPct', v); window.SAFI_STORE.audit('pricing.dcexpress', 'pct', `Dry Cleaning Express → ${v}%`); toast(`Dry Cleaning Express set to ${v}%`); }}/>
+          </label>
+          <p className="safi-hint">Front Desk taps <b>Dry Cleaning Express</b> on New Order; it adds this % of the order's dry cleaning items and updates as items change. Orders already taken keep their price. Saved to the cloud for every laptop.</p>
         </div>
       </Card>
 
@@ -1214,4 +1226,246 @@ function TrackingCard() {
     </Card>
   );
 }
-Object.assign(window, { LoyaltyPointsCard, TrackingCard });
+
+// ─── QR sign-up (Settings + Customers → QR sign-ups) ─────────────────────
+// The sign-up page is one HTML file holding this shop's cloud address, public key and branch.
+// It calls public_signup() (supabase/11_qr_signup.sql); the campaign's % and days are read
+// from the synced 'campaigns' setting in the cloud, never from the page.
+function signupPageHtml(url, key, branch) {
+  const esc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Join Vazi Safi Laundry</title>
+<style>
+:root{--brand:#5C2D91;--accent:#E87722;--ink:#1d1730;--ink2:#5b5670;--line:#e6e2ef;--bg:#f6f4fa;--ok:#1f8a4c;--bad:#b42318}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:460px;margin:0 auto;padding:20px 16px 40px}
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:16px}.logo{width:40px;height:40px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.hd b{font-size:17px}.hd small{display:block;color:var(--ink2);font-size:12px}
+.hero{background:var(--brand);color:#fff;border-radius:16px;padding:20px 18px;margin-bottom:12px}
+.hero .pct{font-size:44px;font-weight:800;line-height:1}.hero p{margin:6px 0 0;opacity:.9;font-size:14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:12px}
+label{display:block;font-size:13px;font-weight:600;margin:0 0 12px}label span{display:block;margin-bottom:5px}
+input,select{width:100%;font:inherit;font-size:16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+.ph{display:flex;gap:8px}.ph select{width:100px;flex:none}
+.seg{display:flex;gap:8px}.seg button{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:#fff;font:inherit;font-weight:600;color:var(--ink2)}
+.seg button.on{border-color:var(--brand);background:#efe8f7;color:var(--brand)}
+.go{width:100%;padding:14px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:inherit;font-size:17px;font-weight:700;margin-top:6px}
+.go:disabled{opacity:.6}
+.err{color:var(--bad);font-size:13px;margin:8px 0 0;min-height:1em}
+.ok h1{font-size:22px;margin:0 0 6px}.ok .big{font-size:30px;font-weight:800;color:var(--brand);margin:10px 0}
+.sub{color:var(--ink2);font-size:14px;margin:0}
+.btn{display:inline-block;margin-top:12px;padding:10px 14px;border-radius:10px;background:var(--brand);color:#fff;text-decoration:none;font-weight:600;font-size:14px}
+.muted{color:var(--ink2);font-size:12px;text-align:center;margin-top:16px}
+</style></head><body><div class="wrap">
+<div class="hd"><div class="logo">VS</div><div><b id="shop">Vazi Safi Laundry</b><small>Wash · Dry Clean · Iron</small></div></div>
+<div id="out">
+<div class="hero"><div class="pct" id="pct">WELCOME</div><p id="pcts">sign up for a discount on your first order</p></div>
+<form class="card" id="f" autocomplete="on">
+  <label><span>Your name</span><input name="name" autocomplete="name" required maxlength="60" placeholder="e.g. Amina Wanjiru"></label>
+  <label><span>Phone number</span><div class="ph">
+    <select name="prefix"><option>+254</option><option>+256</option><option>+255</option><option>+250</option><option>+257</option><option>+251</option><option>+211</option><option>+252</option><option>+234</option><option>+233</option><option>+27</option><option>+1</option><option>+44</option></select>
+    <input name="phone" type="tel" inputmode="tel" autocomplete="tel-national" required placeholder="0712 345 678"></div></label>
+  <label><span>Hostel / area (optional)</span><input name="area" maxlength="60" placeholder="e.g. USIU hostels, Roysambu"></label>
+  <label><span>I am a</span><div class="seg" id="seg"><button type="button" data-v="student" class="on">Student</button><button type="button" data-v="normal">Resident / staff</button></div></label>
+  <button class="go" id="go">Sign up &amp; get my discount</button>
+  <p class="err" id="err"></p>
+</form>
+</div>
+<p class="muted">We use your number only for your laundry orders.</p>
+</div>
+<script>
+var URL_='${esc(url)}'.replace(/\\/+$/,''), KEY='${esc(key)}', BR='${esc(branch)}';
+var q=new URLSearchParams(location.search), CAMP=(q.get('c')||'').trim(), seg='student';
+document.querySelectorAll('#seg button').forEach(function(b){b.onclick=function(){seg=b.dataset.v;document.querySelectorAll('#seg button').forEach(function(x){x.classList.toggle('on',x===b)})}});
+fetch(URL_+'/rest/v1/rpc/public_campaign',{method:'POST',headers:{'apikey':KEY,'Content-Type':'application/json'},body:JSON.stringify({p_branch:BR,p_campaign:CAMP})})
+.then(function(r){return r.json()}).then(function(c){if(!c)return;if(c.shop)document.getElementById('shop').textContent=c.shop;
+  if(!c.on){document.getElementById('out').innerHTML='<div class="card ok"><h1>This offer has ended</h1><p class="sub">Thank you for your interest. Visit us any time!</p></div>';return}
+  document.getElementById('pct').textContent=c.pct+'% OFF';document.getElementById('pcts').textContent='your first order. Sign up today, valid '+c.days+' days.'}).catch(function(){});
+function day(s){if(!s)return'';var d=new Date(s+'T12:00:00');return isNaN(d)?s:d.toLocaleDateString('en-KE',{weekday:'short',day:'numeric',month:'short'})}
+function done(o){
+  if(o.shop)document.getElementById('shop').textContent=o.shop;
+  var out=document.getElementById('out'),c=document.createElement('div');c.className='card ok';
+  var h=o.result==='new'?'Karibu, '+o.name+'! 🎉':o.result==='again'?'You\\'re already signed up, '+o.name+'!':'Welcome back, '+o.name+'!';
+  var big=o.result==='existing'?'':o.pct+'% OFF your first order';
+  var t=o.result==='existing'?'You are already a '+(o.shop||'Vazi Safi')+' customer. Thank you for staying with us! (This first-order offer is for new customers.)'
+       :'Just bring your laundry and give your phone number at the counter. The discount is applied automatically. Valid until '+day(o.until)+'.';
+  c.innerHTML='<h1></h1>'+(big?'<div class="big"></div>':'')+'<p class="sub"></p>';
+  c.querySelector('h1').textContent=h;if(big)c.querySelector('.big').textContent=big;c.querySelector('.sub').textContent=t;
+  if(o.phone){var a=document.createElement('a');a.className='btn';a.textContent='Call '+o.phone;a.href='tel:'+String(o.phone).replace(/[^0-9+]/g,'');c.appendChild(a)}
+  out.innerHTML='';out.appendChild(c);
+}
+document.getElementById('f').onsubmit=function(e){
+  e.preventDefault();var f=e.target,err=document.getElementById('err'),go=document.getElementById('go');err.textContent='';
+  if(!CAMP){err.textContent='Please scan the QR code again.';return}
+  go.disabled=true;go.textContent='Signing you up…';
+  fetch(URL_+'/rest/v1/rpc/public_signup',{method:'POST',headers:{'apikey':KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({p_branch:BR,p_campaign:CAMP,p_name:f.name.value,p_prefix:f.prefix.value,p_phone:f.phone.value,p_area:f.area.value,p_segment:seg})})
+  .then(function(r){return r.json()}).then(function(o){
+    if(o&&o.ok){done(o);return}
+    err.textContent=(o&&(o.error||o.message))||'Something went wrong. Please try again.';
+  }).catch(function(){err.textContent='No internet connection. Please try again.'})
+  .then(function(){go.disabled=false;go.textContent='Sign up & get my discount'});
+};
+</script></body></html>`;
+}
+
+function qrPosterHtml(link, camp, shop) {
+  const e = (s) => String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${e(camp.name)} · QR poster</title>
+<style>@page{size:A4;margin:14mm}body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#1d1730;text-align:center}
+.p{padding:20px}.b{font-size:22px;font-weight:700;color:#5C2D91;letter-spacing:.02em}h1{font-size:64px;margin:16px 0 0;color:#E87722;line-height:1}
+h2{font-size:28px;margin:8px 0 22px}.q{display:inline-block;border:6px solid #5C2D91;border-radius:18px;padding:10px}.q svg{width:320px;height:320px;display:block}
+p{font-size:20px;margin:18px 0 4px}small{color:#5b5670;font-size:13px}</style></head>
+<body onload="setTimeout(function(){window.print()},300)"><div class="p">
+<div class="b">${e(shop || 'Vazi Safi Laundry')}</div><h1>${e(camp.pct)}% OFF</h1><h2>your first order</h2>
+<div class="q">${window.SAFI_QR.svg(link, 320)}</div>
+<p><b>Scan · sign up in 30 seconds</b></p><small>Valid ${e(camp.days)} days from sign-up · new customers · ${e(link)}</small></div></body></html>`;
+}
+
+function saveFile(name, text, type) {
+  const blob = new Blob([text], { type: type || 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+function QrSignupCard() {
+  const D = useStore();
+  const st = D.settings || {};
+  const camps = window.SAFI_OFFER.campaigns();
+  const cloud = window.SAFI_CLOUD ? window.SAFI_CLOUD.getConfig() : {};
+  const base = String(st.signupUrl || '').trim().replace(/\/+$/, '');
+  const [name, setName] = useStateX('');
+  const setCamps = (list) => window.SAFI_STORE.setSetting('campaigns', list);
+  const patch = (code, p) => setCamps(camps.map(c => c.code === code ? { ...c, ...p } : c));
+  const linkOf = (c) => `${base}/?c=${encodeURIComponent(c.code)}`;
+  function add() {
+    const nm = name.trim(); const code = window.SAFI_OFFER.slug(nm);
+    if (!code) { toast('Give the campaign a name, e.g. USIU Pageant', 'error'); return; }
+    if (camps.some(c => c.code === code)) { toast('A campaign with that name exists', 'error'); return; }
+    setCamps([...camps, { code, name: nm, pct: 15, days: 14, on: true, created: SAFI_TIME.stamp() }]);
+    setName('');
+    toast('Campaign added. Sync so the cloud knows about it.', 'success');
+  }
+  function download() {
+    if (!cloud.url || !cloud.anonKey) { toast('Connect the cloud first (Cloud & Updates)', 'error'); return; }
+    saveFile('index.html', signupPageHtml(cloud.url, cloud.anonKey, window.SAFI_SYNC ? window.SAFI_SYNC.branch() : 'main'));
+    toast('Sign-up page saved as index.html', 'success');
+  }
+  return (
+    <Card title="QR sign-up" action={<span className="safi-cell-sub">New customers scan, sign up on their phone and get a first-order discount</span>}>
+      <div className="safi-form" style={{ maxWidth: 720 }}>
+        <ol className="safi-cell-sub" style={{ margin: '0 0 6px', paddingLeft: 18, lineHeight: 1.6 }}>
+          <li>In Supabase → SQL Editor, run <span className="safi-mono">supabase/11_qr_signup.sql</span> once.</li>
+          <li><Button kind="ghost" icon="box" onClick={download}>Download sign-up page</Button> and put it online (Netlify Drop), then paste its address below.</li>
+          <li>Add the campaign, press Sync, then print its QR poster.</li>
+        </ol>
+        <label>Sign-up page address
+          <input className="safi-input safi-mono" placeholder="https://vazisafi-join.netlify.app" defaultValue={st.signupUrl || ''}
+            onBlur={e => window.SAFI_STORE.setSetting('signupUrl', e.target.value.trim())}/>
+        </label>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <label style={{ flex: 1, margin: 0 }}>New campaign
+            <input className="safi-input" placeholder="e.g. USIU Pageant" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()}/>
+          </label>
+          <Button kind="primary" icon="plus" onClick={add}>Add</Button>
+        </div>
+        {camps.map(c => (
+          <div key={c.code} className="safi-qr-camp">
+            <div className="safi-qr-camp__qr" dangerouslySetInnerHTML={{ __html: base ? window.SAFI_QR.svg(linkOf(c), 132) : '' }}/>
+            <div className="safi-qr-camp__body">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <b style={{ fontSize: 15 }}>{c.name}</b>
+                <label className="safi-toggle" style={{ margin: 0 }}>
+                  <input type="checkbox" checked={!!c.on} onChange={e => patch(c.code, { on: e.target.checked })}/><span/>
+                </label>
+                <span className="safi-cell-sub">{c.on ? 'Taking sign-ups' : 'Off: the page says the offer has ended'}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                <label style={{ margin: 0 }}>Discount %
+                  <input className="safi-input" type="number" min="1" max="100" style={{ width: 90 }} defaultValue={c.pct}
+                    onBlur={e => patch(c.code, { pct: Math.min(100, Math.max(1, parseInt(e.target.value, 10) || 15)) })}/>
+                </label>
+                <label style={{ margin: 0 }}>Valid (days)
+                  <input className="safi-input" type="number" min="1" max="365" style={{ width: 90 }} defaultValue={c.days}
+                    onBlur={e => patch(c.code, { days: Math.min(365, Math.max(1, parseInt(e.target.value, 10) || 14)) })}/>
+                </label>
+              </div>
+              <div className="safi-cell-sub safi-mono" style={{ marginTop: 8, wordBreak: 'break-all' }}>{base ? linkOf(c) : 'Paste the sign-up page address above to get the QR code'}</div>
+              {base && <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <Button kind="ghost" icon="print" onClick={() => { saveFile(`QR poster - ${c.name}.html`, qrPosterHtml(linkOf(c), c, st.shopName)); toast('Poster saved: open it and print', 'success'); }}>Download QR poster</Button>
+                <Button kind="ghost" onClick={() => { try { navigator.clipboard.writeText(linkOf(c)); toast('Link copied', 'success'); } catch (e) {} }}>Copy link</Button>
+              </div>}
+            </div>
+          </div>
+        ))}
+        <p className="safi-cell-sub" style={{ margin: 0 }}>Sign-ups appear in Customers → QR sign-ups (with a live count). The welcome % is applied by itself on their first order; people who are already customers get no discount.</p>
+      </div>
+    </Card>
+  );
+}
+
+// Live sign-up numbers, shown on Customers when the "QR sign-ups" filter is on.
+function CampaignStats() {
+  const D = useStore();
+  const [scans, setScans] = useStateX(null);
+  const [busy, setBusy] = useStateX(false);
+  const kes = n => 'KES ' + Math.round(Number(n) || 0).toLocaleString('en-KE');
+  const today = SAFI_TIME.day();
+  async function loadScans() {
+    try {
+      const C = window.SAFI_CLOUD;
+      if (!C || !C.getConfig().url) return;
+      const r = await C.raw(`/rest/v1/signup_scans?select=campaign,result,at&order=at.desc&limit=2000`, { method: 'GET' });
+      setScans(Array.isArray(r) ? r : null);
+    } catch (e) { setScans(null); }
+  }
+  async function refresh() {
+    setBusy(true);
+    try { if (window.SAFI_CLOUD) await window.SAFI_CLOUD.syncNow(); } catch (e) { toast('Sync failed: ' + (e.message || e), 'error'); }
+    await loadScans(); setBusy(false);
+  }
+  useEffectX(() => { loadScans(); const t = setInterval(() => { refresh(); }, 60000); return () => clearInterval(t); }, []);
+  const camps = window.SAFI_OFFER.campaigns();
+  const codes = [...new Set([...camps.map(c => c.code), ...D.customers.filter(c => c.source).map(c => c.source)])];
+  if (!codes.length) return null;
+  return (
+    <Card title="QR sign-ups" action={<Button kind="ghost" icon="refresh" disabled={busy} onClick={refresh}>{busy ? 'Syncing…' : 'Sync now'}</Button>}>
+      <div className="safi-qr-stats">
+        {codes.map(code => {
+          const cs = D.customers.filter(c => c.source === code);
+          const ids = new Set(cs.map(c => c.id));
+          const ords = D.orders.filter(o => ids.has(o.customer) && !o.rewashOf);
+          const buyers = new Set(ords.map(o => o.customer));
+          // Discount on each sign-up's first order (the welcome order).
+          const firsts = new Map();
+          for (const o of ords) { const f = firsts.get(o.customer); if (!f || String(o.in) < String(f.in)) firsts.set(o.customer, o); }
+          const giv = [...firsts.values()].reduce((s, o) => s + (Number(o.discount) || 0), 0);
+          const existing = scans ? scans.filter(s => s.campaign === code && s.result === 'existing').length : null;
+          const stamp = c => c.joinedCloud || c.joinedAt || c.joined || '';
+          const latest = [...cs].sort((a, b) => String(stamp(b)).localeCompare(String(stamp(a)))).slice(0, 8);
+          return (
+            <div key={code} className="safi-qr-stats__camp">
+              <b>{window.SAFI_OFFER.nameOf(code)}</b>
+              <div className="safi-qr-stats__nums">
+                <div><span>Sign-ups</span><b>{cs.length}</b></div>
+                <div><span>Today</span><b>{cs.filter(c => c.joined === today).length}</b></div>
+                <div><span>First orders</span><b>{buyers.size}</b></div>
+                <div><span>Sales from them</span><b className="safi-mono">{kes(ords.reduce((s, o) => s + (Number(o.total) || 0), 0))}</b></div>
+                <div><span>Discount given</span><b className="safi-mono">{kes(giv)}</b></div>
+                {existing != null && <div><span>Existing customers who scanned</span><b>{existing}</b></div>}
+              </div>
+              {latest.length > 0 && <div className="safi-cell-sub" style={{ marginTop: 6 }}>
+                Latest: {latest.map(c => `${c.name} (${String(stamp(c)).slice(11, 16) || c.joined})`).join(' · ')}
+              </div>}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+Object.assign(window, { LoyaltyPointsCard, TrackingCard, QrSignupCard, CampaignStats });

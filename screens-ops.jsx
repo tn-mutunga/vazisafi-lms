@@ -205,12 +205,45 @@ function ActivityCounts() {
     ['Delivery notes printed', count('jobcard', isDay), count('jobcard', isMonth)],
   ];
   const monthName = new Date().toLocaleDateString('en-KE', { month: 'long' });
+  // Orders with no receipt printed (any laptop). Old orders from before print logging can't be told apart, so only this month and last.
+  const printedIds = new Set(prints.filter(a => a.action === 'print.receipt').map(a => a.target));
+  const [noRcOpen, setNoRcOpen] = useStateOps(false);
+  const [noRcScope, setNoRcScope] = useStateOps(month); // a YYYY-MM month; current month by default
+  const lastMonth = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return opsDay(d).slice(0, 7); })();
+  const inScope = (o) => String(o.in || '').startsWith(noRcScope);
+  const noRc = D.orders.filter(o => !printedIds.has(o.id) && !o.rewashOf).sort((a, b) => String(b.in).localeCompare(String(a.in)));
+  const noRcToday = noRc.filter(o => String(o.in || '').startsWith(today)).length;
+  const noRcMonth = noRc.filter(o => String(o.in || '').startsWith(month)).length;
+  const shown = noRc.filter(inScope);
+  const cname = (o) => ((D.customers || []).find(c => c.id === o.customer) || {}).name || orderNo(o.id);
+  const att = (o) => ((D.staff || []).find(s => s.id === o.cashier) || {}).name || '—';
+  const dmy = (v) => { v = String(v || ''); return v.length >= 16 ? `${v.slice(8, 10)}-${v.slice(5, 7)} ${v.slice(11, 16)}` : v; };
   return (
     <Card title="Orders & printing" action={<span className="safi-cell-sub">Counts from this laptop and synced tills</span>}>
       <table className="safi-counts">
         <thead><tr><th></th><th>Today</th><th>{monthName}</th></tr></thead>
-        <tbody>{rows.map(([l, d, m]) => <tr key={l}><td>{l}</td><td className="safi-mono">{d}</td><td className="safi-mono">{m}</td></tr>)}</tbody>
+        <tbody>{rows.map(([l, d, m]) => <tr key={l}><td>{l}</td><td className="safi-mono">{d}</td><td className="safi-mono">{m}</td></tr>)}
+          <tr className="safi-counts__alert"><td><button className="safi-norc-btn" onClick={() => { setNoRcScope(month); setNoRcOpen(true); }}><Icon name="alert" size={14}/> Orders with no receipt printed <span>View ›</span></button></td><td className="safi-mono">{noRcToday}</td><td className="safi-mono">{noRcMonth}</td></tr>
+        </tbody>
       </table>
+      <Modal open={noRcOpen} onClose={() => setNoRcOpen(false)} title={`Orders with no receipt printed · ${shown.length}`} width={900}
+        footer={<Button kind="ghost" onClick={() => setNoRcOpen(false)}>Close</Button>}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <span className="safi-cell-sub">Receipts printed on any laptop count. Newest first.</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div className="safi-seg">{[[lastMonth, ['Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'][Number(lastMonth.slice(5, 7)) - 1]], [month, ['Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'][Number(month.slice(5, 7)) - 1]]].map(([k, l]) => <button key={k} className={`safi-seg__btn ${noRcScope === k ? 'is-active' : ''}`} onClick={() => setNoRcScope(k)}>{l}</button>)}</div>
+            <input type="month" className="safi-input" style={{ width: 'auto' }} min="2026-01" max={month} value={noRcScope} onChange={e => e.target.value && setNoRcScope(e.target.value)} title="Pick any month from 2026"/>
+          </div>
+        </div>
+        <div className="safi-norc-list">
+          <table className="safi-counts safi-norc-tbl">
+            <thead><tr><th>Order</th><th>Customer</th><th>Taken</th><th>Attendant</th><th>Total</th><th>Status</th></tr></thead>
+            <tbody>{shown.map(o => <tr key={o.id}><td className="safi-mono">{orderNo(o.id)}</td><td>{cname(o)}</td><td>{dmy(o.in)}</td><td>{att(o)}</td><td className="safi-mono">KES {(o.total || 0).toLocaleString()}</td><td><StatusBadge status={o.status}/></td></tr>)}
+              {!shown.length && <tr><td colSpan="6" className="safi-cell-sub" style={{ textAlign: 'center', padding: 18 }}>Every order in this period has a printed receipt.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
       <p className="safi-cell-sub" style={{ margin: '10px 0 0' }}>Job card and delivery note print on one sheet, so their counts match. A receipt count far below orders taken means receipts are not being printed.</p>
     </Card>
   );
@@ -248,6 +281,8 @@ function fitRollPages() {
 window.fitRollPages = fitRollPages;
 
 function printDoc(kind, orderId) {
+  const ord = (window.SAFI_STORE.get().orders || []).find(o => o.id === orderId);
+  if (kind === 'receipt' && ord && ord.rewashOf) { window.toast && window.toast('No receipt for a rewash: it is free. Print the job card instead.', 'error'); return; }
   window.SAFI_STORE.logPrint(kind, orderId);
   fitRollPages();
   window.print();
