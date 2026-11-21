@@ -1258,14 +1258,14 @@ input,select{width:100%;font:inherit;font-size:16px;padding:12px;border:1px soli
 .btn{display:inline-block;margin-top:12px;padding:10px 14px;border-radius:10px;background:var(--brand);color:#fff;text-decoration:none;font-weight:600;font-size:14px}
 .muted{color:var(--ink2);font-size:12px;text-align:center;margin-top:16px}
 </style></head><body><div class="wrap">
-<div class="hd"><div class="logo">VS</div><div><b id="shop">Vazi Safi Laundry</b><small>Wash · Dry Clean · Iron</small></div></div>
+<div class="hd"><div class="logo">VS</div><div><b id="shop">Vazi Safi Laundry</b><small>Wash · Dry · Fold</small></div></div>
 <div id="out">
 <div class="hero"><div class="pct" id="pct">WELCOME</div><p id="pcts">sign up for a discount on your first order</p></div>
 <form class="card" id="f" autocomplete="on">
   <label><span>Your name</span><input name="name" autocomplete="name" required maxlength="60" placeholder="e.g. Amina Wanjiru"></label>
   <label><span>Phone number</span><div class="ph">
-    <select name="prefix"><option>+254</option><option>+256</option><option>+255</option><option>+250</option><option>+257</option><option>+251</option><option>+211</option><option>+252</option><option>+234</option><option>+233</option><option>+27</option><option>+1</option><option>+44</option></select>
-    <input name="phone" type="tel" inputmode="tel" autocomplete="tel-national" required placeholder="0712 345 678"></div></label>
+    <select name="prefix" onchange="var o=this.value===\'other\',c=document.getElementById(\'pcode\');c.style.display=o?\'block\':\'none\';c.required=o;if(o)c.focus()"><option>+254</option><option>+256</option><option>+255</option><option>+250</option><option>+257</option><option>+251</option><option>+211</option><option>+252</option><option>+234</option><option>+233</option><option>+27</option><option>+1</option><option>+44</option><option value="other">Other</option></select><input id="pcode" name="pcode" type="tel" inputmode="tel" maxlength="5" placeholder="+" style="display:none;width:72px;flex:none">
+    <input name="phone" oninput="var d=this.value.replace(/\\D/g,\'\').replace(/^0+/,\'\').slice(0,12);this.value=d.replace(/(\\d{3})(?=\\d)/g,\'$1 \')" type="tel" inputmode="tel" autocomplete="tel-national" required placeholder="712 345 678"></div></label>
   <label><span>Hostel / area (optional)</span><input name="area" maxlength="60" placeholder="e.g. USIU hostels, Roysambu"></label>
   <label><span>I am a</span><div class="seg" id="seg"><button type="button" data-v="student" class="on">Student</button><button type="button" data-v="normal">Resident / staff</button></div></label>
   <button class="go" id="go">Sign up &amp; get my discount</button>
@@ -1279,17 +1279,17 @@ var URL_='${esc(url)}'.replace(/\\/+$/,''), KEY='${esc(key)}', BR='${esc(branch)
 var q=new URLSearchParams(location.search), CAMP=(q.get('c')||'').trim(), seg='student';
 document.querySelectorAll('#seg button').forEach(function(b){b.onclick=function(){seg=b.dataset.v;document.querySelectorAll('#seg button').forEach(function(x){x.classList.toggle('on',x===b)})}});
 fetch(URL_+'/rest/v1/rpc/public_campaign',{method:'POST',headers:{'apikey':KEY,'Content-Type':'application/json'},body:JSON.stringify({p_branch:BR,p_campaign:CAMP})})
-.then(function(r){return r.json()}).then(function(c){if(!c)return;if(c.shop)document.getElementById('shop').textContent=c.shop;
+.then(function(r){return r.json()}).then(function(c){if(!c)return;
   if(!c.on){document.getElementById('out').innerHTML='<div class="card ok"><h1>This offer has ended</h1><p class="sub">Thank you for your interest. Visit us any time!</p></div>';return}
   document.getElementById('pct').textContent=c.pct+'% OFF';document.getElementById('pcts').textContent='your first order. Sign up today, valid '+c.days+' days.'}).catch(function(){});
-function day(s){if(!s)return'';var d=new Date(s+'T12:00:00');return isNaN(d)?s:d.toLocaleDateString('en-KE',{weekday:'short',day:'numeric',month:'short'})}
+function day(s){if(!s)return'';var d=new Date(s+'T12:00:00');if(isNaN(d))return s;var n=d.getDate(),x=(n%10==1&&n!=11)?'st':(n%10==2&&n!=12)?'nd':(n%10==3&&n!=13)?'rd':'th';return n+x+' '+d.toLocaleDateString('en-GB',{month:'short'})+' '+d.getFullYear()}
 function done(o){
-  if(o.shop)document.getElementById('shop').textContent=o.shop;
+  
   var out=document.getElementById('out'),c=document.createElement('div');c.className='card ok';
   var h=o.result==='new'?'Karibu, '+o.name+'! 🎉':o.result==='again'?'You\\'re already signed up, '+o.name+'!':'Welcome back, '+o.name+'!';
   var big=o.result==='existing'?'':o.pct+'% OFF your first order';
   var t=o.result==='existing'?'You are already a '+(o.shop||'Vazi Safi')+' customer. Thank you for staying with us! (This first-order offer is for new customers.)'
-       :'Just bring your laundry and give your phone number at the counter. The discount is applied automatically. Valid until '+day(o.until)+'.';
+       :'Just bring your laundry and give your phone number at the counter or during pick-up. The discount is applied automatically. Valid till '+day(o.until)+'.';
   c.innerHTML='<h1></h1>'+(big?'<div class="big"></div>':'')+'<p class="sub"></p>';
   c.querySelector('h1').textContent=h;if(big)c.querySelector('.big').textContent=big;c.querySelector('.sub').textContent=t;
   if(o.phone){var a=document.createElement('a');a.className='btn';a.textContent='Call '+o.phone;a.href='tel:'+String(o.phone).replace(/[^0-9+]/g,'');c.appendChild(a)}
@@ -1300,7 +1300,7 @@ document.getElementById('f').onsubmit=function(e){
   if(!CAMP){err.textContent='Please scan the QR code again.';return}
   go.disabled=true;go.textContent='Signing you up…';
   fetch(URL_+'/rest/v1/rpc/public_signup',{method:'POST',headers:{'apikey':KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({p_branch:BR,p_campaign:CAMP,p_name:f.name.value,p_prefix:f.prefix.value,p_phone:f.phone.value,p_area:f.area.value,p_segment:seg})})
+    body:JSON.stringify({p_branch:BR,p_campaign:CAMP,p_name:f.name.value,p_prefix:(f.prefix.value==='other'?'+'+f.pcode.value.replace(/\\D/g,''):f.prefix.value),p_phone:f.phone.value,p_area:f.area.value,p_segment:seg})})
   .then(function(r){return r.json()}).then(function(o){
     if(o&&o.ok){done(o);return}
     err.textContent=(o&&(o.error||o.message))||'Something went wrong. Please try again.';

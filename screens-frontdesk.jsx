@@ -1371,6 +1371,8 @@ function OrderDetail({ orderId, setView, setActiveOrderId, lang, money, role }) 
             </div>
           </Card>
 
+          <RunningBill c={c} o={o} money={money} setView={setView} setActiveOrderId={setActiveOrderId}/>
+
         </div>
       </div>
 
@@ -1407,6 +1409,142 @@ function OrderDetail({ orderId, setView, setActiveOrderId, lang, money, role }) 
 }
 
 // ─── Payment Modal ────────────────────────────────────────────────────────
+// ─── Running bill (order detail) ──────────────────────────────────────────
+// For customers who pay now and then: every order (bill) and every payment in date order,
+// with the balance left after each, plus what is still owed order by order. "Pay towards
+// account" takes one M-Pesa/bank payment and clears the oldest unpaid orders first.
+function RunningBill({ c, o, money, setView, setActiveOrderId }) {
+  const D = useStore();
+  const [showAll, setShowAll] = useStateFD(false);
+  const [showPay, setShowPay] = useStateFD(false);
+  const [showSt, setShowSt] = useStateFD(false);
+  if (!c) return null;
+  const bills = D.orders.filter(x => x.customer === c.id && !x.rewashOf && (Number(x.total) || 0) > 0)
+    .sort((a, b) => String(a.in).localeCompare(String(b.in)));
+  if (bills.length < 2) return null;
+  const ids = new Set(bills.map(x => x.id));
+  const due = x => Math.max(0, (Number(x.total) || 0) - (Number(x.paid) || 0));
+  const unpaid = bills.filter(x => due(x) > 0);
+  const owed = unpaid.reduce((s, x) => s + due(x), 0);
+  const billed = bills.reduce((s, x) => s + (Number(x.total) || 0), 0);
+  const entries = [
+    ...bills.map(x => ({ k: 'b' + x.id, at: String(x.in || ''), t: 0, label: `Order ${orderNo(x.id)}`, sub: '', amt: Number(x.total) || 0, order: x.id })),
+    ...D.payments.filter(p => ids.has(p.order)).map(p => ({ k: 'p' + p.id, at: String(p.date || ''), t: 1,
+      label: `Paid · ${p.method === 'bank' ? 'Bank' : p.method === 'mpesa' ? 'M-Pesa' : p.method}${p.txn ? ' ' + p.txn : ''}`, sub: `to ${orderNo(p.order)}`, amt: -(Number(p.amount) || 0), order: p.order })),
+  ].sort((a, b) => a.at.localeCompare(b.at) || a.t - b.t);
+  let run = 0;
+  for (const e of entries) { run += e.amt; e.bal = run; }
+  const list = [...entries].reverse();
+  const shown = showAll ? list : list.slice(0, 8);
+  const open = id => { if (id !== o.id && setActiveOrderId) { setActiveOrderId(id); setView('order-detail'); } };
+  return (
+    <Card title="Running bill" action={<span className={`safi-cell-sub ${owed > 0 ? 'safi-rb__owe' : 'safi-rb__ok'}`}>{owed > 0 ? `${unpaid.length} unpaid order${unpaid.length === 1 ? '' : 's'}` : 'All paid up'}</span>}>
+      <div className="safi-rb">
+        <div className="safi-paybox__row"><span>Running bill · {bills.length} orders</span><b className="safi-mono">{money(billed)}</b></div>
+        <div className="safi-paybox__row"><span>Paid so far</span><b className="safi-mono">{money(billed - owed)}</b></div>
+        <div className="safi-rb__total">
+          <span>Running balance</span>
+          <b className="safi-mono">{money(owed)}</b>
+        </div>
+        {unpaid.length > 0 && <div className="safi-rb__unpaid">
+          {unpaid.map(x => (
+            <button key={x.id} className={`safi-rb__u${x.id === o.id ? ' is-here' : ''}`} onClick={() => open(x.id)} title={x.id === o.id ? 'This order' : 'Open this order'}>
+              <span className="safi-mono">{orderNo(x.id)}</span>
+              <span className="safi-cell-sub">{dm(x.in)}</span>
+              <span className="safi-cell-sub safi-mono" title="Paid / order total">{Math.round(x.paid || 0).toLocaleString('en-KE')} / {Math.round(x.total).toLocaleString('en-KE')}</span>
+              <b className="safi-mono">{money(due(x))}</b>
+            </button>
+          ))}
+        </div>}
+        <button className="safi-rb__toggle" onClick={() => setShowSt(!showSt)}>{showSt ? 'Hide statement ▴' : `View statement (${list.length}) ▾`}</button>
+        {showSt && <>
+        <div className="safi-rb__head"><span>Statement</span><span>Amount</span><span>Balance</span></div>
+        <div className="safi-rb__list">
+          {shown.map(e => (
+            <div key={e.k} className={`safi-rb__r ${e.amt < 0 ? 'is-pay' : 'is-bill'}${e.order === o.id ? ' is-here' : ''}`}>
+              <div><div className="safi-rb__l">{e.label}</div><div className="safi-cell-sub">{dm(e.at)}{e.sub ? ' · ' + e.sub : ''}</div></div>
+              <span className="safi-mono">{e.amt < 0 ? '− ' + money(-e.amt) : '+ ' + money(e.amt)}</span>
+              <b className="safi-mono">{money(e.bal)}</b>
+            </div>
+          ))}
+        </div>
+        {list.length > 8 && <button className="safi-rb__more" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show less' : `Show all ${list.length} entries`}</button>}
+        </>}
+        {owed > 0 && unpaid.length > 1 && <Button kind="secondary" full icon="wallet" onClick={() => setShowPay(true)}>Pay towards account · {money(owed)}</Button>}
+      </div>
+      <AccountPaymentModal open={showPay} onClose={() => setShowPay(false)} customer={c} unpaid={unpaid} owed={owed} money={money}/>
+    </Card>
+  );
+}
+
+// One payment shared across several orders, oldest first. Each order gets its own ledger line
+// with the same code (the integrity scan treats that as one split payment, not code reuse).
+function AccountPaymentModal({ open, onClose, customer, unpaid, owed, money }) {
+  const [method, setMethod] = useStateFD('mpesa');
+  const [amount, setAmount] = useStateFD(owed);
+  const [txn, setTxn] = useStateFD('');
+  useEffectFD(() => { if (open) { setAmount(owed); setTxn(''); setMethod('mpesa'); } }, [open, owed]);
+  const plan = [];
+  let left = Math.round(Number(amount) || 0);
+  for (const x of unpaid) {
+    if (left <= 0) break;
+    const due = Math.max(0, (Number(x.total) || 0) - (Number(x.paid) || 0));
+    const pay = Math.min(due, left);
+    plan.push({ id: x.id, due, pay, rest: due - pay });
+    left -= pay;
+  }
+  function submit() {
+    const amt = Math.round(Number(amount) || 0);
+    if (amt <= 0) { toast('Enter amount', 'error'); return; }
+    if (amt > owed) { toast(`That is more than the ${money(owed)} owed`, 'error'); return; }
+    if (String(txn || '').trim().length < 5) { toast('Transaction code needs at least 5 characters (ideally the last 5)', 'error'); return; }
+    const S = window.SAFI_STORE;
+    for (const p of plan) {
+      if (p.pay <= 0) continue;
+      S.recordPayment({ orderId: p.id, method, amount: p.pay, txn, customer: customer.name });
+      if (p.rest > 0) {
+        const ord = S.get().orders.find(x => x.id === p.id);
+        const line = `[${dm(SAFI_TIME.stamp())}] Part payment KES ${p.pay.toLocaleString('en-KE')} (${String(txn).toUpperCase()}) from an account payment of KES ${amt.toLocaleString('en-KE')}. KES ${p.rest.toLocaleString('en-KE')} left on this order.`;
+        S.updateOrder(p.id, { notes: ord && ord.notes ? `${ord.notes}\n${line}` : line });
+      }
+    }
+    S.audit && S.audit('payment.account', customer.id, `${method} ${amt} (${txn}) across ${plan.filter(p => p.pay > 0).map(p => orderNo(p.id)).join(', ')}`);
+    toast(`${money(amt)} recorded across ${plan.filter(p => p.pay > 0).length} order(s)`, 'success');
+    onClose();
+  }
+  return (
+    <Modal open={open} onClose={onClose} title={`Pay towards account · ${customer.name}`}
+      footer={<><Button kind="ghost" onClick={onClose}>Cancel</Button><Button kind="primary" icon="check" onClick={submit}>Record payment</Button></>}>
+      <div className="safi-form">
+        <label>Method
+          <div className="safi-seg safi-seg--full">
+            {['mpesa', 'bank'].map(m => (
+              <button key={m} className={`safi-seg__btn ${method === m ? 'is-active' : ''}`} onClick={() => setMethod(m)}>
+                <Icon name={m === 'mpesa' ? 'mpesa' : 'wallet'} size={14}/>{m === 'mpesa' ? 'M-Pesa' : 'Bank'}
+              </button>
+            ))}
+          </div>
+        </label>
+        <label>Amount (KES) <span className="safi-cell-sub">owed {money(owed)}</span>
+          <input type="number" className="safi-input safi-mono" value={amount} onChange={e => setAmount(parseFloat(e.target.value) || 0)}/></label>
+        <label>{method === 'mpesa' ? 'M-Pesa transaction code' : 'Bank reference'} <span className="safi-cell-sub">(min. 5, ideally last 5)</span>
+          <input className={`safi-input safi-mono ${txn && txn.length < 5 ? 'is-error' : ''}`} maxLength={20} value={txn} onChange={e => setTxn(e.target.value.toUpperCase().replace(/\s/g, ''))} placeholder="Last 5, e.g. KL2M9"/></label>
+        <div className="safi-rb__plan">
+          <div className="safi-cell-sub">Oldest orders are cleared first:</div>
+          {plan.map(p => (
+            <div key={p.id} className="safi-rb__pr">
+              <span className="safi-mono">{orderNo(p.id)}</span>
+              <span className="safi-mono">{money(p.pay)}</span>
+              <span className={p.rest ? 'safi-rb__owe' : 'safi-rb__ok'}>{p.rest ? `${money(p.rest)} left` : 'Cleared'}</span>
+            </div>
+          ))}
+          {(Number(amount) || 0) < owed && (Number(amount) || 0) > 0 && <div className="safi-cell-sub">Still owed after this: <b className="safi-mono">{money(owed - Math.round(Number(amount) || 0))}</b></div>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function PaymentModal({ open, onClose, orderId, suggested = 0, customerName = '' }) {
   const [method, setMethod] = useStateFD('mpesa');
   const [amount, setAmount] = useStateFD(suggested);
@@ -2400,7 +2538,7 @@ function CustomersScreen({ lang, money, setView, role }) {
             { label: 'Name', render: r => (
               <div className="safi-cell-cust">
                 <span className="safi-cust-pick__avatar">{r.name.split(' ').map(s => s[0]).slice(0, 2).join('')}</span>
-                <div><div className="safi-cell-strong">{r.name}{r.source ? <span className="safi-src-pill" title="Signed up by QR code">{window.SAFI_OFFER.nameOf(r.source)}</span> : null}</div><div className="safi-cell-sub">{r.phone}</div></div>
+                <div><div className="safi-cell-strong">{r.name}{r.source && (window.SAFI_OFFER.of(r) || {}).state === 'ok' ? <span className="safi-src-pill" title="Signed up by QR code">{window.SAFI_OFFER.nameOf(r.source)}</span> : null}</div><div className="safi-cell-sub">{r.phone}</div></div>
               </div>
             )},
             { label: 'Tier', render: r => <TierCell customer={r} lang={lang}/> },

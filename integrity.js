@@ -93,10 +93,16 @@ window.SAFI_INTEGRITY = (() => {
     }
     const codes = new Map();
     const reused = [];
+    // One payment split across a customer's orders ("Pay towards account") repeats the code on
+    // purpose: same customer, recorded within 10 minutes. Anything else is real reuse.
+    const custOf = (id) => ((D.orders || []).find(o => o.id === id) || {}).customer || '';
+    const tsOf = (s) => { const t = Date.parse(toIso(s)); return isNaN(t) ? 0 : t; };
     for (const p of electronic.filter(p => p.txn)) {
       const k = String(p.txn).trim().toUpperCase();
-      if (codes.has(k)) reused.push({ txn: k, order: p.order, other: codes.get(k), amount: p.amount });
-      else codes.set(k, p.order);
+      const first = codes.get(k);
+      if (!first) { codes.set(k, { order: p.order, cust: custOf(p.order), at: tsOf(p.date) }); continue; }
+      const split = first.cust && first.cust === custOf(p.order) && Math.abs(tsOf(p.date) - first.at) <= 10 * 60e3;
+      if (!split) reused.push({ txn: k, order: p.order, other: first.order, amount: p.amount });
     }
     if (reused.length) {
       push('high', 'txn-reuse', 'The same M-Pesa code on more than one order',

@@ -1,36 +1,23 @@
-VAZI SAFI LMS v2.6.1  (complete: includes everything up to 2.6.0)
+VAZI SAFI LMS v2.6.2  (complete: includes everything up to 2.6.1)
 
 COPY: paste everything in this folder into Documents/Vazi Safi/Laundry Management System
 and choose Replace (desktop and supabase folders here are complete, so replacing is safe).
+No new SQL to run (13_usiu_dec10.sql is the one you ran on 19 Nov: USIU offer until 10 Dec 2026).
 
-NEW IN 2.6.1 — QR SIGN-UP (for the USIU pageant table)
-- Customers scan a QR code, fill in name + phone on their phone, and are added to Customers
-  by themselves (tagged "USIU Pageant"), with 15% off their FIRST order, valid 14 days.
-- People who are already customers can scan too: they are thanked, but get no discount.
-- New Order: pick the customer (search name or phone) → "WELCOME OFFER" banner, 15% already
-  in the Discount box. Nothing to type. After 14 days the banner says the offer has expired.
-- Customers → "QR sign-ups" chip: the list of sign-ups plus live numbers (sign-ups, today,
-  first orders, sales from them, discount given, existing customers who scanned).
-  It syncs by itself every minute while open; "Sync now" for an instant refresh.
-- Management → Settings → QR sign-up: campaign on/off, %, days, QR code, poster download.
-- (from 2.6.0) Job cards: 10 prints per order. Customers → Joined shows the time.
-
-ONE-TIME SET-UP (about 15 minutes, do it TONIGHT)
-1. Supabase → SQL Editor → paste the CONTENTS of supabase/11_qr_signup.sql → Run.
-2. Publish 2.6.1 and install it on your Mac (Check for updates).
-3. Management → Settings → QR sign-up → "Download sign-up page" (saves index.html).
-4. Put it online: make a new folder called vazisafi-join with only that index.html in it.
-   Go to https://app.netlify.com/drop (free sign-up with Google or email) and drag the folder in.
-   Then Site configuration → Change site name → vazisafi-join
-   Your address becomes https://vazisafi-join.netlify.app (or whatever name was free).
-5. Back in Settings → QR sign-up: paste that address in "Sign-up page address".
-   New campaign: type USIU Pageant → Add. Check 15% and 14 days.
-   Then tap the sync pill at the top so the cloud knows about the campaign.
-6. Test with your phone: scan the QR on the screen, sign up with a number that is NOT already
-   a customer. Within a minute it shows in Customers → QR sign-ups. Delete the test customer after.
-7. "Download QR poster" → open the file → print on A4. Print 2–3 copies for the table.
-
-AT THE EVENT
-- Keep a laptop (with internet) open on Customers → QR sign-ups: the count rises as people sign up.
-- After the event, switch the campaign off if you like: the page then says "This offer has ended".
-  People who signed up keep their 14 days either way.
+NEW IN 2.6.2
+- Order page → "Running bill" (under Payment), for customers with 2 or more orders:
+    · Running bill (all their orders), Paid so far, and Running balance (what is still owed),
+      plus each unpaid order with paid / total (tap one to open it).
+    · "View statement" button: every order (+) and every payment (−), newest first, with the
+      balance left after each, so you see what each payment reduced and what remains.
+    · "Pay towards account": one M-Pesa/bank payment spread over the unpaid orders,
+      oldest first. It shows which orders get cleared and what is left before you save.
+      Each order gets its own payment line with the same code; the integrity scan knows
+      this is one split payment, not a reused code.
+- Customers: the "USIU Pageant" tag next to a name disappears as soon as they have used the
+  offer (their first order), or after 10 Dec 2026 if they never came in. The "QR sign-ups" chip and its numbers stay, so you can still see who
+  came from the pageant and what they spent.
+- Settings → QR sign-up → "Download sign-up page" now gives the same page as the live one:
+  header "Vazi Safi Laundry · Wash · Dry · Fold", "Other" country code, phone number spaced
+  as it is typed with no leading 0 (727 550 161), "at the counter or during pick-up", dates like 10th Dec 2026.
+  (Your live page on Netlify already has all of this. No need to re-upload it.)

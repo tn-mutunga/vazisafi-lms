@@ -93,7 +93,8 @@ begin
     return json_build_object('ok', false, 'error', 'Too many sign-ups right now. Please try again in a few minutes.');
   end if;
 
-  until := today + days;
+  -- USIU pageant: everyone's offer runs to 10 Dec 2026, whatever day they signed up.
+  until := case when p_campaign = 'usiu-pageant' then date '2026-12-10' else today + days end;
   cid   := 'w-' || substr(md5(random()::text || clock_timestamp()::text), 1, 12);
   insert into customers (id, branch_id, name, prefix, phone, segment, location, joined, source, offer_pct, offer_until)
     values (cid, p_branch, nm, '+' || pd, pretty,
