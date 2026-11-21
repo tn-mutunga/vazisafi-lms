@@ -1,8 +1,14 @@
-VAZI SAFI LMS v2.6.2  (complete: includes everything up to 2.6.1)
+VAZI SAFI LMS v2.6.3  (complete: includes everything up to 2.6.2)
 
 COPY: paste everything in this folder into Documents/Vazi Safi/Laundry Management System
 and choose Replace (desktop and supabase folders here are complete, so replacing is safe).
 No new SQL to run (13_usiu_dec10.sql is the one you ran on 19 Nov: USIU offer until 10 Dec 2026).
+
+NEW IN 2.6.3
+- Mac updates: the Mac files now have plain names (VaziSafi-LMS-2.6.3-arm64-mac.zip), and if the
+  release's file list comes back without a Mac zip, the updater reads latest-mac.yml straight
+  from the release and downloads the zip it names. Fixes "Release ... has no Mac zip for arm64".
+- Everything from 2.6.2 below (Running bill, Pay towards account, pageant tag).
 
 NEW IN 2.6.2
 - Order page → "Running bill" (under Payment), for customers with 2 or more orders:

@@ -1,6 +1,6 @@
 {
   "name": "vazisafi-lms",
-  "version": "2.6.2",
+  "version": "2.6.3",
   "description": "VaziSafi Laundry Management System — desktop POS shell",
   "productName": "VaziSafi LMS",
   "main": "desktop/main.js",
@@ -63,7 +63,8 @@
       "darkModeSupport": false,
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "identity": "-"
+      "identity": "-",
+      "artifactName": "VaziSafi-LMS-${version}-${arch}-mac.${ext}"
     },
     "dmg": {
       "title": "VaziSafi LMS"

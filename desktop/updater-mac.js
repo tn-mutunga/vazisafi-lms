@@ -52,8 +52,23 @@ async function latestRelease() {
   return { tag_name: tag, assets };
 }
 
+// When the release's file list does not show a Mac zip (the shop's shared connection hit
+// GitHub's hourly limit and the fallback page changed, or the list came back short), read
+// latest-mac.yml straight from the release download link instead. That file names the zips
+// electron-builder uploaded and is served without any API limit.
+async function assetsFromManifest(tag) {
+  const H = { 'User-Agent': 'VaziSafi-LMS' };
+  const base = `https://github.com/${OWNER}/${REPO}/releases/download/${encodeURIComponent(tag)}/`;
+  const res = await fetch(base + 'latest-mac.yml', { headers: H, redirect: 'follow' });
+  if (!res.ok) return [];
+  const yml = await res.text();
+  const names = [...new Set([...yml.matchAll(/(?:url|path):\s*['"]?([^'"\s]+\.zip)/g)].map(m => m[1]))];
+  // GitHub stores a space in an uploaded file name as a dot.
+  return names.map(n => ({ name: n, browser_download_url: base + encodeURIComponent(n.replace(/ /g, '.')), size: 0 }));
+}
+
 function pickAsset(assets) {
-  const zips = assets.filter(a => /-mac\.zip$/i.test(a.name));
+  const zips = assets.filter(a => /mac\.zip$/i.test(a.name) || /darwin.*\.zip$/i.test(a.name));
   const arm = zips.find(a => /arm64/i.test(a.name));
   const intel = zips.find(a => !/arm64/i.test(a.name));
   return process.arch === 'arm64' ? (arm || intel) : (intel || null);
@@ -100,7 +115,8 @@ function init({ app, dialog, getWindow, onStatus }) {
       }
       if (staged && staged.version === version) { say({ state: 'ready', version }); return; }
 
-      const asset = pickAsset(rel.assets || []);
+      let asset = pickAsset(rel.assets || []);
+      if (!asset) asset = pickAsset(await assetsFromManifest(rel.tag_name || ('v' + version)));
       if (!asset) throw new Error(`Release ${version} has no Mac zip for ${process.arch}`);
       say({ state: 'available', version });
 
