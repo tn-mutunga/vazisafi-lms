@@ -1392,6 +1392,10 @@ function QrSignupCard() {
                   <input className="safi-input" type="number" min="1" max="365" style={{ width: 90 }} defaultValue={c.days}
                     onBlur={e => patch(c.code, { days: Math.min(365, Math.max(1, parseInt(e.target.value, 10) || 14)) })}/>
                 </label>
+                <label className="safi-toggle" style={{ margin: 0, alignSelf: 'flex-end', gap: 8 }} title="Discount only the laundry items (not dry cleaning, shoes or Express)">
+                  <input type="checkbox" checked={c.laundryOnly != null ? !!c.laundryOnly : c.code === 'karibu15'} onChange={e => patch(c.code, { laundryOnly: e.target.checked })}/><span/>
+                  <span className="safi-cell-sub">Laundry items only</span>
+                </label>
               </div>
               <div className="safi-cell-sub safi-mono" style={{ marginTop: 8, wordBreak: 'break-all' }}>{base ? linkOf(c) : 'Paste the sign-up page address above to get the QR code'}</div>
               {base && <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>

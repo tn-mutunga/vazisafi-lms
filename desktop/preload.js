@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('lms', {
   // VaziSafi LMS menu → Zoom in / Zoom out / Actual size.
   onZoom: (fn) => { ipcRenderer.on('lms:zoom', (_e, dir) => fn(dir)); },
   printHtml: (html) => ipcRenderer.invoke('lms:printHtml', html),
+  savePdf: (html, name) => ipcRenderer.invoke('lms:savePdf', html, name),
   printTest: () => ipcRenderer.invoke('lms:printTest'),
   openDrawer: () => ipcRenderer.invoke('lms:openDrawer'),
   sendMail: (msg) => ipcRenderer.invoke('lms:sendMail', msg),

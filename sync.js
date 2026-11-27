@@ -59,6 +59,14 @@
 
   let BRANCH = 'main';
 
+  // Money recorded against each order in the payments ledger (cached per payments list).
+  let ledgerSrc = null, ledgerSum = {};
+  function ledgerPaid(orderId) {
+    const ps = (S().get().payments) || [];
+    if (ps !== ledgerSrc) { ledgerSrc = ps; ledgerSum = {}; for (const p of ps) if (p && p.order) ledgerSum[p.order] = (ledgerSum[p.order] || 0) + (Number(p.amount) || 0); }
+    return Math.round(ledgerSum[orderId] || 0);
+  }
+
   // ── the map ─────────────────────────────────────────────────────────
   // Order matters: parents before children, so foreign keys hold on first push.
   const TABLES = [
@@ -97,7 +105,7 @@
       up: (r) => ({ id: r.id, branch_id: BRANCH, origin_id: BRANCH, customer_id: r.customer || null,
         status: r.status || 'intake', queue_no: r.queueNo || null, tag: s(r.tag),
         total: n(r.total), discount: n(r.discount), discount_pct: Number(r.discountPct) || 0,
-        paid: n(r.paid), method: r.method === '—' ? '' : s(r.method), txn: s(r.txn), notes: s(r.notes),
+        paid: n(r.refunded ? r.paid : Math.max(Number(r.paid) || 0, ledgerPaid(r.id))), method: r.method === '—' ? '' : s(r.method), txn: s(r.txn), notes: s(r.notes),
         rewash_of: r.rewashOf || null, rewashed_by: r.rewashedBy || null,
         cashier_id: r.cashier || null, shift_id: r.shift || null,
         received_at: tsNow(r.in), due_at: ts(r.due),

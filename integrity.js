@@ -84,7 +84,7 @@ window.SAFI_INTEGRITY = (() => {
     }
 
     // ── 3. M-Pesa codes: missing, or reused ────────────────────────────────
-    const electronic = payments.filter(p => p.method && p.method !== 'cash' && p.method !== '—');
+    const electronic = payments.filter(p => p.method && p.method !== 'cash' && p.method !== '—' && p.method !== 'refund');
     const noCode = electronic.filter(p => !p.txn);
     if (noCode.length) {
       push('high', 'no-txn', 'M-Pesa or bank payments with no confirmation code',

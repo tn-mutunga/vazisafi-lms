@@ -299,6 +299,30 @@ ipcMain.handle('lms:printHtml', (_e, html) => new Promise((resolve) => {
     }, 400);
   });
 }));
+// Save an HTML page (e.g. a customer statement) as a real PDF in Downloads, no print window.
+ipcMain.handle('lms:savePdf', async (_e, html, name) => {
+  const fs = require('fs'); const os = require('os'); const p = require('path');
+  const safe = String(name || 'document').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 80) || 'document';
+  const tmp = p.join(os.tmpdir(), 'vazi-pdf-' + Date.now() + '.html');
+  const sheet = new BrowserWindow({ show: false, width: 900, height: 1200, webPreferences: { offscreen: true } });
+  try {
+    fs.writeFileSync(tmp, String(html || ''));
+    await sheet.loadFile(tmp);
+    await new Promise(r => setTimeout(r, 300));
+    const pdf = await sheet.webContents.printToPDF({ pageSize: 'A4', printBackground: true, margins: { marginType: 'default' } });
+    const dir = app.getPath('downloads');
+    let out = p.join(dir, safe + '.pdf');
+    for (let i = 2; fs.existsSync(out) && i < 100; i++) out = p.join(dir, `${safe} (${i}).pdf`);
+    fs.writeFileSync(out, pdf);
+    try { shell.showItemInFolder(out); } catch (e) {}
+    return { ok: true, path: out };
+  } catch (err) {
+    return { ok: false, reason: String(err && err.message || err) };
+  } finally {
+    try { sheet.destroy(); } catch (e) {}
+    try { fs.unlinkSync(tmp); } catch (e) {}
+  }
+});
 ipcMain.handle('lms:printTest', () => printTestReceipt());
 ipcMain.handle('lms:openDrawer', () => kickCashDrawer());
 ipcMain.handle('lms:config', (_e, patch) => (patch ? writeConfig(patch) : readConfig()));

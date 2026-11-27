@@ -3682,3 +3682,21 @@ button.safi-syncpill:hover{filter:brightness(.97)}
 .safi-rb__toggle{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);color:var(--brand);font:inherit;font-size:13px;font-weight:600;cursor:pointer}.safi-rb__toggle:hover{border-color:var(--brand)}
 .safi-rb__total{border-top:1px solid var(--line);padding-top:8px}
 .safi-rb__u > *{white-space:nowrap}.safi-rb__u{grid-template-columns:auto 1fr auto auto}
+
+/* ── Balances due pop-up (2.6.4) ─────────────────────────────────── */
+.safi-bd{display:flex;flex-direction:column;gap:12px}
+.safi-bd__sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.safi-bd__sum>div{padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--paper)}
+.safi-bd__sum span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}.safi-bd__sum b{font-size:20px;color:var(--ink)}.safi-bd__sum>div:first-child b{color:var(--brand)}
+.safi-bd__bar{display:flex;gap:8px}.safi-bd__bar input{flex:1}.safi-bd__bar select{width:auto}
+.safi-bd__list{display:flex;flex-direction:column;gap:6px;max-height:52vh;overflow:auto}
+.safi-bd__c{border:1px solid var(--line);border-radius:var(--r-md);background:var(--card)}.safi-bd__c.is-open{border-color:var(--brand)}
+.safi-bd__row{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:10px;align-items:center;width:100%;padding:9px 12px;border:0;background:none;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+.safi-bd__who{display:flex;flex-direction:column;min-width:0}.safi-bd__who b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.safi-bd__meta{text-align:right;line-height:1.3}.safi-bd__late{color:var(--red);font-style:normal;font-weight:600}
+.safi-bd__amt{font-size:15px;color:var(--brand);white-space:nowrap}.safi-bd__chev{color:var(--ink-3);font-size:12px}
+.safi-bd__orders{display:flex;flex-direction:column;gap:4px;padding:0 12px 10px}
+.safi-up{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card)}
+.safi-up__top{display:flex;align-items:baseline;gap:10px}.safi-up__code{font-weight:700}.safi-up__amt{margin-left:auto;color:var(--brand);font-size:15px}
+.safi-up__det{font-size:12px;word-break:break-word}.safi-up__act{display:flex;align-items:center;gap:14px}
+.safi-bd__sum select.safi-input{width:100%;padding:4px 8px}

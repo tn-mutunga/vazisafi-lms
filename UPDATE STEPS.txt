@@ -1,8 +1,41 @@
-VAZI SAFI LMS v2.6.3  (complete: includes everything up to 2.6.2)
+VAZI SAFI LMS v2.6.4  (complete: includes everything up to 2.6.3)
 
 COPY: paste everything in this folder into Documents/Vazi Safi/Laundry Management System
 and choose Replace (desktop and supabase folders here are complete, so replacing is safe).
 No new SQL to run (13_usiu_dec10.sql is the one you ran on 19 Nov: USIU offer until 10 Dec 2026).
+
+NEW IN 2.6.4
+- FIX: paid orders showing as due again. Each laptop sends the whole order to the cloud; a
+  laptop that had not yet received a payment could send "paid 0" over it (most often in the
+  big re-sync after an update). Now an order's Paid can never be less than the payment lines
+  recorded for it: fixed on start-up, after every download, and before every upload, so
+  wrongly-due orders correct themselves on every laptop and in the cloud.
+  Refunds now add a minus payment line ("REFUND") so the books still agree.
+- Dashboards (Front Desk and Management): "Balances due · KES …" button opens a pop-up of
+  everyone who owes money: total owed, number of customers and unpaid orders, search, sort
+  (biggest balance / owing longest / name), and how long each has owed (red after 14 days).
+  Tap a customer to see their unpaid orders; tap an order to open it and collect.
+- Payments & Audit (Management): "Not recorded · N" button opens a pop-up of money that is on the
+  uploaded M-Pesa/bank statements but whose code is on no payment in the system: code, date,
+  amount and the payer details from the statement (e.g. "Customer Transfer from 2547… - NAME").
+  It suggests the likely order (payer's phone or name matches a customer who owes, or the same
+  amount is owed). "Record to order" records it there with that code, already verified from the
+  statement; if it is more than that order owes, the rest goes to the same customer's other
+  unpaid orders, oldest first. "Not a customer payment" hides transfers, float top-ups etc.
+  Statements uploaded before 2.6.4 show no payer details; upload them again to get them.
+- Karibu15 (and any campaign with "Laundry items only" ticked in Settings → QR sign-up): the % comes
+  off the LAUNDRY items only (wash & fold, per piece, ironing, duvets/bedding, curtains), never dry
+  cleaning, shoes or Express. One time only: once an order with laundry on it has taken the
+  discount, it is used up. A dry-cleaning-only or shoes-only order does not use it up.
+- Dashboard Overdue / Uncollected: "Show more" now lists up to 100 orders (was 50).
+- Running bill: "Download statement (PDF)" button under Pay towards account. Saves a PDF straight to
+  Downloads (the folder opens). The file is named after the customer's first name and order number,
+  e.g. Timothy-2678. It shows the running bill, paid so far, running balance, the unpaid orders,
+  and every order and payment with the balance after each (plus your pay-to details if owing).
+- Discount codes: the old KARIBU15 code (15% off the whole order, any customer, any number of
+  times) is removed from every laptop. Karibu15 is now only the QR sign-up offer.
+- Receipt: points lines (points on payment / points balance) removed. "Points used" stays,
+  because it is money off the order.
 
 NEW IN 2.6.3
 - Mac updates: the Mac files now have plain names (VaziSafi-LMS-2.6.3-arm64-mac.zip), and if the

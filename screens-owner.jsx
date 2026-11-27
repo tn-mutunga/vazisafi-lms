@@ -152,7 +152,7 @@ function ExcludedPeriods() {
   );
 }
 
-function OwnerDashboard({ lang, money, setView }) {
+function OwnerDashboard({ lang, money, setView, setActiveOrderId }) {
   const D = window.safiTrim(useStore());
   const todayStr = SAFI_TIME.day();
   // Revenue = value of orders taken (sales). Collected = money actually received.
@@ -217,6 +217,7 @@ function OwnerDashboard({ lang, money, setView }) {
         title="Management Dashboard"
         subtitle={`${new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · Vazi Safi Laundry`}
         right={<>
+          <BalancesDueButton money={money} setView={setView} setActiveOrderId={setActiveOrderId}/>
           <Button kind="ghost" icon="print" onClick={() => window.print()}>{t('print_summary', lang)}</Button>
           <Button kind="ghost" icon="box" onClick={() => window.SAFI_STORE.exportJSON()}>Backup data</Button>
         </>}

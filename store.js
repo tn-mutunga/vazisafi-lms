@@ -207,6 +207,24 @@ window.SAFI_STORE = (() => {
     }
     listeners.forEach(fn => fn(state));
   }
+  // v2.6.4: an order's "paid" can never be less than the payments recorded against it.
+  // Two laptops each send the whole order row; one that had not yet received a payment
+  // (offline, or mid-sync after an update) could send paid = 0 over it, and collected
+  // orders showed as due again. The payment lines are the record, so "paid" is lifted back
+  // to their total on load and after every download. Refunded orders are left alone.
+  function healPaid(st) {
+    const sum = {};
+    for (const p of st.payments || []) if (p && p.order) sum[p.order] = (sum[p.order] || 0) + (Number(p.amount) || 0);
+    let n = 0;
+    for (const o of st.orders || []) {
+      if (!o || o.refunded) continue;
+      const led = Math.round(sum[o.id] || 0);
+      if (led > (Number(o.paid) || 0)) { o.paid = led; n++; }
+    }
+    return n;
+  }
+  window.SAFI_HEAL_PAID = healPaid;
+  if (healPaid(state)) migrated = true;
   // One-time fix (v2.1.4): the shop PC's clock ran a day ahead on 2–3 Oct 2026.
   // SF-2416 (Alvin) and SF-2417 (Diana) were taken on 3 Oct; every earlier
   // order dated 3 or 4 Oct was really taken on 2 Oct.
@@ -311,11 +329,16 @@ window.SAFI_STORE = (() => {
   // v2.4.6: the three discount codes, real counts from 0, each switched on/off by Management.
   if (!(state.settings || {}).discountsV2) {
     state.discounts = [
-      { id: 'd1', name: 'New Customer 15%', code: 'KARIBU15', value: 15, type: 'pct', expires: 'always', uses: 0, active: true },
       { id: 'd2', name: 'Bulk over 30 kg', code: 'BULK30', value: 10, type: 'pct', expires: 'always', uses: 0, active: false },
       { id: 'd3', name: 'Loyalty 10th order', code: 'LOYAL10', value: 500, type: 'flat', expires: 'always', uses: 0, active: false },
     ];
     state.settings = { ...(state.settings || {}), discountsV2: true };
+    migrated = true;
+  }
+  // v2.6.4: the KARIBU15 code is gone. Karibu15 is now only the QR sign-up offer (laundry
+  // only, once, 14 days), applied by itself; the manual code could be picked for anyone.
+  if ((state.discounts || []).some(d => String(d.code).toUpperCase() === 'KARIBU15')) {
+    state.discounts = state.discounts.filter(d => String(d.code).toUpperCase() !== 'KARIBU15');
     migrated = true;
   }
   // v2.5.2: Ready SMS mentions delivery too (only if the shop never edited the text).
@@ -930,7 +953,12 @@ window.SAFI_STORE = (() => {
         if (ap.action === 'delete_order')      this.deleteOrder(ap.target);
         else if (ap.action === 'rewash_order') this.createRewash(ap.target, ap.payload?.itemIndices, ap.payload?.note || ap.reason);
         else if (ap.action === 'edit_order')   this.updateOrder(ap.target, ap.payload || {});
-        else if (ap.action === 'refund_order') this.updateOrder(ap.target, { status: 'collected', paid: 0, refunded: true });
+        else if (ap.action === 'refund_order') {
+          const ro = state.orders.find(x => x.id === ap.target);
+          const led = (state.payments || []).filter(p => p.order === ap.target).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+          if (ro && led > 0) state.payments = [{ id: nextId('p'), date: SAFI_TIME.stamp(), order: ap.target, customer: '', method: 'refund', amount: -Math.round(led), txn: 'REFUND', verified: true }, ...state.payments];
+          this.updateOrder(ap.target, { status: 'collected', paid: 0, refunded: true });
+        }
         else if (ap.action === 'reprint_receipt') { const g = { ...((state.settings || {}).reprintGrants || {}) }; g[ap.target] = 1; state.settings = { ...(state.settings || {}), reprintGrants: g }; }
       }
       save();
@@ -1156,6 +1184,7 @@ window.SAFI_STORE = (() => {
       try {
         const next = JSON.parse(text);
         if (!next.orders || !next.customers) throw new Error('Invalid backup file');
+        healPaid(next);
         state = next;
         save();
         return true;
@@ -1344,13 +1373,22 @@ window.SAFI_OFFER = {
   campaigns() { const st = window.SAFI_STORE.get(); return Array.isArray(st.settings && st.settings.campaigns) ? st.settings.campaigns : []; },
   nameOf(code) { const c = this.campaigns().find(x => x.code === code); return c ? c.name : String(code || ''); },
   // { pct, until, state: 'ok' | 'expired' | 'used' } for a customer with a welcome offer, else null.
+  // Laundry-only offers (Karibu15) take the % off laundry lines only (not dry cleaning,
+  // shoes or Express). Ticked per campaign in Settings; Karibu15 is laundry-only by default.
+  laundryOnly(code) { const c = this.campaigns().find(x => x.code === code); return c ? (c.laundryOnly != null ? !!c.laundryOnly : code === 'karibu15') : code === 'karibu15'; },
+  isLaundryLine(it, services) { if (!it || it.svc === 'express') return false; const sv = (services || []).find(x => x.id === it.svc); return !!sv && sv.category === 'laundry'; },
   of(customer) {
     if (!customer || !(Number(customer.offerPct) > 0)) return null;
     const st = window.SAFI_STORE.get();
-    const used = (st.orders || []).some(o => o.customer === customer.id && !o.rewashOf);
+    const campaign = customer.source || '';
+    const lo = this.laundryOnly(campaign);
+    // Used once: the first order (any order), or for a laundry-only offer the first order that
+    // had laundry on it. Dry-cleaning-only or shoes-only orders do not use it up.
+    const used = (st.orders || []).some(o => o.customer === customer.id && !o.rewashOf &&
+      (!lo || (o.items || []).some(it => this.isLaundryLine(it, st.services))));
     const until = customer.offerUntil || '';
     const state = used ? 'used' : (until && SAFI_TIME.day() > until) ? 'expired' : 'ok';
-    return { pct: Number(customer.offerPct), until, state, campaign: customer.source || '' };
+    return { pct: Number(customer.offerPct), until, state, campaign, laundryOnly: lo };
   },
   slug(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30); },
 };

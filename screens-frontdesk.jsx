@@ -51,7 +51,7 @@ function FrontDeskDashboard({ setView, setActiveOrderId, lang, money }) {
         title={<>{`${t('today', lang)} · ${new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}`}<LiveClock/></>}
         subtitle="Karibu Vazi Safi 👋 — here is what's happening at the shop right now."
         right={<>
-          <Button kind="ghost" icon="search">Search</Button>
+          <BalancesDueButton money={money} setView={setView} setActiveOrderId={setActiveOrderId}/>
           <Button kind={openShift ? 'ghost' : 'secondary'} icon="clock" onClick={() => setShiftModal(true)}>
             {openShift ? 'Close shift' : 'Open shift'}
           </Button>
@@ -272,7 +272,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   const isWelcomeOrder = !!offer && offer.state === 'ok';
   const wcApplied = useRefFD(false);
   useEffectFD(() => {
-    if (isWelcomeOrder) { if (discountPct < offer.pct) { setDiscountPct(offer.pct); wcApplied.current = true; } }
+    if (isWelcomeOrder && !offer.laundryOnly) { if (discountPct < offer.pct) { setDiscountPct(offer.pct); wcApplied.current = true; } }
     else if (wcApplied.current) { wcApplied.current = false; if (!codeId && !isLoyaltyOrder) setDiscountPct(0); }
   }, [customerId, isWelcomeOrder]);
   const freeBagEnabled = D.settings?.firstTimeBagFree;
@@ -322,7 +322,15 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
   }, 0);
   const code = (D.discounts || []).find(x => x.id === codeId && x.active !== false);
   const flatOff = code && code.type === 'flat' ? Number(code.value) || 0 : 0;
-  const baseDiscount = Math.min(subtotal, Math.round(subtotal * (discountPct / 100)) + flatOff);
+  // Laundry-only welcome offer (Karibu15): % of the laundry lines only.
+  const wcLaundryBase = items.reduce((s, it) => {
+    if (!window.SAFI_OFFER.isLaundryLine(it, D.services)) return s;
+    const sv = D.services.find(x => x.id === it.svc);
+    return s + P.line(sv, it.qty, effGroup, it.customPrice);
+  }, 0);
+  const welcomeOff = isWelcomeOrder && offer.laundryOnly ? Math.round(wcLaundryBase * offer.pct / 100) : 0;
+  const welcomeUsed = isWelcomeOrder && (offer.laundryOnly ? welcomeOff > 0 : discountPct >= offer.pct);
+  const baseDiscount = Math.min(subtotal, Math.round(subtotal * (discountPct / 100)) + flatOff + welcomeOff);
   // Points come off after any % / code discount, up to the whole remaining amount.
   const ptsAvail = customer ? PTS.usable(customer.id, subtotal - baseDiscount) : { pts: 0, kes: 0, balance: 0 };
   const ptsUsed = usePts ? ptsAvail.pts : 0;
@@ -359,12 +367,12 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
     });
     const order = window.SAFI_STORE.createOrder({
       customerId, items: linePriced, total, discount, discountPct,
-      discountCode: code ? code.code : (isWelcomeOrder && discountPct >= offer.pct ? 'WELCOME-' + String(offer.campaign).toUpperCase() : ''),
+      discountCode: code ? code.code : (welcomeUsed ? 'WELCOME-' + String(offer.campaign).toUpperCase() : ''),
       paid: 0, method: '—', txn: '',
       notes, tag: String(tag).trim(),
       pointsRedeemed: ptsUsed,
     });
-    if (isWelcomeOrder && discountPct >= offer.pct) window.SAFI_STORE.audit('offer.welcome', order.id, `${offer.pct}% welcome (${window.SAFI_OFFER.nameOf(offer.campaign)})`, { campaign: offer.campaign, pct: offer.pct, kes: baseDiscount });
+    if (welcomeUsed) window.SAFI_STORE.audit('offer.welcome', order.id, `${offer.pct}% welcome${offer.laundryOnly ? ' on laundry' : ''} (${window.SAFI_OFFER.nameOf(offer.campaign)})`, { campaign: offer.campaign, pct: offer.pct, kes: offer.laundryOnly ? welcomeOff : baseDiscount });
     if (ptsUsed) window.SAFI_STORE.audit('points.redeem', order.id, `${ptsUsed} pts = ${money(ptsOff)}`, { pts: ptsUsed, kes: ptsOff });
 
     if (code) window.SAFI_STORE.useDiscount(code.id);
@@ -430,10 +438,12 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
           <div className="safi-first-banner__body">
             <b>{isWelcomeOrder ? '🎉 WELCOME OFFER' : 'Welcome offer expired'} · {customer.name} · signed up at {window.SAFI_OFFER.nameOf(offer.campaign)}</b>
             <p>{isWelcomeOrder
-              ? <>{offer.pct}% off this first order has been applied (valid until {offer.until}). Let them know when handing over.</>
+              ? (offer.laundryOnly
+                ? <>{offer.pct}% off the <span style={{ fontWeight: 700 }}>laundry</span> items on this order (not dry cleaning or shoes), valid until {offer.until}. {welcomeOff > 0 ? <>Applied: <span style={{ fontWeight: 700 }}>− {money(welcomeOff)}</span>.</> : 'Add the laundry items and it is taken off by itself.'} One time only.</>
+                : <>{offer.pct}% off this first order has been applied (valid until {offer.until}). Let them know when handing over.</>)
               : <>Their {offer.pct}% first-order offer ended on {offer.until}. No discount applies.</>}</p>
           </div>
-          {isWelcomeOrder && <div className="safi-first-banner__pill">{offer.pct}% OFF</div>}
+          {isWelcomeOrder && <div className="safi-first-banner__pill">{offer.pct}% OFF{offer.laundryOnly ? ' LAUNDRY' : ''}</div>}
         </div>
       )}
       {isFirstTime && (
@@ -642,6 +652,7 @@ function NewOrder({ setView, setActiveOrderId, lang, money }) {
                   <span className="safi-cell-sub safi-mono" style={{ marginLeft: 6 }}>— {money(baseDiscount)}</span>
                 </div>
               </div>
+              {welcomeOff > 0 && <div className="safi-sum__row"><span className="safi-cell-sub">incl. {window.SAFI_OFFER.nameOf(offer.campaign)} {offer.pct}% on laundry</span><span className="safi-cell-sub safi-mono">— {money(welcomeOff)}</span></div>}
               {ptsCfg.on && customer && PTS.eligible(customer) && (
                 ptsAvail.pts > 0 ? (
                   <label className="safi-sum__row safi-pts-use" style={{ cursor: 'pointer' }}>
@@ -1471,10 +1482,71 @@ function RunningBill({ c, o, money, setView, setActiveOrderId }) {
         {list.length > 8 && <button className="safi-rb__more" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show less' : `Show all ${list.length} entries`}</button>}
         </>}
         {owed > 0 && unpaid.length > 1 && <Button kind="secondary" full icon="wallet" onClick={() => setShowPay(true)}>Pay towards account · {money(owed)}</Button>}
+        <Button kind="ghost" full icon="print" onClick={() => downloadStatement({ c, o, bills, unpaid, entries, billed, owed, due })}>Download statement (PDF)</Button>
       </div>
       <AccountPaymentModal open={showPay} onClose={() => setShowPay(false)} customer={c} unpaid={unpaid} owed={owed} money={money}/>
     </Card>
   );
+}
+
+// Customer statement as a PDF (print window → Save as PDF). File name: first name + order no.,
+// e.g. "Timothy-2678".
+function downloadStatement({ c, o, bills, unpaid, entries, billed, owed, due }) {
+  const st = window.SAFI_STORE.get().settings || {};
+  const esc = (x) => String(x ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const K = (n) => 'KES ' + Math.round(Number(n) || 0).toLocaleString('en-KE');
+  const first = String(c.name || 'Customer').trim().split(/\s+/)[0].replace(/[^A-Za-z0-9'-]/g, '') || 'Customer';
+  const fname = `${first}-${String(orderNo(o.id)).replace(/\D/g, '')}`;
+  const now = new Date();
+  const today = now.toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' }) + ', ' + SAFI_TIME.stamp(now).slice(11, 16);
+  // "2026-11-01 09:40" → date "01-11-2026" and time "09:40".
+  const dPart = (v) => { const x = String(v || ''); return x.length >= 10 && x[4] === '-' ? `${x.slice(8, 10)}-${x.slice(5, 7)}-${x.slice(0, 4)}` : x; };
+  const tPart = (v) => { const x = String(v || ''); return x.length >= 16 ? x.slice(11, 16) : ''; };
+  const shop = st.shopName || 'Vazi Safi Laundry';
+  const stRows = entries.map(e => `<tr${e.amt < 0 ? ' class="pay-r"' : ''}><td>${esc(dPart(e.at))}</td><td>${esc(tPart(e.at))}</td><td>${esc(e.label)}${e.sub ? `<br><small>${esc(e.sub)}</small>` : ''}</td><td class="n">${e.amt < 0 ? '' : K(e.amt)}</td><td class="n pd">${e.amt < 0 ? K(-e.amt) : ''}</td><td class="n"><b>${K(e.bal)}</b></td></tr>`).join('');
+  const upRows = unpaid.map(x => `<tr><td>${esc(orderNo(x.id))}</td><td>${esc(dPart(x.in))}</td><td>${esc(tPart(x.in))}</td><td class="n">${K(x.total)}</td><td class="n pd">${K(x.paid || 0)}</td><td class="n"><b>${K(due(x))}</b></td></tr>`).join('');
+  const pay = st.payTo ? `<p class="pay">Pay to <b>${esc(st.payTo)}</b>${st.payToName ? ` (${esc(st.payToName)})` : ''}. Use your name or order number as the reference.</p>` : '';
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(fname)}</title><style>
+@page{size:A4;margin:14mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:Arial,Helvetica,sans-serif;color:#1d1730;font-size:12px}
+.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #5C2D91;padding-bottom:10px;margin-bottom:12px}
+.hd h1{margin:0;color:#5C2D91;font-size:22px}.hd .logo{height:120px;width:auto;display:block}.hd .ttl{font-size:18px;letter-spacing:.04em}.hd .ts{font-size:12px;color:#5b5670;margin-top:4px}.hd{align-items:flex-end}.hd .r{text-align:right}.hd small,.muted{color:#5b5670}
+h2{font-size:14px;margin:16px 0 6px}.sum{display:flex;gap:10px;margin:8px 0}.sum div{flex:1;border:1px solid #e6e2ef;border-radius:8px;padding:8px 10px}.sum span{display:block;font-size:10px;text-transform:uppercase;color:#5b5670}.sum b{font-size:16px}.sum .bal b{color:#5C2D91}
+table{width:100%;border-collapse:collapse}th,td{padding:6px 7px;border-bottom:1px solid #e6e2ef;text-align:left;vertical-align:top}th{background:#f3f0f8;font-size:10.5px;text-transform:uppercase}td.n,th.n{text-align:right;white-space:nowrap}td.pd,.pdb b{color:#1f8a4c;font-weight:700}small{color:#5b5670}
+tr.pay-r td{background:#f2fbf5}tfoot td{font-weight:700;border-top:2px solid #1d1730;border-bottom:0}.pay{margin-top:14px;padding:8px 10px;background:#fff7ef;border:1px solid #f5d3b3;border-radius:8px}.ft{margin-top:18px;font-size:10.5px;color:#5b5670;text-align:center}
+</style></head><body>
+<div class="hd"><div>${window.VAZI_LOGO_LETTERHEAD || window.VAZI_LOGO_LOCKUP ? `<img class="logo" src="${window.VAZI_LOGO_LETTERHEAD || window.VAZI_LOGO_LOCKUP}" alt="${esc(shop)}">` : `<h1>${esc(shop)}</h1><small>Wash · Dry · Fold</small>`}</div><div class="r"><b class="ttl">STATEMENT</b><div class="ts">${esc(today)}</div></div></div>
+<div><b style="font-size:15px">${esc(c.name)}</b><br><span class="muted">${esc(c.prefix || '+254')} ${esc(c.phone || '')}</span></div>
+<div class="sum"><div><span>Running bill · ${bills.length} orders</span><b>${K(billed)}</b></div><div class="pdb"><span>Paid so far</span><b>${K(billed - owed)}</b></div><div class="bal"><span>Running balance</span><b>${K(owed)}</b></div></div>
+${unpaid.length ? `<h2>Unpaid orders</h2><table><thead><tr><th>Order</th><th>Date</th><th>Time</th><th class="n">Total</th><th class="n">Paid</th><th class="n">Balance</th></tr></thead><tbody>${upRows}</tbody><tfoot><tr><td colspan="5">Total owed</td><td class="n">${K(owed)}</td></tr></tfoot></table>` : '<p><b>All orders are paid. Thank you!</b></p>'}
+<h2>Statement</h2><table><thead><tr><th>Date</th><th>Time</th><th>Details</th><th class="n">Charged</th><th class="n">Paid</th><th class="n">Balance</th></tr></thead><tbody>${stRows}</tbody></table>
+${owed > 0 ? pay : ''}
+<p class="ft">${esc(shop)}${st.ownerPhone ? ' · ' + esc(st.ownerPhone) : ''} · Thank you for choosing us.</p>
+</body></html>`;
+  // Desktop app: saved straight to Downloads as a real PDF (and the folder opens).
+  if (window.lms && window.lms.savePdf) {
+    window.lms.savePdf(html, fname).then(r => {
+      if (r && r.ok) toast(`Saved ${fname}.pdf in Downloads`, 'success');
+      else toast('Could not save the PDF: ' + ((r && r.reason) || 'unknown error'), 'error');
+    }).catch(e => toast('Could not save the PDF: ' + (e.message || e), 'error'));
+    return;
+  }
+  const old = document.getElementById('safi-stmt-frame'); if (old) old.remove();
+  const fr = document.createElement('iframe');
+  fr.id = 'safi-stmt-frame';
+  fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(fr);
+  const doc = fr.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+  // The saved file takes the page title as its name, so set both titles while printing.
+  const prev = document.title;
+  document.title = fname;
+  const restore = () => { document.title = prev; window.removeEventListener('afterprint', restore); };
+  window.addEventListener('afterprint', restore);
+  setTimeout(() => {
+    try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { toast('Could not open the print window', 'error'); }
+    setTimeout(restore, 4000);
+  }, 300);
+  toast(`Choose "Save as PDF" · file name ${fname}`);
 }
 
 // One payment shared across several orders, oldest first. Each order gets its own ledger line
@@ -1540,6 +1612,256 @@ function AccountPaymentModal({ open, onClose, customer, unpaid, owed, money }) {
           ))}
           {(Number(amount) || 0) < owed && (Number(amount) || 0) > 0 && <div className="safi-cell-sub">Still owed after this: <b className="safi-mono">{money(owed - Math.round(Number(amount) || 0))}</b></div>}
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── Balances due (dashboard pop-up) ──────────────────────────────────────
+// Everyone who owes money right now: one line per customer with their running balance,
+// how many orders are unpaid and since when. Tap a customer to see the orders; tap an
+// order to open it (Collect balance / Pay towards account are there).
+function BalancesDueButton({ money, setView, setActiveOrderId }) {
+  const D = useStore();
+  const [open, setOpen] = useStateFD(false);
+  const rows = balancesDue(D);
+  const total = rows.reduce((s, r) => s + r.owed, 0);
+  return (
+    <>
+      <Button kind="ghost" icon="wallet" onClick={() => setOpen(true)}>Balances due{total > 0 ? ` · ${money(total)}` : ''}</Button>
+      <BalancesDueModal open={open} onClose={() => setOpen(false)} rows={rows} total={total} money={money} setView={setView} setActiveOrderId={setActiveOrderId}/>
+    </>
+  );
+}
+
+function balancesDue(D) {
+  const by = new Map();
+  for (const o of D.orders || []) {
+    if (o.rewashOf || o.refunded) continue;
+    const due = Math.max(0, (Number(o.total) || 0) - (Number(o.paid) || 0));
+    if (due <= 0) continue;
+    const key = o.customer || ('walkin:' + o.id);
+    const c = o.customer ? (D.customers || []).find(x => x.id === o.customer) : null;
+    const r = by.get(key) || { key, name: c ? c.name : `Walk-in · ${orderNo(o.id)}`, phone: c ? c.phone : '', group: c ? c.group : '', owed: 0, orders: [] };
+    r.owed += due; r.orders.push({ o, due });
+    by.set(key, r);
+  }
+  const list = [...by.values()];
+  for (const r of list) { r.orders.sort((a, b) => String(a.o.in).localeCompare(String(b.o.in))); r.oldest = r.orders[0].o.in || ''; }
+  return list;
+}
+
+function BalancesDueModal({ open, onClose, rows, total, money, setView, setActiveOrderId }) {
+  const [q, setQ] = useStateFD('');
+  const [sort, setSort] = useStateFD('amount');
+  const [openKey, setOpenKey] = useStateFD('');
+  const days = s => { const t = Date.parse(String(s || '').replace(' ', 'T')); return isNaN(t) ? 0 : Math.max(0, Math.floor((Date.now() - t) / 864e5)); };
+  const qq = q.trim().toLowerCase();
+  const shown = rows.filter(r => !qq || r.name.toLowerCase().includes(qq) || String(r.phone).replace(/\s/g, '').includes(qq.replace(/\s/g, '')))
+    .sort((a, b) => sort === 'oldest' ? String(a.oldest).localeCompare(String(b.oldest)) : sort === 'name' ? a.name.localeCompare(b.name) : b.owed - a.owed);
+  const go = id => { if (setActiveOrderId) setActiveOrderId(id); setView('order-detail'); onClose(); };
+  return (
+    <Modal open={open} onClose={onClose} title="Balances due" width={620}
+      footer={<Button kind="ghost" onClick={onClose}>Close</Button>}>
+      <div className="safi-bd">
+        <div className="safi-bd__sum">
+          <div><span>Total owed</span><b className="safi-mono">{money(total)}</b></div>
+          <div><span>Customers</span><b>{rows.length}</b></div>
+          <div><span>Unpaid orders</span><b>{rows.reduce((s, r) => s + r.orders.length, 0)}</b></div>
+        </div>
+        <div className="safi-bd__bar">
+          <input className="safi-input" placeholder="Search name or phone…" value={q} onChange={e => setQ(e.target.value)}/>
+          <select className="safi-input" value={sort} onChange={e => setSort(e.target.value)}>
+            <option value="amount">Biggest balance</option>
+            <option value="oldest">Owing longest</option>
+            <option value="name">Name A–Z</option>
+          </select>
+        </div>
+        {!shown.length && <p className="safi-cell-sub" style={{ textAlign: 'center', padding: 20 }}>{rows.length ? 'No one matches that search.' : 'Nobody owes anything right now. 🎉'}</p>}
+        <div className="safi-bd__list">
+          {shown.map(r => (
+            <div key={r.key} className={`safi-bd__c${openKey === r.key ? ' is-open' : ''}`}>
+              <button className="safi-bd__row" onClick={() => setOpenKey(openKey === r.key ? '' : r.key)}>
+                <span className="safi-cust-pick__avatar">{r.name.split(' ').map(s => s[0]).slice(0, 2).join('')}</span>
+                <span className="safi-bd__who"><b>{r.name}</b><span className="safi-cell-sub">{r.phone || '—'}{r.group ? ` · ${r.group}` : ''}</span></span>
+                <span className="safi-bd__meta safi-cell-sub">{r.orders.length} order{r.orders.length === 1 ? '' : 's'}<br/>since {dm(r.oldest)}{days(r.oldest) >= 14 ? <em className="safi-bd__late"> · {days(r.oldest)} days</em> : null}</span>
+                <b className="safi-mono safi-bd__amt">{money(r.owed)}</b>
+                <span className="safi-bd__chev">{openKey === r.key ? '▴' : '▾'}</span>
+              </button>
+              {openKey === r.key && (
+                <div className="safi-bd__orders">
+                  {r.orders.map(({ o, due }) => (
+                    <button key={o.id} className="safi-rb__u" onClick={() => go(o.id)} title="Open this order">
+                      <span className="safi-mono">{orderNo(o.id)}</span>
+                      <span className="safi-cell-sub">{dm(o.in)}</span>
+                      <span className="safi-cell-sub safi-mono">{Math.round(o.paid || 0).toLocaleString('en-KE')} / {Math.round(o.total).toLocaleString('en-KE')}</span>
+                      <b className="safi-mono">{money(due)}</b>
+                    </button>
+                  ))}
+                  <span className="safi-cell-sub">Tap an order to open it and collect payment.</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── On the statement, not recorded (pop-up) ──────────────────────────────
+// Money that reached M-Pesa / the bank (from uploaded statements) whose code is on no
+// payment in the system. Suggests the likely order (same amount owed, or the payer's
+// phone / name in the statement details) and records it there in one tap.
+function UnrecordedPayments({ money }) {
+  const D = useStore();
+  const [open, setOpen] = useStateFD(false);
+  const [range, setRange] = useStateFD('all');
+  const [pick, setPick] = useStateFD(null);   // statement entry being recorded
+  const st = D.settings || {};
+  const ignored = st.statementIgnored || {};
+  const tail = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-5);
+  const known = new Set([...(D.payments || []).map(p => tail(p.txn)), ...(D.expenses || []).map(e => tail(e.txn))].filter(Boolean));
+  const thisM = SAFI_TIME.day().slice(0, 7);
+  const lastD = new Date(); lastD.setDate(1); lastD.setMonth(lastD.getMonth() - 1);
+  const lastM = SAFI_TIME.day(lastD).slice(0, 7);
+  const all = Object.values(st.statementEntries || {}).filter(e => e && e.code && !known.has(tail(e.code)) && !ignored[e.code])
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const list = all.filter(e => range === 'all' || String(e.date || '').startsWith(range === 'this' ? thisM : lastM));
+  const total = list.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const ignore = (code) => { window.SAFI_STORE.setSetting('statementIgnored', { ...ignored, [code]: true }); toast('Marked as not a customer payment'); };
+  return (
+    <>
+      <Button kind={all.length ? 'secondary' : 'ghost'} icon="alert" onClick={() => setOpen(true)}>Not recorded{all.length ? ` · ${all.length}` : ''}</Button>
+      <Modal open={open} onClose={() => setOpen(false)} title="On the statement, not recorded" width={760}
+        footer={<Button kind="ghost" onClick={() => setOpen(false)}>Close</Button>}>
+        <div className="safi-bd">
+          <p className="safi-cell-sub" style={{ margin: 0 }}>Money that reached M-Pesa or the bank (from the statements you uploaded) but whose code is on no payment in the system. Record it against the right order, or mark it as not a customer payment (e.g. a transfer or float).</p>
+          {!Object.keys(st.statementEntries || {}).length && <div className="safi-callout"><Icon name="alert" size={14}/><span>No statements uploaded yet. Use <b>Upload statement & verify</b> first.</span></div>}
+          <div className="safi-bd__sum">
+            <div><span>Not recorded</span><b className="safi-mono">{money(total)}</b></div>
+            <div><span>Payments</span><b>{list.length}</b></div>
+            <div><span>Show</span>
+              <select className="safi-input" value={range} onChange={e => setRange(e.target.value)} style={{ marginTop: 4 }}>
+                <option value="all">All statements</option><option value="this">This month</option><option value="last">Last month</option>
+              </select></div>
+          </div>
+          {!list.length && Object.keys(st.statementEntries || {}).length > 0 && <p className="safi-cell-sub" style={{ textAlign: 'center', padding: 16 }}>Every payment on the statements is recorded. 🎉</p>}
+          <div className="safi-bd__list">
+            {list.map(e => {
+              const sug = suggestOrdersFor(D, e).slice(0, 2);
+              return (
+                <div key={e.code} className="safi-up">
+                  <div className="safi-up__top">
+                    <span className="safi-mono safi-up__code">{e.code}</span>
+                    <span className="safi-cell-sub">{e.date ? dm(e.date) : '—'}</span>
+                    <b className="safi-mono safi-up__amt">{money(e.amount)}</b>
+                  </div>
+                  {e.details && <div className="safi-cell-sub safi-up__det">{e.details}</div>}
+                  {sug.length > 0 && <div className="safi-cell-sub">Likely: {sug.map(x => `${x.name} · ${orderNo(x.o.id)} (owes ${money(x.due)}${x.why ? ', ' + x.why : ''})`).join('  ·  ')}</div>}
+                  <div className="safi-up__act">
+                    <Button kind="primary" icon="wallet" onClick={() => setPick(e)}>Record to order</Button>
+                    <button className="safi-rowlink" onClick={() => ignore(e.code)}>Not a customer payment</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Modal>
+      <RecordStatementPayment entry={pick} onClose={() => setPick(null)} money={money}/>
+    </>
+  );
+}
+
+// Unpaid orders ranked for a statement line: payer phone in the details, then name, then
+// an order whose balance equals the amount.
+function suggestOrdersFor(D, e) {
+  const det = String(e.details || '').toUpperCase();
+  const digits = det.replace(/\D/g, '');
+  const out = [];
+  for (const r of balancesDue(D)) {
+    const c = (D.customers || []).find(x => x.name === r.name && x.phone === r.phone);
+    const ph = String(r.phone || '').replace(/\D/g, '').slice(-9);
+    const phoneHit = ph.length >= 7 && (digits.includes(ph) || (digits.length >= 6 && ph.endsWith(digits.slice(-3)) && /\*{2,}/.test(det) && digits.slice(0, 3) === ('254' + ph).slice(0, 3)));
+    const nameHit = c && String(c.name).toUpperCase().split(/\s+/).filter(w => w.length > 2).some(w => det.includes(w));
+    for (const { o, due } of r.orders) {
+      const amtHit = Math.round(due) === Math.round(Number(e.amount) || 0);
+      const score = (phoneHit ? 4 : 0) + (nameHit ? 2 : 0) + (amtHit ? 3 : 0);
+      if (score) out.push({ o, due, name: r.name, score, why: [phoneHit && 'phone', nameHit && 'name', amtHit && 'same amount'].filter(Boolean).join(' + ') });
+    }
+  }
+  return out.sort((a, b) => b.score - a.score);
+}
+
+function RecordStatementPayment({ entry, onClose, money }) {
+  const D = useStore();
+  const [q, setQ] = useStateFD('');
+  const [sel, setSel] = useStateFD('');
+  const [method, setMethod] = useStateFD('mpesa');
+  useEffectFD(() => {
+    if (!entry) return;
+    setQ(''); setMethod(/^[A-Z][A-Z0-9]{9}$/.test(entry.code) ? 'mpesa' : 'bank');
+    const s = suggestOrdersFor(D, entry); setSel(s.length ? s[0].o.id : '');
+  }, [entry && entry.code]);
+  if (!entry) return null;
+  const rows = balancesDue(D);
+  const qq = q.trim().toLowerCase();
+  const orders = rows.filter(r => !qq || r.name.toLowerCase().includes(qq) || String(r.phone).replace(/\s/g, '').includes(qq.replace(/\s/g, '')) || r.orders.some(x => orderNo(x.o.id).toLowerCase().includes(qq)))
+    .flatMap(r => r.orders.map(x => ({ ...x, name: r.name, phone: r.phone, key: r.key })));
+  const chosen = orders.find(x => x.o.id === sel) || rows.flatMap(r => r.orders.map(x => ({ ...x, name: r.name, key: r.key }))).find(x => x.o.id === sel);
+  const amt = Math.round(Number(entry.amount) || 0);
+  // More than this order owes: the rest goes to the same customer's other unpaid orders, oldest first.
+  const plan = [];
+  if (chosen) {
+    const mine = (rows.find(r => r.key === chosen.key) || { orders: [] }).orders;
+    const queue = [chosen, ...mine.filter(x => x.o.id !== chosen.o.id)];
+    let left = amt;
+    for (const x of queue) { if (left <= 0) break; const pay = Math.min(x.due, left); plan.push({ id: x.o.id, pay, rest: x.due - pay }); left -= pay; }
+    if (left > 0) plan.push({ id: '', pay: left, rest: 0 });
+  }
+  function save() {
+    if (!chosen) { toast('Pick the order this money was for', 'error'); return; }
+    const S = window.SAFI_STORE;
+    const cust = chosen.name;
+    for (const p of plan) {
+      if (!p.id || p.pay <= 0) continue;
+      const pay = S.recordPayment({ orderId: p.id, method, amount: p.pay, txn: entry.code, customer: cust });
+      if (pay && S.verifyPayment) S.verifyPayment(pay.id, { stmtAmount: amt });
+    }
+    const extra = plan.find(p => !p.id);
+    S.audit('payment.fromStatement', chosen.o.id, `${entry.code} ${amt} recorded from statement${extra ? `; KES ${extra.pay} more than owed` : ''}`);
+    toast(extra ? `Recorded. KES ${extra.pay.toLocaleString('en-KE')} is more than they owed: note it on the order.` : 'Recorded from statement', extra ? 'error' : 'success');
+    onClose();
+  }
+  return (
+    <Modal open={!!entry} onClose={onClose} title={`Record ${entry.code} · ${money(amt)}`} width={560}
+      footer={<><Button kind="ghost" onClick={onClose}>Cancel</Button><Button kind="primary" icon="check" onClick={save}>Record payment</Button></>}>
+      <div className="safi-form">
+        {entry.details && <p className="safi-cell-sub" style={{ margin: 0 }}>Statement: {entry.details}</p>}
+        <label>Method
+          <div className="safi-seg safi-seg--full">
+            {['mpesa', 'bank'].map(m => <button key={m} className={`safi-seg__btn ${method === m ? 'is-active' : ''}`} onClick={() => setMethod(m)}>{m === 'mpesa' ? 'M-Pesa' : 'Bank'}</button>)}
+          </div>
+        </label>
+        <label>Which order was this for?
+          <input className="safi-input" placeholder="Search name, phone or order no." value={q} onChange={e => setQ(e.target.value)}/>
+        </label>
+        <div className="safi-bd__orders" style={{ padding: 0, maxHeight: 240, overflow: 'auto' }}>
+          {orders.slice(0, 40).map(x => (
+            <button key={x.o.id} className={`safi-rb__u${sel === x.o.id ? ' is-here' : ''}`} onClick={() => setSel(x.o.id)}>
+              <span className="safi-mono">{orderNo(x.o.id)}</span>
+              <span className="safi-cell-sub">{x.name}</span>
+              <span className="safi-cell-sub">{dm(x.o.in)}</span>
+              <b className="safi-mono">{money(x.due)}</b>
+            </button>
+          ))}
+          {!orders.length && <span className="safi-cell-sub">No unpaid orders match.</span>}
+        </div>
+        {plan.length > 0 && <div className="safi-rb__plan">
+          {plan.map((p, i) => <div key={i} className="safi-rb__pr"><span className="safi-mono">{p.id ? orderNo(p.id) : 'Extra'}</span><span className="safi-mono">{money(p.pay)}</span><span className={p.id ? (p.rest ? 'safi-rb__owe' : 'safi-rb__ok') : 'safi-rb__owe'}>{p.id ? (p.rest ? `${money(p.rest)} left` : 'Cleared') : 'More than owed'}</span></div>)}
+        </div>}
+        <p className="safi-hint">Saved as verified from the statement, with code {entry.code}.</p>
       </div>
     </Modal>
   );
@@ -1657,7 +1979,7 @@ function OverdueCard({ D, setView, setActiveOrderId, money }) {
   // Uncollected: up to 7 days old is yellow, older is red. Overdue: red 7d+, orange 3-6d, green under 3d.
   const shade = (d) => tab === 'all' ? (d <= 7 ? 'is-new' : 'is-old') : (d >= 7 ? 'is-old' : d >= 3 ? 'is-mid' : 'is-fresh');
   const monthEnd = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() - d.getDate() <= 2; })();
-  const shown = more ? list.slice(0, 50) : list.slice(0, 12);
+  const shown = more ? list.slice(0, 100) : list.slice(0, 12);
   function downloadPdf() {
     const title = tab === 'overdue' ? 'Overdue orders' : 'Uncollected orders';
     const tone = (d) => { const s = shade(d); return s === 'is-old' ? '#fee2e2' : s === 'is-mid' ? '#ffedd5' : s === 'is-fresh' ? '#dcfce7' : '#fef9c3'; };
@@ -1702,10 +2024,10 @@ function OverdueCard({ D, setView, setActiveOrderId, money }) {
       )}
       {list.length > 0 && (
         <div className="safi-overdue-foot">
-          {more && <span>Total outstanding <b className="safi-mono">{fmt(outstanding)}</b>{list.length > 50 ? ` · showing 50 of ${list.length}, download for all` : ''}</span>}
+          {more && <span>Total outstanding <b className="safi-mono">{fmt(outstanding)}</b>{list.length > 100 ? ` · showing 100 of ${list.length}, download for all` : ''}</span>}
           <span style={{ flex: 1 }}/>
           <div className="safi-seg"><button className={`safi-seg__btn ${newest ? 'is-active' : ''}`} onClick={() => setNewest(true)}>Newest first</button><button className={`safi-seg__btn ${!newest ? 'is-active' : ''}`} onClick={() => setNewest(false)}>Oldest first</button></div>
-          {list.length > 12 && <Button kind="ghost" size="sm" onClick={() => setMore(!more)}>{more ? 'Show less' : `Show more (${Math.min(50, list.length)})`}</Button>}
+          {list.length > 12 && <Button kind="ghost" size="sm" onClick={() => setMore(!more)}>{more ? 'Show less' : `Show more (${Math.min(100, list.length)})`}</Button>}
           {more && <Button kind="ghost" size="sm" icon="print" onClick={downloadPdf}>Download PDF</Button>}
         </div>
       )}
@@ -2283,14 +2605,6 @@ function Receipt({ orderId, setView, lang, money, shop }) {
             <div><dt>Paid ({(o.method || '—').toUpperCase()})</dt><dd className="safi-mono">{money(o.paid)}</dd></div>
             {o.txn && <div><dt>Txn code</dt><dd className="safi-mono">{o.txn}</dd></div>}
             <div><dt>Balance</dt><dd className="safi-mono">{money(o.total - o.paid)}</dd></div>
-            {c && window.SAFI_POINTS.cfg().on && window.SAFI_POINTS.eligible(c) && (() => {
-              const P = window.SAFI_POINTS, a = P.account(c.id);
-              const fromThis = P.earnedFor(o) || P.pendingFor(o);
-              return <>
-                {fromThis > 0 && <div><dt>{P.earnedFor(o) ? 'Points earned' : 'Points on payment'}</dt><dd className="safi-mono">+{fromThis}</dd></div>}
-                <div><dt>Points balance</dt><dd className="safi-mono">{a.balance} pts</dd></div>
-              </>;
-            })()}
           </dl>
           {window.SAFI_TRACK.on() && o.track && (
             <div className="safi-receipt__pay-line safi-receipt__pay-line--sub" style={{ textAlign: 'center', marginTop: 4 }}>
@@ -2738,7 +3052,8 @@ function parseStatementEntries(text) {
       const list = amts(seg);
       if (list.length && !out[code]) {
         const dd = seg.match(/(20\d{2})-(\d{2})-(\d{2})/);
-        out[code] = { code, amount: list[0], date: dd ? `${dd[1]}-${dd[2]}-${dd[3]}` : '', cands: list.slice(0, 2) };
+        const det = seg.replace(/^ ?20\d{2}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?/, '').split(/ COMPLETED\b|(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}/)[0].trim().slice(0, 140);
+        out[code] = { code, amount: list[0], date: dd ? `${dd[1]}-${dd[2]}-${dd[3]}` : '', cands: list.slice(0, 2), details: det };
       }
       continue;
     }
@@ -2757,7 +3072,7 @@ function parseStatementEntries(text) {
     const around = T.slice(Math.max(0, m.index - 240), m.index + 160);
     const d1 = around.match(/(20\d{2})-(\d{2})-(\d{2})/), d2 = around.match(/(\d{2})[\/.](\d{2})[\/.](20\d{2})/);
     const date = d1 ? `${d1[1]}-${d1[2]}-${d1[3]}` : d2 ? `${d2[3]}-${d2[2]}-${d2[1]}` : '';
-    if (!out[code]) out[code] = { code, amount, date, cands: behind.length >= 2 ? behind : [...new Set([...behind, ...ahead])] };
+    if (!out[code]) out[code] = { code, amount, date, cands: behind.length >= 2 ? behind : [...new Set([...behind, ...ahead])], details: (lastDate >= 0 ? back.slice(lastDate) : '').replace(/(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}/g, '').replace(/\s+/g, ' ').trim().slice(0, 140) };
   }
   return out;
 }
@@ -3037,6 +3352,7 @@ function PaymentsScreen({ lang, money, role }) {
         right={<>
           {isManagement && <Button kind="ghost" icon="print" onClick={() => window.print()}>{t('print_summary', lang)}</Button>}
           {isManagement && (frozen.length ? <Button kind="primary" icon="lock" onClick={() => toggleFreeze(lastMonthKey, 'reopenAll')}>Past months closed · Tap to reopen</Button> : <Button kind="ghost" icon="lock" onClick={() => toggleFreeze(lastMonthKey, 'freeze')}>Close {monthName(lastMonthKey)} & earlier</Button>)}
+          {isManagement && <UnrecordedPayments money={money}/>}
           {isManagement && <ReconcilePeriod/>}
           {isManagement && <StatementReconcile/>}
         </>}
