@@ -1420,6 +1420,26 @@ function OrderDetail({ orderId, setView, setActiveOrderId, lang, money, role }) 
 }
 
 // ─── Payment Modal ────────────────────────────────────────────────────────
+// October 2026 was the testing month. The Running bill counts orders from 1 Nov onwards.
+// Balances due is looked at by month: this month and last month (Nov | Oct now,
+// Dec | Nov in December). Opens on this month.
+const SAFI_BAL_FROM = '2026-11-01';
+function balMonths() {
+  const d = new Date(); const cur = SAFI_TIME.day(d).slice(0, 7);
+  const p = new Date(d.getFullYear(), d.getMonth() - 1, 1); const prev = SAFI_TIME.day(p).slice(0, 7);
+  const name = (ym) => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(ym.slice(5, 7)) - 1];
+  return [{ key: cur, label: name(cur) }, { key: prev, label: name(prev) }];
+}
+function BalMonthSwitch({ value, onChange }) {
+  return (
+    <div className="safi-seg safi-balfrom">
+      {balMonths().map(m => <button key={m.key} className={`safi-seg__btn ${value === m.key ? 'is-active' : ''}`} onClick={() => onChange(m.key)}>{m.label}</button>)}
+    </div>
+  );
+}
+// Order is in the chosen period: a month "2026-11", or 'all' = from 1 Nov.
+const inBalPeriod = (o, period) => period && period !== 'all' ? String(o.in || '').startsWith(period) : String(o.in || '') >= SAFI_BAL_FROM;
+
 // ─── Running bill (order detail) ──────────────────────────────────────────
 // For customers who pay now and then: every order (bill) and every payment in date order,
 // with the balance left after each, plus what is still owed order by order. "Pay towards
@@ -1430,7 +1450,8 @@ function RunningBill({ c, o, money, setView, setActiveOrderId }) {
   const [showPay, setShowPay] = useStateFD(false);
   const [showSt, setShowSt] = useStateFD(false);
   if (!c) return null;
-  const bills = D.orders.filter(x => x.customer === c.id && !x.rewashOf && (Number(x.total) || 0) > 0)
+  const allBills = D.orders.filter(x => x.customer === c.id && !x.rewashOf && (Number(x.total) || 0) > 0);
+  const bills = allBills.filter(x => String(x.in || '') >= SAFI_BAL_FROM)
     .sort((a, b) => String(a.in).localeCompare(String(b.in)));
   if (bills.length < 2) return null;
   const ids = new Set(bills.map(x => x.id));
@@ -1624,20 +1645,22 @@ function AccountPaymentModal({ open, onClose, customer, unpaid, owed, money }) {
 function BalancesDueButton({ money, setView, setActiveOrderId }) {
   const D = useStore();
   const [open, setOpen] = useStateFD(false);
-  const rows = balancesDue(D);
+  const [period, setPeriod] = useStateFD(() => balMonths()[0].key);
+  const rows = balancesDue(D, period);
   const total = rows.reduce((s, r) => s + r.owed, 0);
   return (
     <>
       <Button kind="ghost" icon="wallet" onClick={() => setOpen(true)}>Balances due{total > 0 ? ` · ${money(total)}` : ''}</Button>
-      <BalancesDueModal open={open} onClose={() => setOpen(false)} rows={rows} total={total} money={money} setView={setView} setActiveOrderId={setActiveOrderId}/>
+      <BalancesDueModal open={open} onClose={() => setOpen(false)} rows={rows} total={total} money={money} setView={setView} setActiveOrderId={setActiveOrderId} period={period} setPeriod={setPeriod}/>
     </>
   );
 }
 
-function balancesDue(D) {
+function balancesDue(D, period) {
   const by = new Map();
   for (const o of D.orders || []) {
     if (o.rewashOf || o.refunded) continue;
+    if (period && !inBalPeriod(o, period)) continue;
     const due = Math.max(0, (Number(o.total) || 0) - (Number(o.paid) || 0));
     if (due <= 0) continue;
     const key = o.customer || ('walkin:' + o.id);
@@ -1651,7 +1674,7 @@ function balancesDue(D) {
   return list;
 }
 
-function BalancesDueModal({ open, onClose, rows, total, money, setView, setActiveOrderId }) {
+function BalancesDueModal({ open, onClose, rows, total, money, setView, setActiveOrderId, period, setPeriod }) {
   const [q, setQ] = useStateFD('');
   const [sort, setSort] = useStateFD('amount');
   const [openKey, setOpenKey] = useStateFD('');
@@ -1670,6 +1693,7 @@ function BalancesDueModal({ open, onClose, rows, total, money, setView, setActiv
           <div><span>Unpaid orders</span><b>{rows.reduce((s, r) => s + r.orders.length, 0)}</b></div>
         </div>
         <div className="safi-bd__bar">
+          {setPeriod && <BalMonthSwitch value={period} onChange={setPeriod}/>}
           <input className="safi-input" placeholder="Search name or phone…" value={q} onChange={e => setQ(e.target.value)}/>
           <select className="safi-input" value={sort} onChange={e => setSort(e.target.value)}>
             <option value="amount">Biggest balance</option>
